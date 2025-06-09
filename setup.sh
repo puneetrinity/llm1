@@ -52,12 +52,9 @@ rm -rf /workspace/app
 git clone https://github.com/puneetrinity/llm1.git /workspace/app
 cd /workspace/app
 
-# Create necessary directories
+# Create necessary directories (suppress warnings for existing dirs)
 echo "📁 Creating directories..."
-mkdir -p /workspace/app/logs
-mkdir -p /workspace/app/data/cache
-mkdir -p /workspace/app/data/logs
-mkdir -p /workspace/app/data/models
+mkdir -p logs data/cache data/logs data/models 2>/dev/null || true
 
 # Create .env file
 echo "⚙️ Creating configuration..."
