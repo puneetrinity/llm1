@@ -52,38 +52,6 @@ class Settings(BaseSettings):
     MAX_QUEUE_SIZE: int = 100
     REQUEST_TIMEOUT: int = 300  # 5 minutes
     
-# requirements.txt - Fixed Dependencies with Memory-Safe Versions
-# Core FastAPI dependencies
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-pydantic==2.5.0
-pydantic-settings==2.1.0
-
-# HTTP client and middleware
-aiohttp==3.9.1
-python-multipart==0.0.6
-
-# System monitoring
-psutil==5.9.6
-
-# Authentication and security
-PyJWT==2.8.0
-
-# Optional dependencies for enhanced features
-# Only install these if you enable semantic classification
-sentence-transformers==2.2.2  # ~500MB memory usage
-faiss-cpu==1.7.4              # Lightweight CPU version
-numpy==1.24.3                 # Required by transformers
-
-# Streaming support
-sse-starlette==1.6.5
-
-# Optional GPU monitoring (install separately if needed)
-# GPUtil==1.4.0
-
-# Optional Redis for distributed caching (install separately if needed)
-# redis==5.0.1
-    
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
