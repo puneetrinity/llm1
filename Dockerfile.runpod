@@ -1,0 +1,38 @@
+dockerfileFROM nvidia/cuda:12.1.0-base-ubuntu22.04
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    python3 \
+    python3-pip \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Ollama
+RUN curl -fsSL https://ollama.com/install.sh | sh
+
+# Environment variables for A5000
+ENV OLLAMA_HOST=0.0.0.0:11434
+ENV OLLAMA_NUM_PARALLEL=2
+ENV OLLAMA_MAX_LOADED_MODELS=2
+ENV NVIDIA_VISIBLE_DEVICES=all
+
+WORKDIR /app
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+# Pre-download ML model (saves startup time)
+RUN python3 -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+
+# Copy application
+COPY . .
+RUN chmod +x enhanced_start.sh
+
+# Health check with longer startup time
+HEALTHCHECK --interval=30s --timeout=20s --start-period=300s --retries=3 \
+  CMD curl -f http://localhost:8000/health || exit 1
+
+EXPOSE 8000 11434
+CMD ["./enhanced_start.sh"]
