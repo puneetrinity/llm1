@@ -2,14 +2,26 @@
 from .metrics import MetricsCollector
 from .health import HealthChecker
 
-# Optional enhanced utilities
+# Optional enhanced utilities - import safely
+ENHANCED_UTILS_AVAILABLE = False
+
 try:
     from .performance_monitor import PerformanceMonitor
+    ENHANCED_UTILS_AVAILABLE = True
+except ImportError:
+    PerformanceMonitor = None
+
+try:
     from .dashboard import EnhancedDashboard
+    ENHANCED_UTILS_AVAILABLE = True
+except ImportError:
+    EnhancedDashboard = None
+
+try:
     from .websocket_dashboard import WebSocketDashboard
     ENHANCED_UTILS_AVAILABLE = True
 except ImportError:
-    ENHANCED_UTILS_AVAILABLE = False
+    WebSocketDashboard = None
 
 __all__ = [
     "MetricsCollector",
