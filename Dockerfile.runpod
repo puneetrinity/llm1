@@ -1,38 +1,68 @@
-dockerfileFROM nvidia/cuda:12.1.0-base-ubuntu22.04
+FROM nvidia/cuda:12.1.0-base-ubuntu22.04
+
+# Set environment variables to prevent interactive prompts
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     curl \
     python3 \
     python3-pip \
+    python3-dev \
     build-essential \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Ollama
 RUN curl -fsSL https://ollama.com/install.sh | sh
 
-# Environment variables for A5000
+# Environment variables for A5000 (24GB VRAM)
 ENV OLLAMA_HOST=0.0.0.0:11434
 ENV OLLAMA_NUM_PARALLEL=2
-ENV OLLAMA_MAX_LOADED_MODELS=2
+ENV OLLAMA_MAX_LOADED_MODELS=3
 ENV NVIDIA_VISIBLE_DEVICES=all
+ENV GPU_MEMORY_FRACTION=0.9
+
+# Memory management for RunPod A5000
+ENV MAX_MEMORY_MB=16384
+ENV CACHE_MEMORY_LIMIT_MB=2048
+ENV MODEL_MEMORY_LIMIT_MB=8192
+ENV SEMANTIC_MODEL_MAX_MEMORY_MB=500
+
+# Enhanced features configuration
+ENV ENABLE_SEMANTIC_CLASSIFICATION=true
+ENV ENABLE_STREAMING=true
+ENV ENABLE_MODEL_WARMUP=true
+ENV ENABLE_DETAILED_METRICS=true
 
 WORKDIR /app
 
-# Install Python dependencies
+# Copy requirements first for better caching
 COPY requirements.txt .
-RUN pip3 install --no-cache-dir -r requirements.txt
 
-# Pre-download ML model (saves startup time)
-RUN python3 -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+# Install Python dependencies with enhanced features
+RUN pip3 install --no-cache-dir --upgrade pip && \
+    pip3 install --no-cache-dir -r requirements.txt
 
-# Copy application
+# Pre-download ML model for semantic classification
+RUN python3 -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')" || echo "ML model download failed - will fallback to basic features"
+
+# Copy application code
 COPY . .
+
+# Make scripts executable
 RUN chmod +x enhanced_start.sh
 
-# Health check with longer startup time
-HEALTHCHECK --interval=30s --timeout=20s --start-period=300s --retries=3 \
-  CMD curl -f http://localhost:8000/health || exit 1
+# Create directories for data persistence
+RUN mkdir -p /app/cache /app/logs /app/models
 
+# Health check with appropriate timeouts for RunPod
+HEALTHCHECK --interval=30s --timeout=20s --start-period=300s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Expose ports
 EXPOSE 8000 11434
+
+# Use enhanced startup script
 CMD ["./enhanced_start.sh"]
