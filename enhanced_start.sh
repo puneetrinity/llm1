@@ -1,5 +1,3 @@
-# enhanced_start.sh - Enhanced startup script
-"""
 #!/bin/bash
 
 # Enhanced startup script with model preloading and warmup
@@ -86,4 +84,3 @@ trap cleanup SIGTERM SIGINT
 
 # Keep the script running
 wait
-"""
