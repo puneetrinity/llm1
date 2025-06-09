@@ -1,227 +1,311 @@
-# services/enhanced_imports.py - Safe Import Handler for Enhanced Features
+# STEP 1: Replace services/enhanced_imports.py entirely (30 minutes)
+
 import logging
-import sys
 from typing import Dict, Any, Optional, Type
 from dataclasses import dataclass
+from enum import Enum
+
+class FeatureStatus(Enum):
+    AVAILABLE = "available"
+    FALLBACK = "fallback" 
+    DISABLED = "disabled"
 
 @dataclass
-class FeatureStatus:
-    """Track status of enhanced features"""
-    name: str
-    available: bool
+class ImportResult:
+    status: FeatureStatus
+    module: Optional[Any] = None
     error: Optional[str] = None
-    fallback_class: Optional[Type] = None
 
-class EnhancedImportManager:
-    """Manages safe imports of enhanced features with graceful fallbacks"""
+class SafeImportManager:
+    """Production-safe import manager - no silent failures"""
     
     def __init__(self):
-        self.features: Dict[str, FeatureStatus] = {}
-        self.import_errors: Dict[str, str] = {}
+        self.imports: Dict[str, ImportResult] = {}
+        self.failed_imports: list = []
         
-    def safe_import(self, feature_name: str, import_path: str, fallback_class: Type = None) -> tuple:
-        """Safely import enhanced feature with fallback
+    def safe_import(
+        self, 
+        feature_name: str, 
+        import_path: str, 
+        fallback_class: Optional[Type] = None,
+        required: bool = False
+    ) -> ImportResult:
+        """Import with explicit fallback handling"""
         
-        Returns:
-            tuple: (imported_class, is_enhanced)
-        """
         try:
-            # Split module and class name
             module_path, class_name = import_path.rsplit('.', 1)
-            
-            # Try to import the module
             module = __import__(module_path, fromlist=[class_name])
             imported_class = getattr(module, class_name)
             
-            # Mark as successful
-            self.features[feature_name] = FeatureStatus(
-                name=feature_name,
-                available=True,
-                fallback_class=fallback_class
+            result = ImportResult(
+                status=FeatureStatus.AVAILABLE,
+                module=imported_class
             )
-            
-            logging.info(f"✅ Enhanced feature '{feature_name}' loaded successfully")
-            return imported_class, True
+            logging.info(f"✅ {feature_name} loaded successfully")
             
         except ImportError as e:
-            # Log the specific import error
-            error_msg = str(e)
-            self.import_errors[feature_name] = error_msg
+            error_msg = f"Missing dependency: {str(e)}"
             
-            # Mark as failed and use fallback
-            self.features[feature_name] = FeatureStatus(
-                name=feature_name,
-                available=False,
-                error=error_msg,
-                fallback_class=fallback_class
-            )
-            
-            if fallback_class:
-                logging.info(f"ℹ️  Enhanced feature '{feature_name}' not available, using fallback: {error_msg}")
-                return fallback_class, False
+            if required:
+                # Required features must fail loudly
+                logging.error(f"❌ REQUIRED: {feature_name} failed to load: {error_msg}")
+                self.failed_imports.append(f"{feature_name}: {error_msg}")
+                result = ImportResult(status=FeatureStatus.DISABLED, error=error_msg)
+            elif fallback_class:
+                # Use fallback
+                result = ImportResult(
+                    status=FeatureStatus.FALLBACK,
+                    module=fallback_class,
+                    error=error_msg
+                )
+                logging.warning(f"⚠️ {feature_name} using fallback: {error_msg}")
             else:
-                logging.warning(f"⚠️  Enhanced feature '{feature_name}' not available and no fallback: {error_msg}")
-                return None, False
+                # Disable feature
+                result = ImportResult(status=FeatureStatus.DISABLED, error=error_msg)
+                logging.info(f"ℹ️ {feature_name} disabled: {error_msg}")
                 
         except Exception as e:
-            # Handle other errors
-            error_msg = f"Unexpected error: {str(e)}"
-            self.import_errors[feature_name] = error_msg
-            
-            self.features[feature_name] = FeatureStatus(
-                name=feature_name,
-                available=False,
-                error=error_msg,
-                fallback_class=fallback_class
-            )
-            
-            logging.error(f"❌ Error importing '{feature_name}': {error_msg}")
-            
-            if fallback_class:
-                return fallback_class, False
-            else:
-                return None, False
-
-    def check_dependencies(self) -> Dict[str, bool]:
-        """Check if optional dependencies are available"""
-        dependencies = {
-            'sentence_transformers': False,
-            'faiss': False,
-            'numpy': False,
-            'sse_starlette': False
-        }
+            error_msg = f"Import error: {str(e)}"
+            result = ImportResult(status=FeatureStatus.DISABLED, error=error_msg)
+            if required:
+                self.failed_imports.append(f"{feature_name}: {error_msg}")
+            logging.error(f"❌ {feature_name} failed: {error_msg}")
         
-        for dep in dependencies:
-            try:
-                __import__(dep.replace('_', '-'))
-                dependencies[dep] = True
-            except ImportError:
-                dependencies[dep] = False
-                
-        return dependencies
+        self.imports[feature_name] = result
+        return result
+    
+    def validate_required_features(self) -> bool:
+        """Check if all required features loaded successfully"""
+        if self.failed_imports:
+            logging.error("🚨 Required features failed to load:")
+            for failure in self.failed_imports:
+                logging.error(f"   {failure}")
+            return False
+        return True
     
     def get_feature_status(self) -> Dict[str, Any]:
-        """Get status of all enhanced features"""
-        dependencies = self.check_dependencies()
-        
+        """Get clear status of all features"""
         return {
-            'features': {name: status.available for name, status in self.features.items()},
-            'dependencies': dependencies,
-            'errors': self.import_errors,
-            'total_enhanced_features': sum(1 for s in self.features.values() if s.available),
-            'total_fallbacks': sum(1 for s in self.features.values() if not s.available and s.fallback_class),
-            'missing_features': [name for name, status in self.features.items() 
-                               if not status.available and not status.fallback_class]
+            'available': [name for name, result in self.imports.items() 
+                         if result.status == FeatureStatus.AVAILABLE],
+            'fallback': [name for name, result in self.imports.items() 
+                        if result.status == FeatureStatus.FALLBACK],
+            'disabled': [name for name, result in self.imports.items() 
+                        if result.status == FeatureStatus.DISABLED],
+            'errors': {name: result.error for name, result in self.imports.items() 
+                      if result.error},
+            'ready_for_production': len(self.failed_imports) == 0
         }
-    
-    def log_startup_summary(self):
-        """Log a summary of enhanced features at startup"""
-        status = self.get_feature_status()
-        
-        logging.info("=" * 60)
-        logging.info("🎯 Enhanced Features Summary")
-        logging.info("=" * 60)
-        
-        # Enhanced features
-        enhanced_count = status['total_enhanced_features']
-        if enhanced_count > 0:
-            logging.info(f"✅ Enhanced features enabled: {enhanced_count}")
-            for name, available in status['features'].items():
-                if available:
-                    logging.info(f"   • {name.replace('_', ' ').title()}")
-        
-        # Fallbacks
-        fallback_count = status['total_fallbacks']
-        if fallback_count > 0:
-            logging.info(f"ℹ️  Basic fallbacks active: {fallback_count}")
-            for name, feature_status in self.features.items():
-                if not feature_status.available and feature_status.fallback_class:
-                    logging.info(f"   • {name.replace('_', ' ').title()}")
-        
-        # Missing features
-        missing = status['missing_features']
-        if missing:
-            logging.info(f"⚠️  Features unavailable: {len(missing)}")
-            for name in missing:
-                logging.info(f"   • {name.replace('_', ' ').title()}")
-        
-        # Dependencies
-        missing_deps = [dep for dep, available in status['dependencies'].items() if not available]
-        if missing_deps:
-            logging.info(f"📦 Missing optional dependencies: {', '.join(missing_deps)}")
-            logging.info("   Install with: pip install sentence-transformers faiss-cpu sse-starlette")
-        
-        logging.info("=" * 60)
 
-# Global import manager instance
-import_manager = EnhancedImportManager()
+# STEP 2: Update services/enhanced_router.py (20 minutes)
+# Replace the old import pattern with explicit checks
 
-# Safe imports for all enhanced features
-def setup_enhanced_imports():
-    """Setup all enhanced imports with fallbacks"""
+class EnhancedLLMRouter(BaseRouter):
+    def __init__(self, ollama_client=None):
+        super().__init__(ollama_client)
+        self.semantic_classifier = None
+        self.has_semantic_classification = False
+        
+    async def initialize(self):
+        """Initialize with explicit feature checking"""
+        await super().initialize()
+        
+        # Try to initialize semantic classifier
+        try:
+            # Import here with explicit check
+            import_result = import_manager.safe_import(
+                'semantic_classifier',
+                'services.semantic_classifier.SemanticIntentClassifier',
+                required=False
+            )
+            
+            if import_result.status == FeatureStatus.AVAILABLE:
+                self.semantic_classifier = import_result.module()
+                await self.semantic_classifier.initialize()
+                self.has_semantic_classification = True
+                logging.info("✅ Semantic classification enabled")
+            else:
+                self.has_semantic_classification = False
+                logging.info("ℹ️ Using rule-based classification only")
+                
+        except Exception as e:
+            logging.warning(f"Semantic classifier initialization failed: {e}")
+            self.has_semantic_classification = False
+        
+        logging.info("Enhanced LLM Router initialized")
     
-    # Import core services for fallbacks
-    from services.ollama_client import OllamaClient
-    from services.router import LLMRouter
-    
-    # Enhanced Ollama Client
-    EnhancedOllamaClient, _ = import_manager.safe_import(
-        'enhanced_ollama_client',
-        'services.enhanced_ollama_client.EnhancedOllamaClient',
-        fallback_class=OllamaClient
-    )
-    
-    # Enhanced Router with Semantic Classification
-    EnhancedLLMRouter, semantic_available = import_manager.safe_import(
-        'enhanced_router',
-        'services.enhanced_router.EnhancedLLMRouter',
-        fallback_class=LLMRouter
-    )
-    
-    # Streaming Service
-    StreamingService, streaming_available = import_manager.safe_import(
-        'streaming_service',
-        'services.streaming.StreamingService'
-    )
-    
-    # Model Warmup Service
-    ModelWarmupService, warmup_available = import_manager.safe_import(
-        'model_warmup_service',
-        'services.model_warmup.ModelWarmupService'
-    )
-    
-    # Semantic Classifier
-    SemanticIntentClassifier, classifier_available = import_manager.safe_import(
-        'semantic_classifier',
-        'services.semantic_classifier.SemanticIntentClassifier'
-    )
-    
-    # Semantic Cache
-    SemanticCache, cache_available = import_manager.safe_import(
-        'semantic_cache',
-        'services.semantic_cache.SemanticCache'
-    )
-    
-    return {
-        'EnhancedOllamaClient': EnhancedOllamaClient,
-        'EnhancedLLMRouter': EnhancedLLMRouter,
-        'StreamingService': StreamingService,
-        'ModelWarmupService': ModelWarmupService,
-        'SemanticIntentClassifier': SemanticIntentClassifier,
-        'SemanticCache': SemanticCache,
-        'capabilities': {
-            'semantic_classification': semantic_available,
-            'streaming': streaming_available,
-            'model_warmup': warmup_available,
-            'semantic_cache': cache_available
-        }
-    }
+    def classify_intent(self, text: str, explicit_intent: Optional[str] = None) -> str:
+        """Classify intent with explicit fallback"""
+        
+        if explicit_intent:
+            return explicit_intent
+        
+        # Always try rule-based first (fast and reliable)
+        rule_based_intent = self._rule_based_classification(text)
+        if rule_based_intent != 'unknown':
+            return rule_based_intent
+        
+        # Only use semantic if available and initialized
+        if self.has_semantic_classification and self.semantic_classifier:
+            try:
+                semantic_intent, confidence = await self.semantic_classifier.classify_intent(text)
+                if confidence > 0.7:  # High confidence threshold
+                    return semantic_intent
+            except Exception as e:
+                logging.warning(f"Semantic classification failed: {e}")
+                # Don't crash - fall back to heuristic
+        
+        # Final fallback
+        return self._heuristic_classification(text)
 
-# Initialize enhanced imports
+# STEP 3: Create startup validation (15 minutes)
+# File: utils/startup_validator.py
+
+import os
+import sys
+from services.enhanced_imports import import_manager
+
+def validate_startup() -> bool:
+    """Validate system is ready for production"""
+    
+    logging.info("🔍 Validating startup configuration...")
+    
+    # Check required features
+    if not import_manager.validate_required_features():
+        logging.error("❌ Required features missing - cannot start")
+        return False
+    
+    # Check environment
+    env = os.getenv('ENVIRONMENT', 'development')
+    if env == 'production':
+        if not _validate_production_config():
+            return False
+    
+    # Check Ollama connectivity
+    if not _check_ollama_available():
+        logging.error("❌ Ollama not available")
+        return False
+    
+    logging.info("✅ Startup validation passed")
+    return True
+
+def _validate_production_config() -> bool:
+    """Validate production-specific config"""
+    
+    # Check API key
+    api_key = os.getenv('DEFAULT_API_KEY', '')
+    if len(api_key) < 20:
+        logging.error("❌ Production requires secure API key")
+        return False
+    
+    # Check CORS
+    cors_origins = os.getenv('CORS_ORIGINS', '["*"]')
+    if '"*"' in cors_origins:
+        logging.warning("⚠️ Using wildcard CORS in production")
+    
+    return True
+
+def _check_ollama_available() -> bool:
+    """Check if Ollama is available"""
+    import subprocess
+    try:
+        result = subprocess.run(['which', 'ollama'], capture_output=True)
+        return result.returncode == 0
+    except:
+        return False
+
+# STEP 4: Update main.py startup (15 minutes)
+# Add this to the beginning of your main.py
+
+async def safe_startup():
+    """Safe startup with validation"""
+    
+    from utils.startup_validator import validate_startup
+    
+    # Validate before starting anything
+    if not validate_startup():
+        logging.error("❌ Startup validation failed")
+        sys.exit(1)
+    
+    # Your existing startup code here...
+
+# STEP 5: Update requirements.txt (10 minutes)
+# Split into core and optional
+
+# requirements-core.txt (always install these)
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+aiohttp==3.9.1
+psutil==5.9.6
+
+# requirements-enhanced.txt (optional)
+sentence-transformers==2.2.2
+faiss-cpu==1.7.4
+sse-starlette==1.6.5
+
+# STEP 6: Update Dockerfile (20 minutes)
+# Make installation conditional
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install core dependencies (always)
+COPY requirements-core.txt .
+RUN pip install --no-cache-dir -r requirements-core.txt
+
+# Install enhanced dependencies (conditional)
+COPY requirements-enhanced.txt .
+RUN pip install --no-cache-dir -r requirements-enhanced.txt || echo "Enhanced features not available"
+
+# Rest of your Dockerfile...
+
+# Set feature flags based on what's available
+RUN python -c "
 try:
-    enhanced_imports = setup_enhanced_imports()
-    ENHANCED_IMPORTS_AVAILABLE = True
-except Exception as e:
-    logging.error(f"Failed to setup enhanced imports: {e}")
-    enhanced_imports = {}
-    ENHANCED_IMPORTS_AVAILABLE = False
+    import sentence_transformers
+    print('ENABLE_SEMANTIC_CLASSIFICATION=true')
+except ImportError:
+    print('ENABLE_SEMANTIC_CLASSIFICATION=false')
+" > /tmp/features.env
+
+# STEP 7: Test the fix (30 minutes)
+# Create test script: test_imports.py
+
+def test_import_system():
+    """Test the fixed import system"""
+    
+    from services.enhanced_imports import SafeImportManager
+    
+    manager = SafeImportManager()
+    
+    # Test required import (should fail if missing)
+    result = manager.safe_import(
+        'fastapi_app',
+        'fastapi.FastAPI', 
+        required=True
+    )
+    assert result.status == FeatureStatus.AVAILABLE
+    
+    # Test optional import with fallback
+    result = manager.safe_import(
+        'sentence_transformers',
+        'sentence_transformers.SentenceTransformer',
+        fallback_class=object,  # dummy fallback
+        required=False
+    )
+    # Should be either AVAILABLE or FALLBACK, never crash
+    assert result.status in [FeatureStatus.AVAILABLE, FeatureStatus.FALLBACK]
+    
+    # Get status
+    status = manager.get_feature_status()
+    print("Import Status:", status)
+    
+    # Should not have any required failures
+    assert manager.validate_required_features()
+
+if __name__ == "__main__":
+    test_import_system()
+    print("✅ Import system test passed!")
