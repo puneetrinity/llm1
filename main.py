@@ -42,7 +42,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler('/app/logs/app.log') if sys.platform != 'win32' else logging.StreamHandler()
+        logging.FileHandler('/workspace/app/logs/app.log') if sys.platform != 'win32' else logging.StreamHandler()
     ]
 )
 
