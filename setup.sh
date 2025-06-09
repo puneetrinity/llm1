@@ -14,7 +14,7 @@ apt-get update -qq
 
 # Install essential packages
 echo "📦 Installing system packages..."
-apt-get install -y --no-install-recommends curl python3-pip git
+apt-get install -y --no-install-recommends curl python3-pip python3-venv git wget
 
 # Install Ollama
 echo "🤖 Installing Ollama..."
