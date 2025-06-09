@@ -1,5 +1,4 @@
-# WebSocket dashboard for real-time updates
-# utils/websocket_dashboard.py - Real-time WebSocket Dashboard
+# utils/websocket_dashboard.py - Fixed version without app decorators
 from fastapi import WebSocket, WebSocketDisconnect
 import json
 import asyncio
@@ -78,46 +77,3 @@ class WebSocketDashboard:
             except Exception as e:
                 print(f"Error in broadcast loop: {e}")
                 await asyncio.sleep(30)  # Wait longer on error
-
-# Add WebSocket endpoint to main app
-# Enhanced WebSocket endpoints for main.py
-@app.websocket("/ws/dashboard")
-async def websocket_dashboard(websocket: WebSocket):
-    """WebSocket endpoint for real-time dashboard updates"""
-    
-    dashboard = EnhancedDashboard(
-        metrics, 
-        performance_monitor,  # This would need to be added to main.py
-        cache_service, 
-        warmup_service, 
-        llm_router.semantic_classifier
-    )
-    
-    ws_dashboard = WebSocketDashboard(dashboard)
-    
-    try:
-        await ws_dashboard.connect(websocket)
-        
-        # Keep connection alive and handle messages
-        while True:
-            try:
-                # Wait for client messages (could be commands)
-                data = await websocket.receive_text()
-                message = json.loads(data)
-                
-                if message.get("type") == "get_dashboard":
-                    # Send immediate dashboard update
-                    dashboard_data = await dashboard.get_comprehensive_dashboard()
-                    await websocket.send_text(json.dumps({
-                        "type": "dashboard_update",
-                        "data": dashboard_data
-                    }))
-                
-            except WebSocketDisconnect:
-                break
-            except Exception as e:
-                logging.error(f"WebSocket error: {e}")
-                break
-                
-    finally:
-        ws_dashboard.disconnect(websocket)
