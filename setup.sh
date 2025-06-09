@@ -46,10 +46,17 @@ pip install --no-cache-dir \
     psutil
 
 # Get application code
-echo "📁 Cloning application..."
+echo "📁 Getting application code..."
 rm -rf /workspace/app
 git clone https://github.com/puneetrinity/llm1.git /workspace/app
 cd /workspace/app
+
+# Create necessary directories
+echo "📁 Creating directories..."
+mkdir -p /workspace/app/logs
+mkdir -p /workspace/app/data/cache
+mkdir -p /workspace/app/data/logs
+mkdir -p /workspace/app/data/models
 
 # Create .env file
 echo "⚙️ Creating configuration..."
