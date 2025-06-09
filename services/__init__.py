@@ -1,33 +1,18 @@
-# services/__init__.py
-from .ollama_client import OllamaClient
-from .router import LLMRouter
-from .auth import AuthService
+# services/__init__.py - Updated with Enhanced Import System
+from services.ollama_client import OllamaClient
+from services.router import LLMRouter
+from services.auth import AuthService
 
-# Enhanced services (optional imports)
-try:
-    from .enhanced_ollama_client import EnhancedOllamaClient
-    from .enhanced_router import EnhancedLLMRouter
-    from .streaming import StreamingService
-    from .model_warmup import ModelWarmupService
-    from .semantic_cache import SemanticCache
-    from .semantic_classifier import SemanticIntentClassifier
-    ENHANCED_AVAILABLE = True
-except ImportError:
-    ENHANCED_AVAILABLE = False
+# Use the enhanced import manager instead of manual imports
+from services.enhanced_imports import import_manager, ENHANCED_IMPORTS_AVAILABLE
 
+# Re-export for backward compatibility
 __all__ = [
     "OllamaClient",
     "LLMRouter", 
     "AuthService",
-    "ENHANCED_AVAILABLE"
+    "ENHANCED_IMPORTS_AVAILABLE"
 ]
 
-if ENHANCED_AVAILABLE:
-    __all__.extend([
-        "EnhancedOllamaClient",
-        "EnhancedLLMRouter",
-        "StreamingService", 
-        "ModelWarmupService",
-        "SemanticCache",
-        "SemanticIntentClassifier"
-    ])
+# Enhanced services will be available through the enhanced_imports module
+# This avoids circular imports and provides better error handling
