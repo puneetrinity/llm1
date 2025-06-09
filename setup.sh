@@ -4,6 +4,7 @@ set -e
 
 echo "🚀 Starting LLM Proxy Setup..."
 cd /workspace
+mkdir -p logs
 
 # Fix any package issues first
 echo "🔧 Fixing package system..."
