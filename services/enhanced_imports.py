@@ -170,7 +170,7 @@ enhanced_router = import_manager.safe_import(
     
     return {
         'EnhancedOllamaClient': enhanced_ollama.module,
-        'EnhancedLLMRouter': enhanced_router.module,
+        'LLMRouter': enhanced_router.module,
         'StreamingService': streaming_service.module,
         'ModelWarmupService': warmup_service.module,
         'SemanticIntentClassifier': semantic_classifier.module,
