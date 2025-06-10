@@ -140,6 +140,7 @@ except ImportError:
         status: str
         healthy: bool
         timestamp: str
+        version: str = "2.0.0"  # Fixed: Added default version
         services: List[Dict[str, Any]] = []
 
 # Global service instances with None initialization
@@ -509,6 +510,7 @@ async def health_check():
             status="healthy" if overall_healthy else "unhealthy",
             healthy=overall_healthy,
             timestamp=datetime.now().isoformat(),
+            version="2.0.0",
             services=services_status
         )
         
