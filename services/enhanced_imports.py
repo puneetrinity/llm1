@@ -136,12 +136,12 @@ def setup_enhanced_imports():
     )
     
     # Enhanced Router
-enhanced_router = import_manager.safe_import(
-    'enhanced_router',
-    'services.router.LLMRouter', 
-    fallback_class=LLMRouter,
-    critical=False  # Not critical, can fall back
-)
+    enhanced_router = import_manager.safe_import(
+        'enhanced_router',
+        'services.router.LLMRouter', 
+        fallback_class=LLMRouter,
+        critical=False  # Not critical, can fall back
+    )
     
     # Streaming Service
     streaming_service = import_manager.safe_import(
