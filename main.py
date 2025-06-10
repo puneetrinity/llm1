@@ -320,7 +320,7 @@ async def initialize_core_services():
         # Initialize router
         if ollama_client:
             try:
-                from services.llm_router import EnhancedLLMRouter
+                from services.router import LLMRouter as EnhancedLLMRouter
                 llm_router = EnhancedLLMRouter(ollama_client)
                 await llm_router.initialize()
                 logging.info("✅ Enhanced LLM router initialized")
