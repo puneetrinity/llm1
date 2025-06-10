@@ -1,9 +1,9 @@
 #!/bin/bash
-# ENHANCED RunPod A5000 Setup Script - Advanced GPU Detection & Error Handling
+# ENHANCED RunPod A5000 Setup Script v2.3 - Final Fixed Version
 
 set -e
 
-echo "🚀 ENHANCED LLM Proxy Setup for RunPod A5000 v2.2"
+echo "🚀 ENHANCED LLM Proxy Setup for RunPod A5000 v2.3"
 echo "=================================================="
 
 # Detect if we're on RunPod
@@ -53,33 +53,8 @@ else
     # Update package lists
     apt-get update -qq
     
-    # Try multiple NVIDIA utility versions
-    NVIDIA_INSTALLED=false
-    for version in 535 530 525 520 470; do
-        echo "   🔄 Trying nvidia-utils-$version..."
-        if apt-get install -y nvidia-utils-$version 2>/dev/null; then
-            echo "   ✅ Installed nvidia-utils-$version"
-            NVIDIA_INSTALLED=true
-            break
-        fi
-    done
-    
-    if [ "$NVIDIA_INSTALLED" = false ]; then
-        echo "   ⚠️ Could not install nvidia-utils via apt"
-        # Try nvidia-smi directly
-        if apt-get install -y nvidia-smi 2>/dev/null; then
-            echo "   ✅ Installed nvidia-smi package"
-        fi
-    fi
-    
-    # Retry nvidia-smi after installation
-    if command -v nvidia-smi &> /dev/null && nvidia-smi > /dev/null 2>&1; then
-        GPU_INFO=$(nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits 2>/dev/null || echo "Unknown GPU, Unknown")
-        GPU_NAME=$(echo "$GPU_INFO" | cut -d',' -f1 | xargs)
-        GPU_MEMORY=$(echo "$GPU_INFO" | cut -d',' -f2 | xargs)
-        echo "   ✅ GPU detected after installation: $GPU_NAME ($GPU_MEMORY MB)"
-        GPU_DETECTED=true
-    fi
+    # FIXED: Skip problematic nvidia packages that cause dpkg conflicts
+    echo "   ⚠️ Skipping nvidia apt packages to avoid dpkg conflicts"
 fi
 
 # Method 2: lspci detection
@@ -159,13 +134,15 @@ apt-get install -y --no-install-recommends \
     gnupg \
     lsb-release
 
-# Try to install Python NVIDIA packages via apt (if available)
-echo "🔧 Installing Python NVIDIA packages via apt..."
-apt-get install -y python3-pynvml 2>/dev/null || echo "   ⚠️ python3-pynvml not available via apt"
+# FIXED: Install Python NVIDIA packages with compatible versions
+echo "🐍 Installing Python NVIDIA packages (with version fixes)..."
+pip3 install --no-cache-dir --upgrade pip
 
-# Install Python NVIDIA packages via pip
-echo "🐍 Installing Python NVIDIA packages via pip..."
-pip3 install --no-cache-dir nvidia-ml-py3 pynvml gpustat 2>/dev/null || echo "   ⚠️ Some Python NVIDIA packages failed to install"
+# FIXED: Use specific versions that work on RunPod
+pip3 install --no-cache-dir \
+    "nvidia-ml-py==12.535.161" \
+    "pynvml==11.5.0" \
+    gpustat || echo "   ⚠️ Some Python NVIDIA packages failed to install"
 
 # Test Python GPU detection
 echo "🧪 Testing Python GPU detection..."
@@ -192,7 +169,9 @@ except ImportError:
     print('⚠️ pynvml not available')
 except Exception as e:
     print(f'⚠️ Python GPU detection failed: {e}')
-" 2>/dev/null || echo "   ⚠️ Python GPU test encountered errors"
+    print('   Note: This is common on RunPod due to driver/library mismatch')
+    print('   GPU will likely still work for inference')
+" 2>/dev/null || echo "   ⚠️ Python GPU test encountered errors (continuing)"
 
 # CRITICAL FIX 3: Install Ollama with enhanced GPU support
 echo "🤖 Installing Ollama with ENHANCED GPU support..."
@@ -356,7 +335,7 @@ cd "$WORKSPACE_DIR/app"
 # CRITICAL FIX 6: Create ENHANCED configuration for A5000
 echo "⚙️ Creating ENHANCED RunPod A5000 configuration..."
 cat > .env << 'EOF'
-# ENHANCED RunPod A5000 Configuration v2.2
+# ENHANCED RunPod A5000 Configuration v2.3
 DEBUG=false
 HOST=0.0.0.0
 PORT=8000
@@ -506,7 +485,7 @@ echo "🌐 Creating ENHANCED FastAPI application..."
 cat > main.py << 'MAIN_EOF'
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import uvicorn
@@ -574,7 +553,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="ENHANCED LLM Proxy", 
-    version="2.2.0",
+    version="2.3.0",
     description="RunPod A5000 Optimized LLM Proxy - ENHANCED Version with Advanced Features",
     lifespan=lifespan
 )
@@ -631,7 +610,7 @@ async def health():
             "status": "healthy",
             "timestamp": datetime.now().isoformat(),
             "uptime_seconds": int(time.time() - start_time),
-            "version": "2.2.0-enhanced",
+            "version": "2.3.0-enhanced",
             "gpu_optimized": True,
             "memory_limit_mb": settings.MAX_MEMORY_MB,
             "request_count": request_count,
@@ -743,325 +722,3 @@ async def chat_completions(request: ChatCompletionRequest):
                 if resp.status == 200:
                     data = await resp.json()
                     available_models = [m["name"] for m in data.get("models", [])]
-                    if model_to_use not in available_models:
-                        logger.warning(f"Model {model_to_use} not available, using {settings.DEFAULT_MODEL}")
-                        model_to_use = settings.DEFAULT_MODEL
-                        if model_to_use not in available_models and settings.FALLBACK_MODEL in available_models:
-                            model_to_use = settings.FALLBACK_MODEL
-        except Exception as e:
-            logger.warning(f"Could not check model availability: {e}")
-        
-        # Enhanced Ollama request with better options
-        ollama_request = {
-            "model": model_to_use,
-            "messages": [{"role": msg.role, "content": msg.content} for msg in request.messages],
-            "stream": request.stream or False,
-            "options": {
-                "temperature": request.temperature or 0.7,
-                "top_p": request.top_p or 1.0,
-                "repeat_penalty": 1.1,
-                "top_k": 40
-            }
-        }
-        
-        if request.max_tokens:
-            ollama_request["options"]["num_predict"] = min(request.max_tokens, 4096)
-            
-        # Enhanced request with timeout and retries
-        async with app.state.http_session.post(
-            f"{settings.OLLAMA_BASE_URL}/api/chat",
-            json=ollama_request,
-            timeout=aiohttp.ClientTimeout(total=300)
-        ) as resp:
-            if resp.status == 200:
-                result = await resp.json()
-                
-                # Calculate timing
-                process_time = time.time() - start_time_req
-                
-                # Enhanced OpenAI format response
-                return {
-                    "id": f"chatcmpl-{int(time.time())}-{hash(str(request.messages)) % 10000}",
-                    "object": "chat.completion",
-                    "created": int(time.time()),
-                    "model": model_to_use,
-                    "choices": [{
-                        "index": 0,
-                        "message": {
-                            "role": "assistant",
-                            "content": result.get("message", {}).get("content", "")
-                        },
-                        "finish_reason": "stop"
-                    }],
-                    "usage": {
-                        "prompt_tokens": sum(len(msg.content.split()) for msg in request.messages),
-                        "completion_tokens": len(result.get("message", {}).get("content", "").split()),
-                        "total_tokens": sum(len(msg.content.split()) for msg in request.messages) + len(result.get("message", {}).get("content", "").split())
-                    },
-                    "system_fingerprint": f"fp_{model_to_use}_{int(time.time())}",
-                    "processing_time_seconds": round(process_time, 3)
-                }
-            else:
-                error_text = await resp.text()
-                logger.error(f"Ollama error {resp.status}: {error_text}")
-                raise HTTPException(status_code=resp.status, detail=f"Ollama error: {error_text}")
-                
-    except asyncio.TimeoutError:
-        logger.error("Request timeout")
-        raise HTTPException(status_code=504, detail="Request timeout - try reducing message length")
-    except Exception as e:
-        logger.error(f"Internal error: {e}")
-        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
-
-@app.get("/v1/models")
-async def openai_models():
-    """OpenAI-compatible models endpoint"""
-    return await list_models()
-
-@app.get("/status")
-async def status():
-    """Detailed status information"""
-    return {
-        "service": "Enhanced LLM Proxy",
-        "version": "2.2.0",
-        "status": "running",
-        "gpu_optimized": True,
-        "ollama_url": settings.OLLAMA_BASE_URL,
-        "default_model": settings.DEFAULT_MODEL,
-        "memory_limit_mb": settings.MAX_MEMORY_MB,
-        "features": {
-            "streaming": True,
-            "model_fallback": True,
-            "enhanced_logging": True,
-            "metrics": settings.ENABLE_METRICS,
-            "rate_limiting": settings.ENABLE_RATE_LIMITING
-        }
-    }
-
-@app.get("/")
-async def root():
-    return {
-        "message": "ENHANCED LLM Proxy - RunPod A5000 Optimized",
-        "version": "2.2.0-enhanced",
-        "status": "GPU optimized with advanced features",
-        "endpoints": {
-            "chat": "/v1/chat/completions",
-            "models": "/models",
-            "health": "/health",
-            "metrics": "/metrics",
-            "docs": "/docs"
-        },
-        "gpu_status": "optimized"
-    }
-
-if __name__ == "__main__":
-    logger.info(f"Starting Enhanced LLM Proxy on {settings.HOST}:{settings.PORT}")
-    uvicorn.run(
-        "main:app", 
-        host=settings.HOST, 
-        port=settings.PORT, 
-        reload=settings.DEBUG,
-        access_log=True,
-        log_level="info"
-    )
-MAIN_EOF
-
-echo "🌐 Starting ENHANCED FastAPI application..."
-source "$WORKSPACE_DIR/venv/bin/activate"
-
-# Create requirements.txt for future reference
-echo "📝 Creating requirements.txt..."
-cat > requirements.txt << 'REQ_EOF'
-# Enhanced LLM Proxy Requirements
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-aiohttp==3.9.1
-pydantic==2.5.0
-pydantic-settings==2.1.0
-psutil==5.9.6
-python-multipart==0.0.6
-huggingface_hub>=0.20.0,<0.25.0
-sentence-transformers>=2.2.0,<3.0.0
-faiss-cpu==1.7.4
-sse-starlette==1.6.5
-numpy>=1.21.0,<1.25.0
-python-dotenv==1.0.0
-jinja2>=3.1.0
-prometheus-client==0.19.0
-python-json-logger==2.0.7
-colorama==0.4.6
-nvidia-ml-py3
-pynvml
-gpustat
-REQ_EOF
-
-# Start the application with enhanced logging
-echo "   🚀 Starting ENHANCED application with monitoring..."
-python3 main.py > "$WORKSPACE_DIR/logs/app.log" 2>&1 &
-APP_PID=$!
-
-echo "   📋 FastAPI PID: $APP_PID"
-
-# Enhanced startup verification
-echo "⏳ Waiting for FastAPI application to start..."
-APP_READY=false
-
-for i in {1..30}; do
-    if curl -s http://localhost:8000/health >/dev/null 2>&1; then
-        echo "   ✅ FastAPI application is ready!"
-        APP_READY=true
-        break
-    fi
-    
-    # Check if process is still running
-    if ! kill -0 $APP_PID 2>/dev/null; then
-        echo "   ❌ FastAPI process died during startup"
-        echo "   📋 Last few lines of app log:"
-        tail -10 "$WORKSPACE_DIR/logs/app.log" 2>/dev/null || echo "   No log available"
-        break
-    fi
-    
-    echo "   Attempt $i/30 - waiting 3 seconds... (process running: ✓)"
-    sleep 3
-done
-
-if [ "$APP_READY" = false ]; then
-    echo "   ❌ FastAPI failed to start"
-    exit 1
-fi
-
-# Enhanced service testing
-echo ""
-echo "🧪 ENHANCED Service Testing..."
-
-# Test health endpoint
-echo "   🏥 Testing health endpoint..."
-HEALTH_RESPONSE=$(curl -s http://localhost:8000/health 2>/dev/null || echo '{"error": "failed"}')
-if echo "$HEALTH_RESPONSE" | grep -q '"status"'; then
-    STATUS=$(echo "$HEALTH_RESPONSE" | python3 -c "import json, sys; data=json.load(sys.stdin); print(data.get('status', 'unknown'))" 2>/dev/null)
-    echo "   ✅ Health check passed - Status: $STATUS"
-    
-    # Show detailed health info
-    OLLAMA_STATUS=$(echo "$HEALTH_RESPONSE" | python3 -c "import json, sys; data=json.load(sys.stdin); print(data.get('ollama_status', 'unknown'))" 2>/dev/null)
-    MODEL_COUNT=$(echo "$HEALTH_RESPONSE" | python3 -c "import json, sys; data=json.load(sys.stdin); print(data.get('models_available', 0))" 2>/dev/null)
-    echo "   📊 Ollama: $OLLAMA_STATUS, Models: $MODEL_COUNT"
-else
-    echo "   ⚠️ Health check failed: $HEALTH_RESPONSE"
-fi
-
-# Test chat completion
-echo "   💬 Testing chat completion..."
-CHAT_RESPONSE=$(curl -s -X POST http://localhost:8000/v1/chat/completions \
-    -H "Content-Type: application/json" \
-    -d '{
-        "model":"mistral:7b-instruct-q4_0",
-        "messages":[{"role":"user","content":"Say hello in one word"}],
-        "max_tokens":10
-    }' 2>/dev/null || echo '{"error": "failed"}')
-
-if echo "$CHAT_RESPONSE" | grep -q '"choices"'; then
-    RESPONSE_CONTENT=$(echo "$CHAT_RESPONSE" | python3 -c "import json, sys; data=json.load(sys.stdin); print(data.get('choices', [{}])[0].get('message', {}).get('content', 'No content'))" 2>/dev/null)
-    PROCESS_TIME=$(echo "$CHAT_RESPONSE" | python3 -c "import json, sys; data=json.load(sys.stdin); print(data.get('processing_time_seconds', 'N/A'))" 2>/dev/null)
-    echo "   ✅ Chat completion passed!"
-    echo "   📝 Response: $RESPONSE_CONTENT"
-    echo "   ⏱️ Processing time: ${PROCESS_TIME}s"
-else
-    echo "   ⚠️ Chat completion failed: $CHAT_RESPONSE"
-fi
-
-# Test models endpoint
-echo "   📚 Testing models endpoint..."
-MODELS_RESPONSE=$(curl -s http://localhost:8000/models 2>/dev/null || echo '{"error": "failed"}')
-if echo "$MODELS_RESPONSE" | grep -q '"data"'; then
-    MODEL_COUNT_API=$(echo "$MODELS_RESPONSE" | python3 -c "import json, sys; data=json.load(sys.stdin); print(len(data.get('data', [])))" 2>/dev/null)
-    echo "   ✅ Models endpoint passed - $MODEL_COUNT_API models available"
-else
-    echo "   ⚠️ Models endpoint failed"
-fi
-
-# Enhanced cleanup function
-cleanup() {
-    echo ""
-    echo "🛑 Shutting down ENHANCED services..."
-    
-    echo "   🛑 Stopping FastAPI application (PID: $APP_PID)..."
-    kill $APP_PID 2>/dev/null || true
-    
-    echo "   🛑 Stopping Ollama service (PID: $OLLAMA_PID)..."
-    kill $OLLAMA_PID 2>/dev/null || true
-    
-    # Wait for graceful shutdown
-    sleep 5
-    
-    # Force kill if still running
-    kill -9 $APP_PID 2>/dev/null || true
-    kill -9 $OLLAMA_PID 2>/dev/null || true
-    
-    echo "   ✅ Services stopped"
-}
-
-trap cleanup EXIT SIGTERM SIGINT
-
-# Display enhanced startup summary
-echo ""
-echo "🎉 ENHANCED LLM Proxy is running successfully!"
-echo "============================================="
-echo "🔧 Version: 2.2.0-enhanced"
-echo "🖥️  GPU: $GPU_NAME ($GPU_MEMORY MB)" 
-echo "🧠 Memory Limit: ${settings.MAX_MEMORY_MB}MB"
-echo "📊 API URL: http://localhost:8000"
-echo "📚 API Docs: http://localhost:8000/docs"
-echo "🏥 Health Check: http://localhost:8000/health"
-echo "📈 Metrics: http://localhost:8000/metrics"
-echo "🤖 Models: http://localhost:8000/models"
-echo "📋 Status: http://localhost:8000/status"
-echo ""
-echo "📁 Log Files:"
-echo "   🤖 Ollama: $WORKSPACE_DIR/logs/ollama.log"
-echo "   🌐 FastAPI: $WORKSPACE_DIR/logs/app.log"
-echo ""
-echo "🧪 Test Commands:"
-echo "# Health Check"
-echo 'curl http://localhost:8000/health | jq'
-echo ""
-echo "# Chat Completion"
-echo 'curl -X POST http://localhost:8000/v1/chat/completions \'
-echo '  -H "Content-Type: application/json" \'
-echo '  -d '"'"'{"model":"mistral:7b-instruct-q4_0","messages":[{"role":"user","content":"Hello!"}]}'"'"' | jq'
-echo ""
-echo "# List Models"
-echo 'curl http://localhost:8000/models | jq'
-echo ""
-echo "🔧 Enhanced Features Active:"
-echo "   ✅ GPU Optimization for RunPod A5000"
-echo "   ✅ Advanced Error Handling"
-echo "   ✅ Prometheus Metrics"
-echo "   ✅ Model Fallback System"
-echo "   ✅ Enhanced Logging"
-echo "   ✅ Request Monitoring"
-echo "   ✅ Health Monitoring"
-echo ""
-echo "Press Ctrl+C to stop all services"
-
-# Keep script running and show live status
-echo ""
-echo "📊 Live Status (updates every 30 seconds):"
-while true; do
-    sleep 30
-    
-    # Quick status check
-    if curl -s http://localhost:8000/health >/dev/null 2>&1; then
-        CURRENT_TIME=$(date '+%H:%M:%S')
-        echo "[$CURRENT_TIME] ✅ Services running normally"
-        
-        # Show request count if available
-        HEALTH_DATA=$(curl -s http://localhost:8000/health 2>/dev/null)
-        if [ $? -eq 0 ]; then
-            REQ_COUNT=$(echo "$HEALTH_DATA" | python3 -c "import json, sys; data=json.load(sys.stdin); print(data.get('request_count', 'N/A'))" 2>/dev/null)
-            ERROR_COUNT=$(echo "$HEALTH_DATA" | python3 -c "import json, sys; data=json.load(sys.stdin); print(data.get('error_count', 'N/A'))" 2>/dev/null)
-            echo "[$CURRENT_TIME] 📊 Requests: $REQ_COUNT, Errors: $ERROR_COUNT"
-        fi
-    else
-        echo "[$CURRENT_TIME] ⚠️  Service health check failed"
-    fi
-done
