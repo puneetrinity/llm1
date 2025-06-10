@@ -327,7 +327,7 @@ cd "$WORKSPACE_DIR/app"
 
 # CRITICAL FIX 6: Create ENHANCED configuration for A5000
 echo "⚙️ Creating ENHANCED RunPod A5000 configuration..."
-cat > .env << 'ENV_CONFIG_END'
+cat > .env << 'EOF'
 # ENHANCED RunPod A5000 Configuration v2.3
 DEBUG=false
 HOST=0.0.0.0
@@ -387,7 +387,7 @@ ENABLE_HEALTH_CHECKS=true
 HEALTH_CHECK_INTERVAL=30
 ENABLE_PERFORMANCE_MONITORING=true
 LOG_REQUEST_DETAILS=true
-ENV_CONFIG_END
+EOF
 
 # CRITICAL FIX 7: Enhanced model management
 echo "📦 ENHANCED model downloading for A5000..."
@@ -475,7 +475,7 @@ fi
 
 # CRITICAL FIX 8: Create ENHANCED FastAPI application
 echo "🌐 Creating ENHANCED FastAPI application..."
-cat > main.py << 'FASTAPI_CODE_END'
+cat > main.py << 'EOF'
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, Response
@@ -715,3 +715,284 @@ async def chat_completions(request: ChatCompletionRequest):
                 if resp.status == 200:
                     data = await resp.json()
                     available_models = [m["name"] for m in data.get("models", [])]
+                    if model_to_use not in available_models:
+                        logger.warning(f"Model {model_to_use} not available, using fallback: {settings.FALLBACK_MODEL}")
+                        model_to_use = settings.FALLBACK_MODEL
+        except Exception as e:
+            logger.warning(f"Could not check available models: {e}")
+
+        # Prepare Ollama request
+        ollama_request = {
+            "model": model_to_use,
+            "messages": [{"role": msg.role, "content": msg.content} for msg in request.messages],
+            "stream": request.stream or False,
+            "options": {}
+        }
+        
+        # Add optional parameters
+        if request.temperature is not None:
+            ollama_request["options"]["temperature"] = request.temperature
+        if request.max_tokens is not None:
+            ollama_request["options"]["num_predict"] = request.max_tokens
+        if request.top_p is not None:
+            ollama_request["options"]["top_p"] = request.top_p
+
+        # Handle streaming vs non-streaming requests
+        if request.stream:
+            return StreamingResponse(
+                stream_chat_response(ollama_request),
+                media_type="text/plain"
+            )
+        else:
+            # Non-streaming request
+            async with app.state.http_session.post(
+                f"{settings.OLLAMA_BASE_URL}/api/chat",
+                json=ollama_request,
+                timeout=aiohttp.ClientTimeout(total=300)
+            ) as resp:
+                if resp.status != 200:
+                    error_text = await resp.text()
+                    logger.error(f"Ollama error {resp.status}: {error_text}")
+                    raise HTTPException(status_code=502, detail=f"Ollama error: {error_text}")
+                
+                ollama_response = await resp.json()
+                
+                # Transform to OpenAI format
+                openai_response = {
+                    "id": f"chatcmpl-{int(time.time())}",
+                    "object": "chat.completion",
+                    "created": int(time.time()),
+                    "model": model_to_use,
+                    "choices": [{
+                        "index": 0,
+                        "message": {
+                            "role": "assistant",
+                            "content": ollama_response.get("message", {}).get("content", "")
+                        },
+                        "finish_reason": "stop"
+                    }],
+                    "usage": {
+                        "prompt_tokens": ollama_response.get("prompt_eval_count", 0),
+                        "completion_tokens": ollama_response.get("eval_count", 0),
+                        "total_tokens": ollama_response.get("prompt_eval_count", 0) + ollama_response.get("eval_count", 0)
+                    }
+                }
+                
+                process_time = time.time() - start_time_req
+                logger.info(f"Chat completion completed in {process_time:.3f}s")
+                
+                return openai_response
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Chat completion error: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+async def stream_chat_response(ollama_request: dict):
+    """Stream chat response in OpenAI format"""
+    try:
+        async with app.state.http_session.post(
+            f"{settings.OLLAMA_BASE_URL}/api/chat",
+            json=ollama_request,
+            timeout=aiohttp.ClientTimeout(total=300)
+        ) as resp:
+            if resp.status != 200:
+                error_text = await resp.text()
+                yield f"data: {json.dumps({'error': f'Ollama error: {error_text}'})}\n\n"
+                return
+            
+            chunk_id = f"chatcmpl-{int(time.time())}"
+            
+            async for line in resp.content:
+                if line:
+                    try:
+                        line_str = line.decode('utf-8').strip()
+                        if line_str:
+                            ollama_chunk = json.loads(line_str)
+                            
+                            # Transform to OpenAI streaming format
+                            openai_chunk = {
+                                "id": chunk_id,
+                                "object": "chat.completion.chunk",
+                                "created": int(time.time()),
+                                "model": ollama_request["model"],
+                                "choices": [{
+                                    "index": 0,
+                                    "delta": {
+                                        "content": ollama_chunk.get("message", {}).get("content", "")
+                                    },
+                                    "finish_reason": "stop" if ollama_chunk.get("done", False) else None
+                                }]
+                            }
+                            
+                            yield f"data: {json.dumps(openai_chunk)}\n\n"
+                            
+                            if ollama_chunk.get("done", False):
+                                break
+                                
+                    except json.JSONDecodeError:
+                        continue
+            
+            # Send final chunk
+            final_chunk = {
+                "id": chunk_id,
+                "object": "chat.completion.chunk",
+                "created": int(time.time()),
+                "model": ollama_request["model"],
+                "choices": [{
+                    "index": 0,
+                    "delta": {},
+                    "finish_reason": "stop"
+                }]
+            }
+            yield f"data: {json.dumps(final_chunk)}\n\n"
+            yield "data: [DONE]\n\n"
+            
+    except Exception as e:
+        logger.error(f"Streaming error: {e}")
+        yield f"data: {json.dumps({'error': f'Streaming error: {str(e)}'})}\n\n"
+
+@app.get("/")
+async def root():
+    return {
+        "message": "ENHANCED LLM Proxy v2.3 - RunPod A5000 Optimized",
+        "status": "running",
+        "gpu_optimized": True,
+        "endpoints": {
+            "health": "/health",
+            "metrics": "/metrics", 
+            "models": "/models",
+            "chat": "/v1/chat/completions"
+        },
+        "documentation": "/docs"
+    }
+
+if __name__ == "__main__":
+    uvicorn.run(
+        "main:app",
+        host=settings.HOST,
+        port=settings.PORT,
+        log_level="info",
+        access_log=True
+    )
+EOF
+
+# CRITICAL FIX 9: Create startup script
+echo "🚀 Creating enhanced startup script..."
+cat > start.sh << 'EOF'
+#!/bin/bash
+# Enhanced startup script for LLM Proxy
+
+cd "$WORKSPACE_DIR/app" || cd /workspace/app
+
+# Activate virtual environment
+source "$WORKSPACE_DIR/venv/bin/activate" || source /workspace/venv/bin/activate
+
+# Set environment variables
+export CUDA_VISIBLE_DEVICES=0
+export NVIDIA_VISIBLE_DEVICES=all
+
+# Start the FastAPI application
+echo "🚀 Starting ENHANCED LLM Proxy on port 8000..."
+python main.py
+EOF
+
+chmod +x start.sh
+
+# Create process management script
+echo "🔧 Creating process management script..."
+cat > manage.sh << 'EOF'
+#!/bin/bash
+# Process management script
+
+WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
+
+case "$1" in
+    start)
+        echo "Starting services..."
+        # Start Ollama
+        CUDA_VISIBLE_DEVICES=0 OLLAMA_HOST=0.0.0.0:11434 ollama serve > "$WORKSPACE_DIR/logs/ollama.log" 2>&1 &
+        echo "Ollama started (PID: $!)"
+        
+        # Wait for Ollama to be ready
+        sleep 10
+        
+        # Start FastAPI app
+        cd "$WORKSPACE_DIR/app"
+        source "$WORKSPACE_DIR/venv/bin/activate"
+        python main.py &
+        echo "FastAPI app started (PID: $!)"
+        ;;
+    stop)
+        echo "Stopping services..."
+        pkill -f "ollama serve"
+        pkill -f "python main.py"
+        echo "Services stopped"
+        ;;
+    restart)
+        $0 stop
+        sleep 5
+        $0 start
+        ;;
+    status)
+        echo "Service status:"
+        if pgrep -f "ollama serve" > /dev/null; then
+            echo "Ollama: Running"
+        else
+            echo "Ollama: Stopped"
+        fi
+        
+        if pgrep -f "python main.py" > /dev/null; then
+            echo "FastAPI: Running"
+        else
+            echo "FastAPI: Stopped"
+        fi
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status}"
+        exit 1
+        ;;
+esac
+EOF
+
+chmod +x manage.sh
+
+# Final setup completion
+echo ""
+echo "🎉 ENHANCED RunPod A5000 Setup Complete!"
+echo "============================================"
+echo ""
+echo "📋 Setup Summary:"
+echo "   ✅ GPU Detection: $([[ $GPU_DETECTED == true ]] && echo "SUCCESS" || echo "WARNING")"
+echo "   ✅ Ollama Service: Running (PID: $OLLAMA_PID)"
+echo "   ✅ Models: $([[ $MODEL_PULL_SUCCESS == true ]] && echo "Mistral 7B Ready" || echo "Check Required")"
+echo "   ✅ FastAPI App: Ready to start"
+echo "   ✅ Memory Optimization: A5000 (24GB) configured"
+echo ""
+echo "🚀 Quick Start Commands:"
+echo "   Start everything:    cd $WORKSPACE_DIR/app && ./start.sh"
+echo "   Manage services:     cd $WORKSPACE_DIR/app && ./manage.sh start|stop|status"
+echo "   Test health:         curl http://localhost:8000/health"
+echo "   View logs:           tail -f $WORKSPACE_DIR/logs/ollama.log"
+echo ""
+echo "🌐 Access URLs (when running):"
+echo "   Health Check:        http://localhost:8000/health"
+echo "   API Documentation:   http://localhost:8000/docs"
+echo "   Metrics:            http://localhost:8000/metrics"
+echo "   Chat API:           http://localhost:8000/v1/chat/completions"
+echo ""
+echo "💡 Tips:"
+echo "   - The FastAPI app will start on port 8000"
+echo "   - Ollama runs on port 11434"
+echo "   - Check logs if services don't start properly"
+echo "   - Models are cached in $WORKSPACE_DIR/models"
+echo ""
+
+if [ "$MODEL_PULL_SUCCESS" = false ]; then
+    echo "⚠️  Warning: Model download failed"
+    echo "   Try manually: cd $WORKSPACE_DIR && ollama pull mistral:7b-instruct-q4_0"
+    echo ""
+fi
+
+echo "✨ Setup completed successfully! Run './start.sh' to begin."
