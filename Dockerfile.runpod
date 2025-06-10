@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y \
     python3-dev \
     build-essential \
     git \
+    dos2unix \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Ollama
@@ -51,8 +52,11 @@ RUN python3 -c "from sentence_transformers import SentenceTransformer; SentenceT
 # Copy application code
 COPY . .
 
-# Make scripts executable
-RUN chmod +x enhanced_start.sh
+# Fix line endings and make scripts executable
+RUN if [ -f enhanced_start.sh ]; then \
+        dos2unix enhanced_start.sh && \
+        chmod +x enhanced_start.sh; \
+    fi
 
 # Create directories for data persistence
 RUN mkdir -p /app/cache /app/logs /app/models
@@ -64,5 +68,68 @@ HEALTHCHECK --interval=30s --timeout=20s --start-period=300s --retries=3 \
 # Expose ports
 EXPOSE 8000 11434
 
-# Use enhanced startup script
-CMD ["./enhanced_start.sh"]
+# FIXED: Use a more reliable startup approach
+CMD ["/bin/bash", "-c", "\
+    echo '🚀 Starting Enhanced LLM Proxy Service...' && \
+    \
+    # Start Ollama in background \
+    echo '📡 Starting Ollama service...' && \
+    ollama serve & \
+    OLLAMA_PID=$! && \
+    \
+    # Wait for Ollama to be ready \
+    echo '⏳ Waiting for Ollama to start...' && \
+    for i in {1..30}; do \
+        if curl -f http://localhost:11434/api/tags >/dev/null 2>&1; then \
+            echo '✅ Ollama is ready!'; \
+            break; \
+        fi; \
+        echo \"   Attempt $i/30 - waiting 2 seconds...\"; \
+        sleep 2; \
+    done && \
+    \
+    # Check if Ollama started successfully \
+    if ! curl -f http://localhost:11434/api/tags >/dev/null 2>&1; then \
+        echo '❌ Failed to start Ollama service'; \
+        exit 1; \
+    fi && \
+    \
+    # Pull and warm up priority model \
+    echo '📦 Pulling Mistral 7B (Priority 1)...' && \
+    ollama pull mistral:7b-instruct-q4_0 && \
+    echo '✅ Mistral 7B ready!' && \
+    \
+    # Warm up the model \
+    echo '🔥 Warming up Mistral...' && \
+    curl -X POST http://localhost:11434/api/chat \
+        -H 'Content-Type: application/json' \
+        -d '{\"model\": \"mistral:7b-instruct-q4_0\", \"messages\": [{\"role\": \"user\", \"content\": \"Hello\"}], \"stream\": false, \"options\": {\"num_predict\": 5}}' \
+        >/dev/null 2>&1 && \
+    echo '✅ Mistral warmed up!' && \
+    \
+    # Pull other models in background \
+    echo '📦 Pulling additional models in background...' && \
+    (ollama pull deepseek-v2:7b-q4_0 && echo '✅ DeepSeek V2 7B ready!') & \
+    (ollama pull llama3:8b-instruct-q4_0 && echo '✅ LLaMA3 8B ready!') & \
+    \
+    # Start the FastAPI application \
+    echo '🌐 Starting FastAPI application...' && \
+    if [ -f main_enhanced.py ]; then \
+        python3 main_enhanced.py; \
+    elif [ -f main.py ]; then \
+        python3 main.py; \
+    else \
+        echo '❌ No main.py found, creating basic one...' && \
+        python3 -c \"\
+from fastapi import FastAPI; \
+from fastapi.middleware.cors import CORSMiddleware; \
+import uvicorn; \
+app = FastAPI(title='LLM Proxy', version='1.0.0'); \
+app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_credentials=True, allow_methods=['*'], allow_headers=['*']); \
+@app.get('/health') \
+async def health(): return {'status': 'healthy'}; \
+@app.get('/') \
+async def root(): return {'message': 'LLM Proxy API'}; \
+uvicorn.run('__main__:app', host='0.0.0.0', port=8000)\"; \
+    fi \
+"]
