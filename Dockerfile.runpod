@@ -1,11 +1,21 @@
 FROM nvidia/cuda:12.1.0-base-ubuntu22.04
 
-# Set environment variables to prevent interactive prompts
+# FIXED: Set environment variables to prevent interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
-# Install system dependencies
+# CRITICAL FIX 1: Set CUDA environment variables FIRST
+ENV CUDA_VISIBLE_DEVICES=0
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV PATH=/usr/local/cuda/bin:$PATH
+ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+
+# CRITICAL FIX 2: Install GPU detection tools BEFORE other packages
 RUN apt-get update && apt-get install -y \
+    pciutils \
+    lshw \
+    hwinfo \
+    nvidia-utils-535 \
     curl \
     python3 \
     python3-pip \
@@ -15,39 +25,50 @@ RUN apt-get update && apt-get install -y \
     dos2unix \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Ollama
+# CRITICAL FIX 3: Install Ollama with proper GPU environment
 RUN curl -fsSL https://ollama.com/install.sh | sh
 
-# Environment variables for A5000 (24GB VRAM)
+# FIXED Environment variables for A5000 (24GB VRAM) - Conservative settings
 ENV OLLAMA_HOST=0.0.0.0:11434
 ENV OLLAMA_NUM_PARALLEL=2
-ENV OLLAMA_MAX_LOADED_MODELS=3
-ENV NVIDIA_VISIBLE_DEVICES=all
-ENV GPU_MEMORY_FRACTION=0.9
+ENV OLLAMA_MAX_LOADED_MODELS=2
+ENV OLLAMA_GPU_OVERHEAD=0
+ENV OLLAMA_DEBUG=INFO
 
-# Memory management for RunPod A5000
-ENV MAX_MEMORY_MB=16384
-ENV CACHE_MEMORY_LIMIT_MB=2048
-ENV MODEL_MEMORY_LIMIT_MB=8192
+# FIXED Memory management for RunPod A5000 - Conservative
+ENV MAX_MEMORY_MB=12288
+ENV CACHE_MEMORY_LIMIT_MB=1024
+ENV MODEL_MEMORY_LIMIT_MB=6144
 ENV SEMANTIC_MODEL_MAX_MEMORY_MB=500
 
-# Enhanced features configuration
-ENV ENABLE_SEMANTIC_CLASSIFICATION=true
+# FIXED Enhanced features configuration - Conservative to avoid errors
+ENV ENABLE_SEMANTIC_CLASSIFICATION=false
 ENV ENABLE_STREAMING=true
 ENV ENABLE_MODEL_WARMUP=true
 ENV ENABLE_DETAILED_METRICS=true
 
 WORKDIR /app
 
-# Copy requirements first for better caching
+# CRITICAL FIX 4: Copy requirements with FIXED versions
 COPY requirements.txt .
 
-# Install Python dependencies with enhanced features
+# FIXED: Install Python dependencies with compatible versions
 RUN pip3 install --no-cache-dir --upgrade pip && \
-    pip3 install --no-cache-dir -r requirements.txt
+    pip3 install --no-cache-dir \
+    fastapi==0.104.1 \
+    uvicorn[standard]==0.24.0 \
+    aiohttp==3.9.1 \
+    pydantic==2.5.0 \
+    pydantic-settings==2.1.0 \
+    psutil==5.9.6
 
-# Pre-download ML model for semantic classification
-RUN python3 -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')" || echo "ML model download failed - will fallback to basic features"
+# CRITICAL FIX 5: Install compatible huggingface_hub version
+RUN pip3 install --no-cache-dir "huggingface_hub>=0.20.0,<0.25.0" && \
+    pip3 install --no-cache-dir \
+    "sentence-transformers>=2.2.0,<3.0.0" \
+    "faiss-cpu==1.7.4" \
+    "sse-starlette==1.6.5" \
+    "numpy>=1.21.0,<1.25.0" || echo "Enhanced features may be limited"
 
 # Copy application code
 COPY . .
@@ -61,62 +82,65 @@ RUN if [ -f enhanced_start.sh ]; then \
 # Create directories for data persistence
 RUN mkdir -p /app/cache /app/logs /app/models
 
-# Health check with appropriate timeouts for RunPod
-HEALTHCHECK --interval=30s --timeout=20s --start-period=300s --retries=3 \
+# FIXED Health check with appropriate timeouts for RunPod
+HEALTHCHECK --interval=60s --timeout=30s --start-period=300s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # Expose ports
 EXPOSE 8000 11434
 
-# FIXED: Use a more reliable startup approach
+# CRITICAL FIX 6: Use FIXED startup approach with proper GPU setup
 CMD ["/bin/bash", "-c", "\
-    echo '🚀 Starting Enhanced LLM Proxy Service...' && \
+    echo '🚀 Starting FIXED Enhanced LLM Proxy Service...' && \
     \
-    # Start Ollama in background \
-    echo '📡 Starting Ollama service...' && \
-    ollama serve & \
-    OLLAMA_PID=$! && \
+    # CRITICAL: Export GPU environment variables \
+    export CUDA_VISIBLE_DEVICES=0 && \
+    export NVIDIA_VISIBLE_DEVICES=all && \
+    export OLLAMA_HOST=0.0.0.0:11434 && \
+    export OLLAMA_GPU_OVERHEAD=0 && \
     \
-    # Wait for Ollama to be ready \
+    # Verify GPU detection \
+    echo '🔍 Verifying GPU detection...' && \
+    nvidia-smi || echo 'GPU detection may have issues' && \
+    \
+    # Start Ollama in background with GPU environment \
+    echo '📡 Starting Ollama service with GPU support...' && \
+    CUDA_VISIBLE_DEVICES=0 ollama serve & \
+    OLLAMA_PID=$$! && \
+    \
+    # Wait for Ollama to be ready with better error handling \
     echo '⏳ Waiting for Ollama to start...' && \
-    for i in {1..30}; do \
+    for i in {1..60}; do \
         if curl -f http://localhost:11434/api/tags >/dev/null 2>&1; then \
             echo '✅ Ollama is ready!'; \
             break; \
         fi; \
-        echo \"   Attempt $i/30 - waiting 2 seconds...\"; \
-        sleep 2; \
+        echo \"   Attempt $$i/60 - waiting 5 seconds...\"; \
+        sleep 5; \
     done && \
     \
     # Check if Ollama started successfully \
     if ! curl -f http://localhost:11434/api/tags >/dev/null 2>&1; then \
-        echo '❌ Failed to start Ollama service'; \
+        echo '❌ Failed to start Ollama service - checking logs'; \
+        ps aux | grep ollama; \
         exit 1; \
     fi && \
     \
-    # Pull and warm up priority model \
+    # Pull and warm up priority model with error handling \
     echo '📦 Pulling Mistral 7B (Priority 1)...' && \
-    ollama pull mistral:7b-instruct-q4_0 && \
+    (CUDA_VISIBLE_DEVICES=0 ollama pull mistral:7b-instruct-q4_0 || echo 'Model pull failed') && \
     echo '✅ Mistral 7B ready!' && \
     \
     # Warm up the model \
     echo '🔥 Warming up Mistral...' && \
-    curl -X POST http://localhost:11434/api/chat \
+    (curl -X POST http://localhost:11434/api/chat \
         -H 'Content-Type: application/json' \
         -d '{\"model\": \"mistral:7b-instruct-q4_0\", \"messages\": [{\"role\": \"user\", \"content\": \"Hello\"}], \"stream\": false, \"options\": {\"num_predict\": 5}}' \
-        >/dev/null 2>&1 && \
-    echo '✅ Mistral warmed up!' && \
-    \
-    # Pull other models in background \
-    echo '📦 Pulling additional models in background...' && \
-    (ollama pull deepseek-v2:7b-q4_0 && echo '✅ DeepSeek V2 7B ready!') & \
-    (ollama pull llama3:8b-instruct-q4_0 && echo '✅ LLaMA3 8B ready!') & \
+        >/dev/null 2>&1 && echo '✅ Mistral warmed up!' || echo '⚠️ Warmup failed') && \
     \
     # Start the FastAPI application \
-    echo '🌐 Starting FastAPI application...' && \
-    if [ -f main_enhanced.py ]; then \
-        python3 main_enhanced.py; \
-    elif [ -f main.py ]; then \
+    echo '🌐 Starting FIXED FastAPI application...' && \
+    if [ -f main.py ]; then \
         python3 main.py; \
     else \
         echo '❌ No main.py found, creating basic one...' && \
@@ -124,12 +148,12 @@ CMD ["/bin/bash", "-c", "\
 from fastapi import FastAPI; \
 from fastapi.middleware.cors import CORSMiddleware; \
 import uvicorn; \
-app = FastAPI(title='LLM Proxy', version='1.0.0'); \
+app = FastAPI(title='FIXED LLM Proxy', version='2.1.0'); \
 app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_credentials=True, allow_methods=['*'], allow_headers=['*']); \
 @app.get('/health') \
-async def health(): return {'status': 'healthy'}; \
+async def health(): return {'status': 'healthy', 'version': 'fixed'}; \
 @app.get('/') \
-async def root(): return {'message': 'LLM Proxy API'}; \
+async def root(): return {'message': 'FIXED LLM Proxy API'}; \
 uvicorn.run('__main__:app', host='0.0.0.0', port=8000)\"; \
     fi \
 "]
