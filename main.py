@@ -9,7 +9,7 @@ import sys
 import traceback
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 # Import configuration with fallback handling
 try:
