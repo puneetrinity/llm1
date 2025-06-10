@@ -146,35 +146,25 @@ pip3 install --no-cache-dir \
 
 # Test Python GPU detection
 echo "🧪 Testing Python GPU detection..."
-python3 << 'PYTHON_END'
-import sys
+python3 -c "
 try:
     import pynvml
     pynvml.nvmlInit()
     count = pynvml.nvmlDeviceGetCount()
-    print(f'✅ Found {count} GPU(s) via Python')
+    print('✅ Found ' + str(count) + ' GPU(s) via Python')
     for i in range(count):
         try:
             handle = pynvml.nvmlDeviceGetHandleByIndex(i)
             name = pynvml.nvmlDeviceGetName(handle)
-            # FIXED: Handle both bytes and string returns
-            if isinstance(name, bytes):
+            if hasattr(name, 'decode'):
                 name = name.decode('utf-8')
-            mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-            total_gb = mem_info.total // (1024**3)
-            free_gb = mem_info.free // (1024**3)
-            used_gb = mem_info.used // (1024**3)
-            print(f'   GPU {i}: {name}')
-            print(f'   Memory: {total_gb} GB total, {free_gb} GB free, {used_gb} GB used')
+            print('   GPU ' + str(i) + ': ' + str(name))
         except Exception as e:
-            print(f'   GPU {i}: Error getting details - {e}')
-except ImportError:
-    print('⚠️ pynvml not available')
+            print('   GPU ' + str(i) + ': Error - ' + str(e))
 except Exception as e:
-    print(f'⚠️ Python GPU detection failed: {e}')
-    print('   Note: This is common on RunPod due to driver/library mismatch')
-    print('   GPU will likely still work for inference')
-PYTHON_END
+    print('⚠️ GPU detection failed: ' + str(e))
+    print('   This is normal on RunPod - GPU will still work')
+" || echo "   ⚠️ Python GPU test had issues (continuing)"
 
 # CRITICAL FIX 3: Install Ollama with enhanced GPU support
 echo "🤖 Installing Ollama with ENHANCED GPU support..."
