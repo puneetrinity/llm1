@@ -1,10 +1,9 @@
-# requirements.txt - Fixed Dependencies with Memory-Safe Versions
+# requirements.txt - Fixed Dependencies with Compatible Versions
 # Core FastAPI dependencies
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 pydantic==2.5.0
 pydantic-settings==2.1.0
-pip install --upgrade huggingface_hub
 
 # HTTP client and middleware
 aiohttp==3.9.1
@@ -16,13 +15,11 @@ psutil==5.9.6
 # Authentication and security
 PyJWT==2.8.0
 
-# Optional dependencies for enhanced features
-# Only install these if you enable semantic classification
-sentence-transformers==2.2.2  # ~500MB memory usage
-faiss-cpu==1.7.4              # Lightweight CPU version
-numpy==1.24.3                 # Required by transformers
-
-# Streaming support
+# Enhanced features with compatible versions
+sentence-transformers==4.1.0
+huggingface_hub>=0.20.0
+faiss-cpu==1.7.4
+numpy==1.24.3
 sse-starlette==1.6.5
 
 # Optional GPU monitoring (install separately if needed)
