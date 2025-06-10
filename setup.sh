@@ -1,5 +1,5 @@
 #!/bin/bash
-# ENHANCED RunPod A5000 Setup Script v2.3 - Final Fixed Version
+# ENHANCED RunPod A5000 Setup Script v2.3 - Fixed Version (No Loop)
 
 set -e
 
@@ -19,6 +19,36 @@ fi
 
 cd "$WORKSPACE_DIR"
 mkdir -p logs models cache
+
+# CRITICAL FIX: Prevent multiple runs
+SETUP_COMPLETE_FILE="$WORKSPACE_DIR/.setup_complete"
+if [ -f "$SETUP_COMPLETE_FILE" ]; then
+    echo "✅ Setup already completed. Skipping setup process..."
+    echo "🚀 Starting services directly..."
+    cd "$WORKSPACE_DIR/app"
+    
+    # Check if ollama is running
+    if ! pgrep -f "ollama serve" > /dev/null; then
+        echo "🤖 Starting Ollama service..."
+        CUDA_VISIBLE_DEVICES=0 \
+        NVIDIA_VISIBLE_DEVICES=all \
+        OLLAMA_HOST=0.0.0.0:11434 \
+        ollama serve > "$WORKSPACE_DIR/logs/ollama.log" 2>&1 &
+        sleep 10
+    else
+        echo "✅ Ollama already running"
+    fi
+    
+    # Start the FastAPI app
+    if [ -f "start.sh" ]; then
+        echo "🚀 Starting FastAPI application..."
+        source "$WORKSPACE_DIR/venv/bin/activate" 2>/dev/null || true
+        exec ./start.sh
+    else
+        echo "❌ start.sh not found. Removing setup marker and re-running setup..."
+        rm -f "$SETUP_COMPLETE_FILE"
+    fi
+fi
 
 # CRITICAL FIX 1: Export CUDA environment variables FIRST
 echo "🔧 CRITICAL: Setting up CUDA environment for A5000..."
@@ -995,4 +1025,33 @@ if [ "$MODEL_PULL_SUCCESS" = false ]; then
     echo ""
 fi
 
-echo "✨ Setup completed successfully! Run './start.sh' to begin."
+# CRITICAL FIX: Mark setup as complete and prevent restart loop
+echo "🔒 Marking setup complete to prevent restart loop..."
+touch "$SETUP_COMPLETE_FILE"
+
+echo "✨ Setup completed successfully!"
+echo ""
+echo "🔄 IMPORTANT: Choose your next step:"
+echo "   Option 1 (Recommended): Auto-start the application"
+echo "   Option 2: Exit and manually start later with './start.sh'"
+echo ""
+
+# Auto-start option (recommended for RunPod)
+read -t 10 -p "Auto-start the application now? (Y/n): " AUTO_START
+AUTO_START=${AUTO_START:-Y}
+
+if [[ $AUTO_START =~ ^[Yy]$ ]] || [[ -z $AUTO_START ]]; then
+    echo "🚀 Auto-starting application..."
+    echo "📋 Switching to application mode - setup script exiting..."
+    
+    # Start the application and keep it running
+    cd "$WORKSPACE_DIR/app"
+    source "$WORKSPACE_DIR/venv/bin/activate"
+    
+    # This exec replaces the current process, preventing the script from continuing
+    exec ./start.sh
+else
+    echo "🛑 Setup completed. Run './start.sh' manually when ready."
+    echo "🔒 Setup script exiting to prevent restart loop..."
+    exit 0
+fi
