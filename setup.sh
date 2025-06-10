@@ -327,7 +327,7 @@ cd "$WORKSPACE_DIR/app"
 
 # CRITICAL FIX 6: Create ENHANCED configuration for A5000
 echo "⚙️ Creating ENHANCED RunPod A5000 configuration..."
-cat > .env << 'EOF'
+cat > .env << 'ENV_CONFIG_END'
 # ENHANCED RunPod A5000 Configuration v2.3
 DEBUG=false
 HOST=0.0.0.0
@@ -387,7 +387,7 @@ ENABLE_HEALTH_CHECKS=true
 HEALTH_CHECK_INTERVAL=30
 ENABLE_PERFORMANCE_MONITORING=true
 LOG_REQUEST_DETAILS=true
-EOF
+ENV_CONFIG_END
 
 # CRITICAL FIX 7: Enhanced model management
 echo "📦 ENHANCED model downloading for A5000..."
@@ -475,7 +475,7 @@ fi
 
 # CRITICAL FIX 8: Create ENHANCED FastAPI application
 echo "🌐 Creating ENHANCED FastAPI application..."
-cat > main.py << 'EOF'
+cat > main.py << 'FASTAPI_CODE_END'
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, Response
