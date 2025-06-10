@@ -303,7 +303,7 @@ async def initialize_core_services():
             enhanced_imports = setup_enhanced_imports()
             enhanced_capabilities = enhanced_imports['capabilities']
             
-            ollama_client = enhanced_imports['EnhancedOllamaClient'](
+            ollama_client = enhanced_imports.get('EnhancedOllamaClient', BasicOllamaClient)(
                 settings.OLLAMA_BASE_URL, 
                 getattr(settings, 'OLLAMA_TIMEOUT', 300)
             )
