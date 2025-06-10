@@ -1,8 +1,9 @@
-# services/model_warmup.py - Model Warmup Service
+# services/model_warmup.py - Model Warmup Service (Fixed)
 import asyncio
 import logging
+import aiohttp
 from datetime import datetime, timedelta
-from typing import Dict, List, Set, Any, Optional
+from typing import Dict, List, Set, Any
 import random
 
 class ModelWarmupService:
@@ -130,8 +131,9 @@ class ModelWarmupService:
         logging.debug(f"Warming up model: {model}")
         
         try:
-            # Ensure model is loaded
-            await self.router.ensure_model_loaded(model)
+            # Ensure model is loaded via router if available
+            if hasattr(self.router, 'ensure_model_loaded'):
+                await self.router.ensure_model_loaded(model)
             
             # Get appropriate warmup prompt
             prompts = self.warmup_prompts.get(model, ["Hello"])
@@ -149,17 +151,29 @@ class ModelWarmupService:
             }
             
             # Send warmup request
-            async with self.ollama_client.session.post(
-                f"{self.ollama_client.base_url}/api/chat",
-                json=warmup_request,
-                timeout=aiohttp.ClientTimeout(total=30)
-            ) as response:
-                if response.status == 200:
-                    await response.json()  # Consume response
-                    self.model_last_used[model] = datetime.now()
-                    logging.debug(f"Successfully warmed up {model}")
-                else:
-                    logging.warning(f"Warmup request failed for {model}: {response.status}")
+            if hasattr(self.ollama_client, 'session') and self.ollama_client.session:
+                async with self.ollama_client.session.post(
+                    f"{self.ollama_client.base_url}/api/chat",
+                    json=warmup_request,
+                    timeout=aiohttp.ClientTimeout(total=30)
+                ) as response:
+                    if response.status == 200:
+                        await response.json()  # Consume response
+                        self.model_last_used[model] = datetime.now()
+                        logging.debug(f"Successfully warmed up {model}")
+                    else:
+                        logging.warning(f"Warmup request failed for {model}: {response.status}")
+            else:
+                # Fallback: use the ollama client's generate_completion method
+                messages = [{"role": "user", "content": warmup_prompt}]
+                await self.ollama_client.generate_completion(
+                    model=model,
+                    messages=messages,
+                    max_tokens=10,
+                    temperature=0.1
+                )
+                self.model_last_used[model] = datetime.now()
+                logging.debug(f"Successfully warmed up {model}")
                     
         except Exception as e:
             logging.error(f"Error warming up {model}: {str(e)}")
