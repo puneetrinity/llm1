@@ -482,7 +482,7 @@ fi
 
 # CRITICAL FIX 8: Create ENHANCED FastAPI application
 echo "🌐 Creating ENHANCED FastAPI application..."
-cat > main.py << MAIN_EOF
+cat > main.py << 'EOF'
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, Response
