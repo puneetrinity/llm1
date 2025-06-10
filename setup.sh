@@ -1030,28 +1030,47 @@ echo "🔒 Marking setup complete to prevent restart loop..."
 touch "$SETUP_COMPLETE_FILE"
 
 echo "✨ Setup completed successfully!"
-echo ""
-echo "🔄 IMPORTANT: Choose your next step:"
-echo "   Option 1 (Recommended): Auto-start the application"
-echo "   Option 2: Exit and manually start later with './start.sh'"
-echo ""
 
-# Auto-start option (recommended for RunPod)
-read -t 10 -p "Auto-start the application now? (Y/n): " AUTO_START
-AUTO_START=${AUTO_START:-Y}
+# CRITICAL: Auto-start without user input (RunPod containers are non-interactive)
+echo "🚀 Auto-starting application (non-interactive mode)..."
+echo "📋 Switching to application mode - setup script will be replaced..."
 
-if [[ $AUTO_START =~ ^[Yy]$ ]] || [[ -z $AUTO_START ]]; then
-    echo "🚀 Auto-starting application..."
-    echo "📋 Switching to application mode - setup script exiting..."
+# Change to app directory and activate environment
+cd "$WORKSPACE_DIR/app"
+source "$WORKSPACE_DIR/venv/bin/activate"
+
+# Ensure Ollama is still running before starting FastAPI
+if ! pgrep -f "ollama serve" > /dev/null; then
+    echo "🤖 Restarting Ollama service..."
+    CUDA_VISIBLE_DEVICES=0 \
+    NVIDIA_VISIBLE_DEVICES=all \
+    OLLAMA_HOST=0.0.0.0:11434 \
+    ollama serve > "$WORKSPACE_DIR/logs/ollama.log" 2>&1 &
     
-    # Start the application and keep it running
-    cd "$WORKSPACE_DIR/app"
-    source "$WORKSPACE_DIR/venv/bin/activate"
-    
-    # This exec replaces the current process, preventing the script from continuing
-    exec ./start.sh
+    # Wait for Ollama to be ready
+    echo "⏳ Waiting for Ollama to start..."
+    for i in {1..30}; do
+        if curl -fs http://localhost:11434/api/tags >/dev/null 2>&1; then
+            echo "✅ Ollama is ready!"
+            break
+        fi
+        echo "   Waiting... ($i/30)"
+        sleep 2
+    done
 else
-    echo "🛑 Setup completed. Run './start.sh' manually when ready."
-    echo "🔒 Setup script exiting to prevent restart loop..."
-    exit 0
+    echo "✅ Ollama already running"
 fi
+
+# CRITICAL: Use exec to replace this process entirely - this prevents restart loops
+echo "🔄 Starting FastAPI application and replacing setup process..."
+echo "📋 From now on, this container will run the FastAPI app continuously..."
+echo ""
+echo "🌐 Once started, access the API at:"
+echo "   Health Check: http://localhost:8000/health"
+echo "   Documentation: http://localhost:8000/docs"
+echo "   Chat API: http://localhost:8000/v1/chat/completions"
+echo ""
+
+# This exec command replaces the current shell process with the FastAPI app
+# This is CRITICAL - it prevents the script from ending and restarting
+exec python main.py
