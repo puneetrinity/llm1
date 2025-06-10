@@ -1,6 +1,4 @@
-# services/enhanced_imports.py - DROP-IN REPLACEMENT
-# Just replace your existing file with this content
-
+# services/enhanced_imports.py - Fixed Version
 import logging
 from typing import Dict, Any, Optional, Type
 from dataclasses import dataclass
@@ -135,7 +133,7 @@ def setup_enhanced_imports():
         critical=False  # Not critical, can fall back
     )
     
-    # Enhanced Router
+    # Enhanced Router - FIXED: Use correct import path
     enhanced_router = import_manager.safe_import(
         'enhanced_router',
         'services.router.LLMRouter', 
