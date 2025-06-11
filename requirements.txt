@@ -1,29 +1,113 @@
-# requirements.txt - Fixed Dependencies with Compatible Versions
-# Core FastAPI dependencies
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-pydantic==2.5.0
-pydantic-settings==2.1.0
+# requirements_enhanced.txt - Additional Dependencies for Enhanced Features
+# Install with: pip install -r requirements.txt -r requirements_enhanced.txt
 
-# HTTP client and middleware
-aiohttp==3.9.1
-python-multipart==0.0.6
+# === CORE ENHANCED FEATURES (Required) ===
+
+# Enhanced HTTP client with connection pooling (already in requirements.txt)
+# aiohttp==3.9.1
+
+# Advanced data structures and algorithms
+numpy>=1.21.0,<1.25.0
+
+# === SMART CACHING FEATURES (Optional but Recommended) ===
+
+# Redis backend for distributed caching
+redis>=4.5.0,<5.0.0
+aioredis>=2.0.0,<3.0.0
+
+# Semantic similarity for intelligent caching
+sentence-transformers>=2.2.0,<3.0.0
+transformers>=4.21.0,<5.0.0
+torch>=1.12.0,<2.0.0
+
+# Scientific computing for similarity calculations
+scikit-learn>=1.1.0,<2.0.0
+scipy>=1.9.0,<2.0.0
+
+# === PERFORMANCE MONITORING (Optional) ===
 
 # System monitoring
-psutil==5.9.6
+psutil>=5.9.0,<6.0.0
 
-# Authentication and security
-PyJWT==2.8.0
+# GPU monitoring (optional - for systems with GPU)
+# GPUtil>=1.4.0
+# nvidia-ml-py>=12.535.0
 
-# Enhanced features with compatible versions
-sentence-transformers==4.1.0
-huggingface_hub>=0.20.0
-faiss-cpu==1.7.4
-numpy==1.24.3
-sse-starlette==1.6.5
+# === DEVELOPMENT AND TESTING (Optional) ===
 
-# Optional GPU monitoring (install separately if needed)
-# GPUtil==1.4.0
+# Testing framework
+pytest>=7.1.0,<8.0.0
+pytest-asyncio>=0.21.0,<1.0.0
+pytest-cov>=4.0.0,<5.0.0
 
-# Optional Redis for distributed caching (install separately if needed)
-# redis==5.0.1
+# Code quality
+black>=22.3.0,<24.0.0
+isort>=5.10.0,<6.0.0
+flake8>=4.0.0,<6.0.0
+
+# Performance testing
+locust>=2.10.0,<3.0.0
+
+# === ALTERNATIVE LIGHTWEIGHT REQUIREMENTS ===
+# If you want minimal dependencies, install only these:
+
+# Minimal smart caching (memory-only, no Redis)
+# No additional requirements needed - uses built-in caching
+
+# Minimal semantic similarity (optional)
+# sentence-transformers>=2.2.0,<3.0.0  # Only if semantic caching desired
+
+# === HARDWARE-SPECIFIC OPTIMIZATIONS ===
+
+# For CPU-optimized installations
+# scikit-learn[cpu]>=1.1.0
+# torch-cpu>=1.12.0
+
+# For GPU-optimized installations (CUDA 11.8)
+# torch>=1.12.0+cu118
+# sentence-transformers[gpu]>=2.2.0
+
+# === INSTALLATION NOTES ===
+
+# 1. Basic Enhanced Features (Connection Pooling + Circuit Breaker):
+#    pip install numpy>=1.21.0
+
+# 2. Smart Caching with Redis:
+#    pip install redis>=4.5.0 aioredis>=2.0.0
+
+# 3. Semantic Similarity:
+#    pip install sentence-transformers>=2.2.0 scikit-learn>=1.1.0
+
+# 4. Full Enhanced Features:
+#    pip install -r requirements_enhanced.txt
+
+# === COMPATIBILITY MATRIX ===
+
+# Python 3.8+: All features supported
+# Python 3.9+: Recommended
+# Python 3.10+: Full performance optimization
+
+# Memory Requirements:
+# - Basic enhancements: +50MB
+# - Redis caching: +0MB (external service)
+# - Semantic similarity: +300-500MB
+# - Full features: +500-800MB
+
+# === GRACEFUL DEGRADATION ===
+
+# The enhanced features are designed to degrade gracefully:
+# - No Redis? Falls back to memory-only caching
+# - No sentence-transformers? Disables semantic similarity
+# - No scikit-learn? Uses basic similarity metrics
+# - Import errors are handled gracefully with fallbacks
+
+# === VERIFICATION COMMANDS ===
+
+# Test Redis connection:
+# python -c "import redis; r=redis.Redis(); print('Redis OK' if r.ping() else 'Redis Failed')"
+
+# Test semantic model:
+# python -c "from sentence_transformers import SentenceTransformer; print('Semantic OK')"
+
+# Test enhanced imports:
+# python -c "from services.enhanced_imports import setup_enhanced_imports; print(setup_enhanced_imports())"
