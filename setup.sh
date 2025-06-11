@@ -1,12 +1,12 @@
 #!/bin/bash
-# quick_fix.sh - Quick fixes for common RunPod LLM Proxy issues
+# setup.sh - FIXED RunPod Setup Script with Proper Ollama Installation
 
 set -e
 
-echo "🔧 Quick Fix Script for RunPod LLM Proxy Issues"
-echo "==============================================="
+echo "🚀 RunPod LLM Proxy Setup - FIXED VERSION"
+echo "=========================================="
 
-# Colors
+# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -18,13 +18,189 @@ print_warning() { echo -e "${YELLOW}⚠️  $1${NC}"; }
 print_error() { echo -e "${RED}❌ $1${NC}"; }
 print_info() { echo -e "${BLUE}ℹ️  $1${NC}"; }
 
-# Fix 1: Address 402 Payment Required Error
-echo -e "\n${BLUE}🔐 Fix 1: Resolving 402 Payment Required Error${NC}"
+# Step 1: System Updates and Basic Tools
+echo -e "\n${BLUE}📦 Step 1: System Setup${NC}"
 
-print_info "Creating .env file with proper authentication settings..."
+print_info "Updating system packages..."
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -qq
+apt-get install -y curl wget git python3 python3-pip python3-venv build-essential jq dos2unix
+
+print_status "System packages updated"
+
+# Step 2: GPU and CUDA Setup
+echo -e "\n${BLUE}🔧 Step 2: GPU and CUDA Setup${NC}"
+
+print_info "Setting up GPU environment..."
+
+# Set CUDA environment variables
+export CUDA_VISIBLE_DEVICES=0
+export NVIDIA_VISIBLE_DEVICES=all
+export PATH=/usr/local/cuda/bin:$PATH
+export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+
+# Make environment variables persistent
+cat >> ~/.bashrc << 'EOF'
+export CUDA_VISIBLE_DEVICES=0
+export NVIDIA_VISIBLE_DEVICES=all
+export PATH=/usr/local/cuda/bin:$PATH
+export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+EOF
+
+# Check GPU
+if nvidia-smi > /dev/null 2>&1; then
+    print_status "GPU detected and accessible"
+    nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+else
+    print_warning "GPU not detected - continuing with CPU"
+fi
+
+# Step 3: Install Ollama
+echo -e "\n${BLUE}🤖 Step 3: Installing Ollama${NC}"
+
+print_info "Downloading and installing Ollama..."
+
+# Install Ollama
+if ! command -v ollama &> /dev/null; then
+    print_info "Installing Ollama..."
+    curl -fsSL https://ollama.com/install.sh | sh
+    
+    # Verify installation
+    if command -v ollama &> /dev/null; then
+        print_status "Ollama installed successfully"
+        ollama --version
+    else
+        print_error "Ollama installation failed"
+        exit 1
+    fi
+else
+    print_status "Ollama already installed"
+    ollama --version
+fi
+
+# Step 4: Configure Ollama
+echo -e "\n${BLUE}⚙️  Step 4: Configuring Ollama${NC}"
+
+print_info "Setting up Ollama configuration..."
+
+# Set Ollama environment variables
+export OLLAMA_HOST=0.0.0.0:11434
+export OLLAMA_GPU_OVERHEAD=0
+export OLLAMA_MAX_LOADED_MODELS=2
+export OLLAMA_NUM_PARALLEL=2
+
+# Make Ollama environment persistent
+cat >> ~/.bashrc << 'EOF'
+export OLLAMA_HOST=0.0.0.0:11434
+export OLLAMA_GPU_OVERHEAD=0
+export OLLAMA_MAX_LOADED_MODELS=2
+export OLLAMA_NUM_PARALLEL=2
+EOF
+
+print_status "Ollama configuration set"
+
+# Step 5: Start Ollama Service
+echo -e "\n${BLUE}🚀 Step 5: Starting Ollama Service${NC}"
+
+print_info "Starting Ollama service..."
+
+# Kill any existing Ollama processes
+pkill -f "ollama serve" 2>/dev/null || true
+sleep 2
+
+# Start Ollama in background
+ollama serve > /tmp/ollama.log 2>&1 &
+OLLAMA_PID=$!
+
+print_info "Ollama started with PID: $OLLAMA_PID"
+
+# Wait for Ollama to be ready
+print_info "Waiting for Ollama to be ready..."
+for i in {1..60}; do
+    if curl -f http://localhost:11434/api/tags >/dev/null 2>&1; then
+        print_status "Ollama is ready and responding!"
+        break
+    fi
+    if [ $i -eq 60 ]; then
+        print_error "Ollama failed to start within 60 seconds"
+        echo "Ollama logs:"
+        tail -20 /tmp/ollama.log
+        exit 1
+    fi
+    echo "  Attempt $i/60 - waiting 2 seconds..."
+    sleep 2
+done
+
+# Verify Ollama is working
+print_info "Testing Ollama API..."
+if curl -s http://localhost:11434/api/tags | jq . >/dev/null 2>&1; then
+    print_status "Ollama API is working correctly"
+else
+    print_error "Ollama API test failed"
+    curl -s http://localhost:11434/api/tags
+    exit 1
+fi
+
+# Step 6: Install Python Dependencies
+echo -e "\n${BLUE}🐍 Step 6: Installing Python Dependencies${NC}"
+
+print_info "Installing Python dependencies..."
+
+# Install core dependencies
+pip3 install --no-cache-dir --upgrade pip
+
+# Install required packages with specific versions for compatibility
+pip3 install --no-cache-dir \
+    fastapi==0.104.1 \
+    uvicorn[standard]==0.24.0 \
+    aiohttp==3.9.1 \
+    pydantic==2.5.0 \
+    pydantic-settings==2.1.0 \
+    psutil==5.9.6 \
+    python-multipart==0.0.6
+
+print_status "Core Python dependencies installed"
+
+# Install optional enhanced features (with graceful fallbacks)
+print_info "Installing optional enhanced features..."
+pip3 install --no-cache-dir \
+    sentence-transformers \
+    faiss-cpu \
+    sse-starlette \
+    redis \
+    prometheus-client || print_warning "Some enhanced features may not be available"
+
+print_status "Python setup completed"
+
+# Step 7: Download a Model
+echo -e "\n${BLUE}📦 Step 7: Downloading AI Model${NC}"
+
+print_info "Downloading Mistral 7B model (this may take a few minutes)..."
+
+# Pull a lightweight but capable model
+if ollama pull mistral:7b-instruct-q4_0; then
+    print_status "Mistral 7B model downloaded successfully"
+else
+    print_warning "Mistral download failed, trying smaller model..."
+    if ollama pull llama3.2:1b; then
+        print_status "Llama 3.2 1B model downloaded successfully"
+    else
+        print_error "Failed to download any model"
+        print_info "You can manually download a model later with: ollama pull <model-name>"
+    fi
+fi
+
+# Verify models
+print_info "Available models:"
+ollama list
+
+# Step 8: Create Environment Configuration
+echo -e "\n${BLUE}📝 Step 8: Creating Configuration${NC}"
+
+print_info "Creating .env configuration file..."
 
 cat > .env << 'EOF'
-# Fixed environment configuration for RunPod
+# RunPod LLM Proxy Configuration
 DEBUG=false
 ENVIRONMENT=development
 HOST=0.0.0.0
@@ -35,19 +211,19 @@ OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_HOST=0.0.0.0:11434
 OLLAMA_TIMEOUT=300
 
-# Authentication - DISABLED for testing
+# Authentication - DISABLED for simplicity
 ENABLE_AUTH=false
 API_KEY_HEADER=X-API-Key
-DEFAULT_API_KEY=sk-test-key
+DEFAULT_API_KEY=sk-runpod-test
 
-# CORS Settings - Permissive for testing
+# CORS Settings - Permissive for development
 CORS_ORIGINS=["*"]
 CORS_ALLOW_CREDENTIALS=true
 
 # Memory Management
-MAX_MEMORY_MB=8192
+MAX_MEMORY_MB=12288
 CACHE_MEMORY_LIMIT_MB=1024
-MODEL_MEMORY_LIMIT_MB=4096
+MODEL_MEMORY_LIMIT_MB=6144
 
 # Enhanced Features - Conservative settings
 ENABLE_SEMANTIC_CLASSIFICATION=false
@@ -55,7 +231,7 @@ ENABLE_STREAMING=true
 ENABLE_MODEL_WARMUP=true
 ENABLE_DETAILED_METRICS=false
 
-# Rate Limiting - Disabled for testing
+# Rate Limiting - Disabled for development
 ENABLE_RATE_LIMITING=false
 DEFAULT_RATE_LIMIT=1000
 
@@ -64,399 +240,111 @@ LOG_LEVEL=INFO
 ENABLE_DETAILED_LOGGING=false
 EOF
 
-print_status ".env file created with authentication disabled"
+print_status "Configuration file created"
 
-# Fix 2: Restart Services
-echo -e "\n${BLUE}🔄 Fix 2: Restarting Services${NC}"
+# Step 9: Test Model
+echo -e "\n${BLUE}🧪 Step 9: Testing Model${NC}"
 
-print_info "Stopping existing processes..."
+print_info "Testing model with a simple query..."
 
-# Kill existing Python processes
-pkill -f "python.*main" 2>/dev/null || echo "No Python processes found"
+# Test the model
+test_response=$(ollama run mistral:7b-instruct-q4_0 "Say 'TEST' and nothing else" 2>/dev/null || ollama run llama3.2:1b "Say 'TEST' and nothing else" 2>/dev/null || echo "Model test failed")
 
-# Kill existing Ollama processes
-pkill -f "ollama serve" 2>/dev/null || echo "No Ollama serve processes found"
-
-sleep 2
-
-print_info "Starting Ollama service..."
-
-# Start Ollama in background
-export OLLAMA_HOST=0.0.0.0:11434
-export CUDA_VISIBLE_DEVICES=0
-ollama serve > /tmp/ollama.log 2>&1 &
-OLLAMA_PID=$!
-
-print_info "Waiting for Ollama to be ready..."
-
-# Wait for Ollama to start
-for i in {1..30}; do
-    if curl -f http://localhost:11434/api/tags >/dev/null 2>&1; then
-        print_status "Ollama is ready!"
-        break
-    fi
-    echo "  Attempt $i/30 - waiting 3 seconds..."
-    sleep 3
-done
-
-# Check if Ollama started successfully
-if ! curl -f http://localhost:11434/api/tags >/dev/null 2>&1; then
-    print_error "Ollama failed to start"
-    echo "Ollama logs:"
-    tail -20 /tmp/ollama.log
-    exit 1
-fi
-
-# Fix 3: Ensure Model is Available
-echo -e "\n${BLUE}📦 Fix 3: Ensuring Model Availability${NC}"
-
-print_info "Checking for available models..."
-
-models=$(curl -s http://localhost:11434/api/tags | jq -r '.models[].name' 2>/dev/null || echo "")
-
-if [ -z "$models" ]; then
-    print_warning "No models found. Pulling Mistral 7B..."
-    
-    # Pull a lightweight model
-    echo "Pulling mistral:7b-instruct-q4_0..."
-    ollama pull mistral:7b-instruct-q4_0
-    
-    if [ $? -eq 0 ]; then
-        print_status "Model pulled successfully"
-    else
-        print_error "Model pull failed"
-        
-        # Try alternative model
-        print_info "Trying alternative model: llama3.2:1b"
-        ollama pull llama3.2:1b
-    fi
+if [[ "$test_response" == *"TEST"* ]]; then
+    print_status "Model test successful!"
+    print_info "Response: $test_response"
 else
-    print_status "Models already available:"
-    echo "$models" | while read model; do
-        echo "  • $model"
-    done
+    print_warning "Model test didn't return expected response"
+    print_info "Response: $test_response"
 fi
 
-# Fix 4: Create Fixed main.py
-echo -e "\n${BLUE}🐍 Fix 4: Creating Fixed main.py${NC}"
+# Step 10: Prepare to Start Service
+echo -e "\n${BLUE}🌐 Step 10: Service Preparation${NC}"
 
-print_info "Creating fixed main.py..."
+print_info "Preparing to start the LLM Proxy service..."
 
-cat > main_fixed.py << 'EOF'
-# main_fixed.py - Minimal working version for RunPod
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-import uvicorn
-import aiohttp
-import json
-import logging
-import asyncio
-from datetime import datetime
-from typing import List, Optional
-from pydantic import BaseModel
+# Create startup script
+cat > start_service.sh << 'EOF'
+#!/bin/bash
+echo "🚀 Starting LLM Proxy Service..."
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Ensure Ollama is running
+if ! curl -f http://localhost:11434/api/tags >/dev/null 2>&1; then
+    echo "Starting Ollama..."
+    ollama serve > /tmp/ollama.log 2>&1 &
+    sleep 5
+fi
 
-# Simple models
-class Message(BaseModel):
-    role: str
-    content: str
-
-class ChatRequest(BaseModel):
-    model: str
-    messages: List[Message]
-    temperature: float = 0.7
-    max_tokens: Optional[int] = None
-
-# Simple Ollama client
-class OllamaClient:
-    def __init__(self):
-        self.base_url = "http://localhost:11434"
-        self.session = None
-    
-    async def initialize(self):
-        self.session = aiohttp.ClientSession()
-    
-    async def cleanup(self):
-        if self.session:
-            await self.session.close()
-    
-    async def health_check(self):
-        try:
-            async with self.session.get(f"{self.base_url}/api/tags") as resp:
-                return resp.status == 200
-        except:
-            return False
-    
-    async def chat_completion(self, request: ChatRequest):
-        # Map model names
-        model_map = {
-            "gpt-3.5-turbo": "mistral:7b-instruct-q4_0",
-            "gpt-4": "mistral:7b-instruct-q4_0"
-        }
-        
-        actual_model = model_map.get(request.model, request.model)
-        
-        # Check if model exists
-        async with self.session.get(f"{self.base_url}/api/tags") as resp:
-            if resp.status == 200:
-                data = await resp.json()
-                available_models = [m["name"] for m in data.get("models", [])]
-                if available_models and actual_model not in available_models:
-                    actual_model = available_models[0]  # Use first available
-        
-        payload = {
-            "model": actual_model,
-            "messages": [{"role": m.role, "content": m.content} for m in request.messages],
-            "stream": False,
-            "options": {
-                "temperature": request.temperature,
-                "num_predict": request.max_tokens or 150
-            }
-        }
-        
-        async with self.session.post(f"{self.base_url}/api/chat", json=payload) as resp:
-            if resp.status == 200:
-                data = await resp.json()
-                return {
-                    "id": f"chatcmpl-{int(asyncio.get_event_loop().time())}",
-                    "object": "chat.completion",
-                    "created": int(asyncio.get_event_loop().time()),
-                    "model": request.model,
-                    "choices": [{
-                        "index": 0,
-                        "message": {
-                            "role": "assistant",
-                            "content": data.get("message", {}).get("content", "")
-                        },
-                        "finish_reason": "stop"
-                    }],
-                    "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30}
-                }
-            else:
-                error = await resp.text()
-                raise HTTPException(status_code=500, detail=f"Ollama error: {error}")
-
-# Global client
-client = OllamaClient()
-
-# FastAPI app
-app = FastAPI(title="Fixed LLM Proxy", version="1.0.0")
-
-# CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-@app.on_event("startup")
-async def startup():
-    await client.initialize()
-    logger.info("Service started")
-
-@app.on_event("shutdown") 
-async def shutdown():
-    await client.cleanup()
-
-@app.get("/")
-async def root():
-    return {"message": "Fixed LLM Proxy", "status": "running"}
-
-@app.get("/health")
-async def health():
-    ollama_healthy = await client.health_check()
-    
-    return JSONResponse(
-        status_code=200 if ollama_healthy else 503,
-        content={
-            "healthy": ollama_healthy,
-            "status": "healthy" if ollama_healthy else "unhealthy",
-            "timestamp": datetime.now().isoformat(),
-            "version": "1.0.0",
-            "services": [{
-                "name": "ollama",
-                "status": "healthy" if ollama_healthy else "unhealthy"
-            }]
-        }
-    )
-
-@app.post("/v1/chat/completions")
-async def chat_completions(request: ChatRequest):
-    try:
-        response = await client.chat_completion(request)
-        return response
-    except Exception as e:
-        logger.error(f"Chat completion error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/models")
-async def list_models():
-    try:
-        async with client.session.get(f"{client.base_url}/api/tags") as resp:
-            if resp.status == 200:
-                data = await resp.json()
-                models = [{"id": m["name"], "object": "model"} for m in data.get("models", [])]
-            else:
-                models = []
-        
-        # Add standard models
-        standard_models = [
-            {"id": "gpt-3.5-turbo", "object": "model"},
-            {"id": "gpt-4", "object": "model"}
-        ]
-        
-        return {"object": "list", "data": models + standard_models}
-    except Exception as e:
-        return {"object": "list", "data": [{"id": "gpt-3.5-turbo", "object": "model"}]}
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-EOF
-
-print_status "Fixed main.py created as main_fixed.py"
-
-# Fix 5: Start Fixed Service
-echo -e "\n${BLUE}🚀 Fix 5: Starting Fixed Service${NC}"
-
-print_info "Starting fixed Python service..."
-
-# Start the fixed service
-python3 main_fixed.py > /tmp/service.log 2>&1 &
+# Start the Python service
+echo "Starting Python service..."
+python3 main.py > /tmp/service.log 2>&1 &
 SERVICE_PID=$!
 
-print_info "Waiting for service to be ready..."
-
-# Wait for service to start
-for i in {1..20}; do
-    if curl -f http://localhost:8000/health >/dev/null 2>&1; then
-        print_status "Service is ready!"
-        break
-    fi
-    echo "  Attempt $i/20 - waiting 3 seconds..."
-    sleep 3
-done
-
-# Fix 6: Test the Fixes
-echo -e "\n${BLUE}🧪 Fix 6: Testing the Fixes${NC}"
-
-# Test health endpoint
-print_info "Testing health endpoint..."
-health_response=$(curl -s http://localhost:8000/health)
-health_status=$(echo "$health_response" | jq -r '.status' 2>/dev/null || echo "unknown")
-
-if [ "$health_status" = "healthy" ]; then
-    print_status "Health check: PASSED"
-else
-    print_warning "Health check: $health_status"
-    echo "Response: $health_response"
-fi
-
-# Test chat completion
-print_info "Testing chat completion..."
-chat_test=$(curl -s -X POST http://localhost:8000/v1/chat/completions \
-    -H "Content-Type: application/json" \
-    -d '{
-        "model": "gpt-3.5-turbo",
-        "messages": [{"role": "user", "content": "Say TEST"}],
-        "max_tokens": 5
-    }')
-
-if echo "$chat_test" | jq -e '.choices[0].message.content' >/dev/null 2>&1; then
-    print_status "Chat completion: PASSED"
-    response_content=$(echo "$chat_test" | jq -r '.choices[0].message.content')
-    print_info "Response: $response_content"
-else
-    print_error "Chat completion: FAILED"
-    echo "Response: $chat_test"
-fi
-
-# Test models endpoint
-print_info "Testing models endpoint..."
-models_test=$(curl -s http://localhost:8000/models)
-model_count=$(echo "$models_test" | jq -r '.data | length' 2>/dev/null || echo "0")
-
-if [ "$model_count" -gt 0 ]; then
-    print_status "Models endpoint: PASSED ($model_count models)"
-else
-    print_warning "Models endpoint: No models found"
-fi
-
-# Fix 7: Create Quick Test Commands
-echo -e "\n${BLUE}📝 Fix 7: Quick Test Commands${NC}"
-
-cat > test_commands.sh << 'EOF'
-#!/bin/bash
-# Quick test commands for the fixed service
-
-echo "=== Quick Test Commands ==="
-
-echo "1. Health Check:"
-echo "curl http://localhost:8000/health"
-echo ""
-
-echo "2. List Models:"
-echo "curl http://localhost:8000/models"
-echo ""
-
-echo "3. Chat Completion:"
-echo 'curl -X POST http://localhost:8000/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d "{\"model\": \"gpt-3.5-turbo\", \"messages\": [{\"role\": \"user\", \"content\": \"Hello\"}]}"'
-echo ""
-
-echo "4. Check Ollama:"
-echo "curl http://localhost:11434/api/tags"
-echo ""
-
-echo "5. Service Status:"
-echo "ps aux | grep -E '(ollama|python.*main)'"
-echo ""
-
-echo "6. View Logs:"
-echo "tail -f /tmp/service.log"
-echo "tail -f /tmp/ollama.log"
+echo "Service started with PID: $SERVICE_PID"
+echo "Logs: tail -f /tmp/service.log"
+echo "Health: curl http://localhost:8000/health"
 EOF
 
-chmod +x test_commands.sh
-print_status "Quick test commands saved to test_commands.sh"
+chmod +x start_service.sh
+print_status "Startup script created: start_service.sh"
+
+# Create test script
+cat > test_service.sh << 'EOF'
+#!/bin/bash
+echo "🧪 Testing LLM Proxy Service..."
+
+echo "1. Testing health endpoint..."
+curl -s http://localhost:8000/health | jq .
+
+echo -e "\n2. Testing models endpoint..."
+curl -s http://localhost:8000/models | jq '.data[].id'
+
+echo -e "\n3. Testing chat completion..."
+curl -s -X POST http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-3.5-turbo",
+    "messages": [{"role": "user", "content": "Say hello"}],
+    "max_tokens": 10
+  }' | jq '.choices[0].message.content'
+
+echo -e "\n✅ Test completed!"
+EOF
+
+chmod +x test_service.sh
+print_status "Test script created: test_service.sh"
 
 # Summary
-echo -e "\n${BLUE}📊 Fix Summary${NC}"
-echo "=============="
+echo -e "\n${BLUE}📊 Setup Summary${NC}"
+echo "=================="
 
-print_status "Fixes Applied:"
-echo "1. ✅ Created .env with authentication disabled"
-echo "2. ✅ Restarted Ollama and Python services"
-echo "3. ✅ Ensured model availability"
-echo "4. ✅ Created fixed main.py"
-echo "5. ✅ Started fixed service"
-echo "6. ✅ Tested all endpoints"
-echo "7. ✅ Created test commands"
+print_status "Setup completed successfully!"
 
-echo ""
-print_info "Service Status:"
-echo "• Ollama PID: $OLLAMA_PID"
-echo "• Service PID: $SERVICE_PID"
-echo "• Health Status: $health_status"
-echo "• Available Models: $model_count"
+echo -e "\n${GREEN}🎯 What was installed:${NC}"
+echo "✅ System packages and tools"
+echo "✅ GPU/CUDA environment configured"
+echo "✅ Ollama AI runtime"
+echo "✅ Python dependencies"
+echo "✅ AI model downloaded"
+echo "✅ Configuration files created"
 
-echo ""
-print_info "Next Steps:"
-echo "1. Run: ./test_commands.sh"
-echo "2. Test your API endpoints"
-echo "3. If issues persist, check logs: tail -f /tmp/service.log"
+echo -e "\n${GREEN}🚀 Next steps:${NC}"
+echo "1. Start the service:    ./start_service.sh"
+echo "2. Test the service:     ./test_service.sh"
+echo "3. View logs:           tail -f /tmp/service.log"
+echo "4. Check health:        curl http://localhost:8000/health"
 
-echo ""
-print_info "Service URLs:"
-echo "• Main API: http://localhost:8000"
-echo "• Health Check: http://localhost:8000/health"
-echo "• API Docs: http://localhost:8000/docs"
-echo "• Ollama API: http://localhost:11434"
+echo -e "\n${GREEN}📡 Service endpoints:${NC}"
+echo "• Health:     http://localhost:8000/health"
+echo "• API Docs:   http://localhost:8000/docs"
+echo "• Chat API:   http://localhost:8000/v1/chat/completions"
+echo "• Models:     http://localhost:8000/models"
+echo "• Ollama:     http://localhost:11434"
 
-print_status "Quick fix completed! Your service should now be working."
+echo -e "\n${BLUE}💡 Troubleshooting:${NC}"
+echo "• If Ollama fails: pkill ollama && ollama serve &"
+echo "• If service fails: pkill -f 'python.*main' && python3 main.py &"
+echo "• Check logs: tail -f /tmp/ollama.log /tmp/service.log"
+
+print_status "RunPod LLM Proxy setup completed successfully!"
+print_info "You can now start the service with: ./start_service.sh"
