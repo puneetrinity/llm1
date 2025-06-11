@@ -33,6 +33,16 @@ if [ -f "/workspace/.setup_complete" ]; then
     
     cd /workspace/app
     
+    # CRITICAL: Activate virtual environment first
+    if [ -f "/workspace/venv/bin/activate" ]; then
+        print_info "Activating virtual environment..."
+        source /workspace/venv/bin/activate
+        print_status "Virtual environment activated"
+    else
+        print_warning "No virtual environment found, installing dependencies globally..."
+        pip3 install fastapi uvicorn pydantic pydantic-settings aiohttp psutil
+    fi
+    
     # Start the service immediately - NO MORE LOOPS!
     if [ -f "main.py" ]; then
         print_status "Starting main.py..."
@@ -228,6 +238,13 @@ print_status "🎉 Setup finished! Starting LLM Proxy service..."
 
 # Start the service immediately - NO RETURN TO SHELL!
 print_info "🌐 Starting FastAPI server on http://0.0.0.0:8000"
+
+# CRITICAL: Activate virtual environment before starting
+if [ -f "/workspace/venv/bin/activate" ]; then
+    print_info "Activating virtual environment..."
+    source /workspace/venv/bin/activate
+    print_status "Virtual environment activated"
+fi
 
 # Use exec to replace the shell process - this prevents loops!
 exec python3 main.py
