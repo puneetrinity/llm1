@@ -1,10 +1,10 @@
 #!/bin/bash
-# setup_container_safe.sh - Container-Safe Setup with Process Management and Loop Prevention
+# setup_noninteractive.sh - Fully Non-Interactive Container Setup for RunPod
 
 set -e
 
-echo "🚀 Container-Safe RunPod LLM Proxy Setup"
-echo "========================================"
+echo "🚀 Non-Interactive RunPod LLM Proxy Setup"
+echo "========================================="
 
 # Colors for output
 RED='\033[0;31m'
@@ -18,9 +18,10 @@ print_warning() { echo -e "${YELLOW}⚠️  $1${NC}"; }
 print_error() { echo -e "${RED}❌ $1${NC}"; }
 print_info() { echo -e "${BLUE}ℹ️  $1${NC}"; }
 
-# CRITICAL: Check if we're in a container and if setup is already running
+# CRITICAL: Non-interactive configuration
 SETUP_LOCK="/tmp/llm_proxy_setup.lock"
 CONTAINER_ENV="/tmp/container_setup_done"
+FORCE_SETUP="${FORCE_SETUP:-false}"  # Can be set via environment variable
 
 # Function to cleanup on exit
 cleanup() {
@@ -70,40 +71,77 @@ fi
 echo $$ > "$SETUP_LOCK"
 print_info "Setup lock created (PID: $$)"
 
-# Check if we're in a container
+# Check container environment - NO INTERACTIVE PROMPTS
 if [ -f /.dockerenv ] || [ -n "${CONTAINER}" ] || [ -n "${KUBERNETES_SERVICE_HOST}" ]; then
     print_info "Container environment detected"
     IN_CONTAINER=true
     
-    # Check if setup was already completed in this container
-    if [ -f "$CONTAINER_ENV" ]; then
-        print_warning "Setup already completed in this container"
+    # Check if setup was already completed
+    if [ -f "$CONTAINER_ENV" ] && [ "$FORCE_SETUP" != "true" ]; then
+        print_info "Setup already completed in this container"
         PREVIOUS_SETUP=$(cat "$CONTAINER_ENV")
         print_info "Previous setup: $PREVIOUS_SETUP"
         
-        read -p "Do you want to re-run setup? (y/N): " -r
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            print_info "Skipping setup. Starting services instead..."
-            
-            # Try to start existing services
-            if command -v ollama >/dev/null 2>&1; then
-                if ! pgrep -f "ollama serve" >/dev/null; then
-                    print_info "Starting existing Ollama service..."
-                    ollama serve > /tmp/ollama.log 2>&1 &
-                    sleep 5
-                fi
+        # NON-INTERACTIVE: Always start services instead of re-running setup
+        print_info "Starting existing services (non-interactive mode)..."
+        
+        # Try to start existing services
+        if command -v ollama >/dev/null 2>&1; then
+            if ! pgrep -f "ollama serve" >/dev/null; then
+                print_info "Starting existing Ollama service..."
+                export OLLAMA_HOST=0.0.0.0:11434
+                export CUDA_VISIBLE_DEVICES=0
+                ollama serve > /tmp/ollama.log 2>&1 &
+                sleep 5
+                
+                # Wait for Ollama to be ready
+                for i in {1..30}; do
+                    if curl -f http://localhost:11434/api/tags >/dev/null 2>&1; then
+                        print_status "Ollama service started successfully"
+                        break
+                    fi
+                    sleep 2
+                done
+            else
+                print_status "Ollama already running"
             fi
-            
-            if [ -f "main.py" ]; then
-                if ! pgrep -f "python.*main" >/dev/null; then
-                    print_info "Starting existing Python service..."
-                    python3 main.py > /tmp/service.log 2>&1 &
-                    sleep 3
-                fi
+        fi
+        
+        if [ -f "main.py" ]; then
+            if ! pgrep -f "python.*main" >/dev/null; then
+                print_info "Starting existing Python service..."
+                python3 main.py > /tmp/service.log 2>&1 &
+                sleep 3
+                
+                # Wait for service to be ready
+                for i in {1..20}; do
+                    if curl -f http://localhost:8000/health >/dev/null 2>&1; then
+                        print_status "Python service started successfully"
+                        break
+                    fi
+                    sleep 2
+                done
+            else
+                print_status "Python service already running"
             fi
-            
-            print_status "Services started. Check status with: curl http://localhost:8000/health"
-            exit 0
+        fi
+        
+        # Test services
+        print_info "Testing services..."
+        if curl -f http://localhost:8000/health >/dev/null 2>&1; then
+            print_status "✅ Services are running and healthy!"
+            print_info "Health check: curl http://localhost:8000/health"
+            print_info "API docs: http://localhost:8000/docs"
+            print_info "Ollama API: http://localhost:11434"
+        else
+            print_warning "Services started but health check failed"
+            print_info "Check logs: tail -f /tmp/service.log /tmp/ollama.log"
+        fi
+        
+        exit 0
+    else
+        if [ "$FORCE_SETUP" = "true" ]; then
+            print_warning "FORCE_SETUP=true, re-running setup despite previous completion"
         fi
     fi
 else
@@ -111,10 +149,10 @@ else
     print_info "Non-container environment detected"
 fi
 
-# Timeout for operations to prevent infinite loops
-TIMEOUT=300  # 5 minutes max for any operation
-OLLAMA_START_TIMEOUT=120  # 2 minutes for Ollama to start
-MODEL_DOWNLOAD_TIMEOUT=600  # 10 minutes for model download
+# Timeout for operations
+TIMEOUT=300
+OLLAMA_START_TIMEOUT=120
+MODEL_DOWNLOAD_TIMEOUT=600
 
 # Function to run commands with timeout
 run_with_timeout() {
@@ -180,14 +218,14 @@ safe_kill() {
 # Step 1: Environment Preparation
 echo -e "\n${BLUE}🔧 Step 1: Environment Preparation${NC}"
 
-print_info "Checking system state..."
+print_info "Preparing environment for setup..."
 
-# Stop any existing services to prevent conflicts
+# Stop any existing services
 print_info "Stopping any existing services..."
 safe_kill "ollama serve"
 safe_kill "python.*main"
 
-# Check available disk space
+# Check disk space
 AVAILABLE_SPACE=$(df / | tail -1 | awk '{print $4}')
 REQUIRED_SPACE=5000000  # 5GB in KB
 
@@ -196,9 +234,9 @@ if [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ]; then
     exit 1
 fi
 
-print_status "Environment checks passed"
+print_status "Environment preparation completed"
 
-# Step 2: System Updates (with timeout)
+# Step 2: System Updates
 echo -e "\n${BLUE}📦 Step 2: System Setup${NC}"
 
 print_info "Updating system packages..."
@@ -211,7 +249,7 @@ else
     exit 1
 fi
 
-# Step 3: GPU Setup (non-blocking)
+# Step 3: GPU Setup
 echo -e "\n${BLUE}🎮 Step 3: GPU Setup${NC}"
 
 print_info "Configuring GPU environment..."
@@ -222,16 +260,24 @@ export NVIDIA_VISIBLE_DEVICES=all
 export PATH=/usr/local/cuda/bin:$PATH
 export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
 
-# Check GPU (non-blocking)
+# Make environment persistent
+cat >> ~/.bashrc << 'EOF'
+export CUDA_VISIBLE_DEVICES=0
+export NVIDIA_VISIBLE_DEVICES=all
+export PATH=/usr/local/cuda/bin:$PATH
+export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+EOF
+
+# Check GPU
 if timeout 10 nvidia-smi >/dev/null 2>&1; then
     print_status "GPU detected and accessible"
     GPU_INFO=$(nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null || echo "GPU info unavailable")
     print_info "GPU: $GPU_INFO"
 else
-    print_warning "GPU not detected or nvidia-smi not available - continuing with CPU"
+    print_warning "GPU not detected - continuing with CPU mode"
 fi
 
-# Step 4: Install Ollama (with timeout and checks)
+# Step 4: Install Ollama
 echo -e "\n${BLUE}🤖 Step 4: Installing Ollama${NC}"
 
 if command -v ollama >/dev/null 2>&1; then
@@ -254,10 +300,10 @@ else
     fi
 fi
 
-# Step 5: Configure and Start Ollama (with timeout)
+# Step 5: Start Ollama Service
 echo -e "\n${BLUE}🚀 Step 5: Starting Ollama Service${NC}"
 
-print_info "Configuring Ollama..."
+print_info "Configuring and starting Ollama..."
 
 # Set Ollama environment
 export OLLAMA_HOST=0.0.0.0:11434
@@ -265,15 +311,23 @@ export OLLAMA_GPU_OVERHEAD=0
 export OLLAMA_MAX_LOADED_MODELS=2
 export OLLAMA_NUM_PARALLEL=2
 
-print_info "Starting Ollama service with timeout protection..."
+# Make Ollama environment persistent
+cat >> ~/.bashrc << 'EOF'
+export OLLAMA_HOST=0.0.0.0:11434
+export OLLAMA_GPU_OVERHEAD=0
+export OLLAMA_MAX_LOADED_MODELS=2
+export OLLAMA_NUM_PARALLEL=2
+EOF
 
-# Start Ollama with timeout protection
+print_info "Starting Ollama service..."
+
+# Start Ollama
 ollama serve > /tmp/ollama.log 2>&1 &
 OLLAMA_PID=$!
 
 print_info "Ollama started with PID: $OLLAMA_PID"
 
-# Check if Ollama is responsive with timeout
+# Check if Ollama is responsive
 if check_service "http://localhost:11434/api/tags" "Ollama" 60 2; then
     print_status "Ollama service is running and responsive"
 else
@@ -283,10 +337,10 @@ else
     exit 1
 fi
 
-# Step 6: Install Python Dependencies (with timeout)
+# Step 6: Install Python Dependencies
 echo -e "\n${BLUE}🐍 Step 6: Installing Python Dependencies${NC}"
 
-print_info "Installing Python dependencies with timeout protection..."
+print_info "Installing Python dependencies..."
 
 if run_with_timeout $TIMEOUT "pip3 install --no-cache-dir --upgrade pip"; then
     print_status "pip updated"
@@ -304,34 +358,32 @@ else
     exit 1
 fi
 
-# Optional dependencies (non-blocking)
+# Optional dependencies
 print_info "Installing optional dependencies..."
 pip3 install --no-cache-dir sentence-transformers faiss-cpu sse-starlette redis prometheus-client 2>/dev/null || print_warning "Some optional features may not be available"
 
-# Step 7: Download Model (with timeout and size check)
+# Step 7: Download Model
 echo -e "\n${BLUE}📦 Step 7: Downloading AI Model${NC}"
 
-print_info "Downloading model with timeout protection..."
-
-# Check if any models already exist
+# Check existing models
 EXISTING_MODELS=$(ollama list 2>/dev/null | grep -v "NAME" | wc -l)
 
 if [ "$EXISTING_MODELS" -gt 0 ]; then
     print_status "Models already available:"
     ollama list
 else
-    print_info "Downloading Mistral 7B model (with ${MODEL_DOWNLOAD_TIMEOUT}s timeout)..."
+    print_info "Downloading model..."
     
+    # Try Mistral first, fallback to smaller model
     if run_with_timeout $MODEL_DOWNLOAD_TIMEOUT "ollama pull mistral:7b-instruct-q4_0"; then
         print_status "Mistral 7B model downloaded successfully"
     else
-        print_warning "Mistral download failed/timed out, trying smaller model..."
+        print_warning "Mistral download failed, trying smaller model..."
         
         if run_with_timeout 300 "ollama pull llama3.2:1b"; then
             print_status "Llama 3.2 1B model downloaded successfully"
         else
-            print_warning "Model download failed. Service will work but no models available."
-            print_info "You can download models later with: ollama pull <model-name>"
+            print_warning "Model download failed. Service will work but responses may fail."
         fi
     fi
 fi
@@ -339,10 +391,10 @@ fi
 # Step 8: Create Configuration
 echo -e "\n${BLUE}📝 Step 8: Creating Configuration${NC}"
 
-print_info "Creating safe configuration..."
+print_info "Creating configuration files..."
 
 cat > .env << 'EOF'
-# Container-Safe RunPod Configuration
+# Non-Interactive RunPod Configuration
 DEBUG=false
 ENVIRONMENT=development
 HOST=0.0.0.0
@@ -353,14 +405,14 @@ OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_HOST=0.0.0.0:11434
 OLLAMA_TIMEOUT=60
 
-# Authentication - DISABLED for container safety
+# Authentication - DISABLED for simplicity
 ENABLE_AUTH=false
 ENABLE_RATE_LIMITING=false
 
-# CORS - Permissive for development
+# CORS - Open for development
 CORS_ORIGINS=["*"]
 
-# Memory Management - Conservative
+# Memory - Conservative
 MAX_MEMORY_MB=8192
 CACHE_MEMORY_LIMIT_MB=512
 
@@ -376,132 +428,148 @@ EOF
 
 print_status "Configuration created"
 
-# Step 9: Create Container-Safe Service Manager
-echo -e "\n${BLUE}🔧 Step 9: Creating Service Manager${NC}"
+# Step 9: Create Service Management Scripts
+echo -e "\n${BLUE}🔧 Step 9: Creating Management Scripts${NC}"
 
-cat > service_manager.sh << 'EOF'
+# Non-interactive service manager
+cat > run_services.sh << 'EOF'
 #!/bin/bash
-# Container-safe service manager
+# Non-interactive service runner
 
-OLLAMA_PID_FILE="/tmp/ollama.pid"
-SERVICE_PID_FILE="/tmp/service.pid"
+echo "🚀 Starting LLM Proxy Services..."
 
-start_services() {
-    echo "🚀 Starting services..."
-    
-    # Start Ollama if not running
-    if ! pgrep -f "ollama serve" >/dev/null; then
-        echo "Starting Ollama..."
-        ollama serve > /tmp/ollama.log 2>&1 &
-        echo $! > "$OLLAMA_PID_FILE"
-        sleep 5
-    fi
-    
-    # Start Python service if not running
-    if ! pgrep -f "python.*main" >/dev/null; then
-        echo "Starting Python service..."
-        python3 main.py > /tmp/service.log 2>&1 &
-        echo $! > "$SERVICE_PID_FILE"
-        sleep 3
-    fi
-    
-    echo "✅ Services started"
-}
+# Set environment
+export OLLAMA_HOST=0.0.0.0:11434
+export CUDA_VISIBLE_DEVICES=0
 
-stop_services() {
-    echo "🛑 Stopping services..."
+# Start Ollama if not running
+if ! pgrep -f "ollama serve" >/dev/null; then
+    echo "Starting Ollama..."
+    ollama serve > /tmp/ollama.log 2>&1 &
+    sleep 5
     
-    # Stop Python service
-    if [ -f "$SERVICE_PID_FILE" ]; then
-        PID=$(cat "$SERVICE_PID_FILE")
-        if kill -0 "$PID" 2>/dev/null; then
-            kill "$PID"
-            rm -f "$SERVICE_PID_FILE"
+    # Wait for Ollama
+    for i in {1..30}; do
+        if curl -f http://localhost:11434/api/tags >/dev/null 2>&1; then
+            echo "✅ Ollama ready"
+            break
         fi
-    fi
-    
-    # Stop Ollama
-    if [ -f "$OLLAMA_PID_FILE" ]; then
-        PID=$(cat "$OLLAMA_PID_FILE")
-        if kill -0 "$PID" 2>/dev/null; then
-            kill "$PID"
-            rm -f "$OLLAMA_PID_FILE"
-        fi
-    fi
-    
-    echo "✅ Services stopped"
-}
-
-status_services() {
-    echo "📊 Service Status:"
-    
-    # Check Ollama
-    if curl -f http://localhost:11434/api/tags >/dev/null 2>&1; then
-        echo "✅ Ollama: Running"
-    else
-        echo "❌ Ollama: Not responding"
-    fi
-    
-    # Check Python service
-    if curl -f http://localhost:8000/health >/dev/null 2>&1; then
-        echo "✅ Python Service: Running"
-    else
-        echo "❌ Python Service: Not responding"
-    fi
-}
-
-case "$1" in
-    start) start_services ;;
-    stop) stop_services ;;
-    restart) stop_services; sleep 2; start_services ;;
-    status) status_services ;;
-    *) echo "Usage: $0 {start|stop|restart|status}" ;;
-esac
-EOF
-
-chmod +x service_manager.sh
-print_status "Service manager created"
-
-# Step 10: Final Setup and Testing
-echo -e "\n${BLUE}🧪 Step 10: Final Testing${NC}"
-
-print_info "Testing setup with timeout protection..."
-
-# Test Ollama
-if check_service "http://localhost:11434/api/tags" "Ollama" 10 1; then
-    print_status "Ollama test passed"
-else
-    print_error "Ollama test failed"
-    exit 1
+        sleep 2
+    done
 fi
 
-# Mark setup as completed
-echo "$(date): Container setup completed successfully" > "$CONTAINER_ENV"
+# Start Python service if not running
+if ! pgrep -f "python.*main" >/dev/null; then
+    echo "Starting Python service..."
+    python3 main.py > /tmp/service.log 2>&1 &
+    sleep 3
+    
+    # Wait for service
+    for i in {1..20}; do
+        if curl -f http://localhost:8000/health >/dev/null 2>&1; then
+            echo "✅ Service ready"
+            break
+        fi
+        sleep 2
+    done
+fi
 
-# Summary
+echo "🎯 Services Status:"
+curl -s http://localhost:8000/health | jq . 2>/dev/null || curl -s http://localhost:8000/health
+
+echo ""
+echo "📡 Endpoints:"
+echo "• Health: http://localhost:8000/health"
+echo "• Docs: http://localhost:8000/docs"
+echo "• Chat: http://localhost:8000/v1/chat/completions"
+EOF
+
+chmod +x run_services.sh
+
+# Quick test script
+cat > test_api.sh << 'EOF'
+#!/bin/bash
+echo "🧪 Testing LLM Proxy API..."
+
+echo "1. Health Check:"
+curl -s http://localhost:8000/health | jq .
+
+echo -e "\n2. Models:"
+curl -s http://localhost:8000/models | jq '.data[].id'
+
+echo -e "\n3. Chat Test:"
+curl -s -X POST http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-3.5-turbo",
+    "messages": [{"role": "user", "content": "Say TEST"}],
+    "max_tokens": 5
+  }' | jq '.choices[0].message.content'
+
+echo -e "\n✅ API test completed"
+EOF
+
+chmod +x test_api.sh
+
+print_status "Management scripts created"
+
+# Step 10: Mark Setup Complete and Start Services
+echo -e "\n${BLUE}🎯 Step 10: Completing Setup${NC}"
+
+# Mark setup as completed
+echo "$(date): Non-interactive container setup completed successfully" > "$CONTAINER_ENV"
+
+print_info "Starting services automatically..."
+
+# Start the service automatically
+if [ -f "main.py" ]; then
+    print_info "Starting Python service..."
+    python3 main.py > /tmp/service.log 2>&1 &
+    SERVICE_PID=$!
+    
+    print_info "Service started with PID: $SERVICE_PID"
+    
+    # Wait for service to be ready
+    if check_service "http://localhost:8000/health" "Python Service" 20 3; then
+        print_status "Python service is ready!"
+    else
+        print_warning "Service started but may not be fully ready"
+    fi
+else
+    print_warning "main.py not found - service not started"
+fi
+
+# Final Summary
 echo -e "\n${BLUE}📊 Setup Complete${NC}"
 echo "=================="
 
-print_status "Container-safe setup completed successfully!"
+print_status "Non-interactive setup completed successfully!"
 
-echo -e "\n${GREEN}🎯 What's available:${NC}"
+echo -e "\n${GREEN}🎯 What's Running:${NC}"
 echo "✅ Ollama AI runtime (PID: $OLLAMA_PID)"
-echo "✅ Python environment with dependencies"
-echo "✅ AI models ready"
-echo "✅ Container-safe service manager"
+if [ -n "$SERVICE_PID" ]; then
+    echo "✅ Python LLM Proxy (PID: $SERVICE_PID)"
+fi
 
-echo -e "\n${GREEN}🚀 Next steps:${NC}"
-echo "1. Start services:       ./service_manager.sh start"
-echo "2. Check status:         ./service_manager.sh status"
-echo "3. Test health:          curl http://localhost:8000/health"
-echo "4. Stop services:        ./service_manager.sh stop"
+echo -e "\n${GREEN}🌐 Endpoints:${NC}"
+echo "• Health:     http://localhost:8000/health"
+echo "• API Docs:   http://localhost:8000/docs"
+echo "• Chat API:   http://localhost:8000/v1/chat/completions"
+echo "• Ollama:     http://localhost:11434"
 
-echo -e "\n${GREEN}🔒 Safety features:${NC}"
-echo "• Process lock prevents multiple setups"
-echo "• Timeout protection prevents infinite loops"
-echo "• Container state tracking"
-echo "• Safe service management"
-echo "• Graceful cleanup on exit"
+echo -e "\n${GREEN}🔧 Commands:${NC}"
+echo "• Start services: ./run_services.sh"
+echo "• Test API:       ./test_api.sh"
+echo "• View logs:      tail -f /tmp/service.log /tmp/ollama.log"
 
-print_status "Setup lock will be removed automatically"
-print_info "Container setup state saved to: $CONTAINER_ENV"
+echo -e "\n${GREEN}🧪 Quick Test:${NC}"
+if curl -f http://localhost:8000/health >/dev/null 2>&1; then
+    print_status "✅ Service is healthy and ready!"
+    HEALTH_STATUS=$(curl -s http://localhost:8000/health | jq -r '.status' 2>/dev/null || echo "unknown")
+    print_info "Status: $HEALTH_STATUS"
+else
+    print_warning "⚠️  Service may still be starting..."
+    print_info "Wait a moment and check: curl http://localhost:8000/health"
+fi
+
+print_status "Setup lock will be removed automatically on exit"
