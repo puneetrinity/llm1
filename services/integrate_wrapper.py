@@ -1,4 +1,4 @@
-# Replace the downloaded integrate_wrapper.py with the correct Python version
+# Create the correct Python-only integration script
 cat > integrate_wrapper.py << 'EOF'
 #!/usr/bin/env python3
 """Safe integration of semantic routing with existing system"""
@@ -139,14 +139,14 @@ except ImportError as e:
         print("\n🎉 Integration Complete!")
         print("=" * 40)
         print("✅ Semantic classifier integrated")
-        print("✅ Semantic enhanced router integrated")
+        print("✅ Semantic enhanced router integrated") 
         print("✅ main.py enhanced safely")
         print("✅ Backups created (.backup files)")
         
         print("\n🎯 What you get:")
         print("• Coding queries → DeepSeek Coder")
         print("• Resume analysis → Llama3 8B")
-        print("• Interview prep → Llama3 8B")
+        print("• Interview prep → Llama3 8B") 
         print("• Creative tasks → Mistral 7B")
         print("• Automatic fallback if semantic fails")
         
@@ -167,8 +167,3 @@ if __name__ == "__main__":
     sys.exit(main())
 EOF
 
-# Make it executable
-chmod +x integrate_wrapper.py
-
-# Now run the correct Python script
-python3 integrate_wrapper.py
