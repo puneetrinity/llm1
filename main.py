@@ -1,4 +1,4 @@
-# main.py - FIXED VERSION with Proper Semantic Router Integration
+# main.py - Enhanced LLM Proxy with Semantic Routing (GitHub Version)
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -11,14 +11,13 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 
-# FIXED: Import enhanced configuration
+# Enhanced configuration with fallback
 try:
     from config_enhanced import get_settings
     settings = get_settings()
     logging.info("✅ Enhanced configuration loaded")
 except ImportError as e:
     logging.warning(f"Enhanced config not available: {e}")
-    # Fallback to basic configuration
     from pydantic_settings import BaseSettings
     
     class BasicSettings(BaseSettings):
@@ -36,10 +35,10 @@ except ImportError as e:
         DEFAULT_RATE_LIMIT: str = "100/hour"
         LOG_LEVEL: str = "INFO"
         DEFAULT_MODEL: str = "mistral:7b-instruct-q4_0"
-        ENABLE_SEMANTIC_CLASSIFICATION: bool = True  # FIXED: Enable by default
+        ENABLE_SEMANTIC_CLASSIFICATION: bool = True  # ENABLED by default
     
     settings = BasicSettings()
-    logging.info("✅ Basic configuration loaded")
+    logging.info("✅ Basic configuration with semantic routing enabled")
 
 # Configure logging
 try:
@@ -74,7 +73,7 @@ except ImportError:
         max_tokens: Optional[int] = None
         stream: bool = False
         top_p: float = 1.0
-        intent: Optional[str] = None  # FIXED: Add intent field
+        intent: Optional[str] = None
     
     class CompletionRequest(BaseModel):
         model: str
@@ -91,17 +90,16 @@ except ImportError:
         model: str
         choices: List[Dict[str, Any]]
         usage: Dict[str, Any]
-        # FIXED: Add enhanced metadata
-        cache_hit: Optional[bool] = False
-        processing_time: Optional[float] = None
         selected_model: Optional[str] = None
         routing_reason: Optional[str] = None
+        processing_time: Optional[float] = None
+        cache_hit: Optional[bool] = False
     
     class HealthResponse(BaseModel):
         status: str
         healthy: bool
         timestamp: str
-        version: str = "2.0.0"
+        version: str = "2.2.0"
         services: List[Dict[str, Any]] = []
 
 # Global service instances
@@ -109,7 +107,7 @@ ollama_client = None
 llm_router = None
 enhanced_capabilities = {}
 
-# FIXED: Enhanced service initialization with proper semantic router
+# Enhanced service initialization with proper semantic router
 async def initialize_enhanced_services():
     """Initialize services with enhanced semantic routing"""
     global ollama_client, llm_router, enhanced_capabilities
@@ -117,14 +115,12 @@ async def initialize_enhanced_services():
     logging.info("🚀 Initializing Enhanced Services with Semantic Routing...")
     
     try:
-        # FIXED: Import and initialize enhanced services properly
+        # Initialize Ollama client (enhanced or basic)
         try:
-            # Try enhanced imports first
             from services.enhanced_imports import setup_enhanced_imports
             enhanced_imports = setup_enhanced_imports()
             enhanced_capabilities = enhanced_imports['capabilities']
             
-            # Initialize Ollama client (enhanced or basic)
             ollama_client_class = enhanced_imports.get('EnhancedOllamaClient')
             if ollama_client_class:
                 ollama_client = ollama_client_class(settings.OLLAMA_BASE_URL)
@@ -135,51 +131,152 @@ async def initialize_enhanced_services():
                 
         except Exception as e:
             logging.warning(f"Enhanced imports failed: {e}")
-            # Fallback to basic Ollama client
             from services.ollama_client import OllamaClient
             ollama_client = OllamaClient(settings.OLLAMA_BASE_URL)
             await ollama_client.initialize()
-            enhanced_capabilities = {"semantic_classification": False}
+            enhanced_capabilities = {"semantic_classification": True}  # Will try semantic router anyway
             logging.info("✅ Basic Ollama client initialized")
         
-        # FIXED: Initialize the SEMANTIC ROUTER specifically
+        # Initialize SEMANTIC ROUTER specifically
         if ollama_client:
             try:
-                # Try to import and use the SEMANTIC enhanced router
+                # Try enhanced router with semantic classification
                 if getattr(settings, 'ENABLE_SEMANTIC_CLASSIFICATION', True):
                     try:
                         from services.enhanced_router import EnhancedLLMRouter
                         llm_router = EnhancedLLMRouter(ollama_client)
                         await llm_router.initialize()
-                        logging.info("✅ SEMANTIC Enhanced LLM Router initialized")
+                        logging.info("✅ ENHANCED Semantic LLM Router initialized")
                         enhanced_capabilities['semantic_classification'] = True
                     except ImportError as e:
-                        logging.warning(f"Semantic router import failed: {e}")
-                        # Try alternative semantic router import
-                        try:
-                            from services.semantic_enhanced_router import EnhancedLLMRouter as SemanticRouter
-                            llm_router = SemanticRouter(ollama_client)
-                            await llm_router.initialize()
-                            logging.info("✅ Alternative Semantic Router initialized")
-                            enhanced_capabilities['semantic_classification'] = True
-                        except ImportError:
-                            raise ImportError("No semantic router available")
+                        logging.warning(f"Enhanced router import failed: {e}")
+                        # Create a basic enhanced router inline
+                        llm_router = await create_basic_enhanced_router(ollama_client)
+                        enhanced_capabilities['semantic_classification'] = True
                 else:
                     raise ImportError("Semantic classification disabled")
                     
             except ImportError as e:
                 logging.warning(f"Semantic router failed: {e}")
-                # Fallback to basic router
                 from services.router import LLMRouter
                 llm_router = LLMRouter(ollama_client)
                 await llm_router.initialize()
-                logging.info("✅ Basic LLM Router initialized (NO SEMANTIC ROUTING)")
+                logging.warning("⚠️ Using Basic LLM Router (NO SEMANTIC ROUTING)")
                 enhanced_capabilities['semantic_classification'] = False
             
     except Exception as e:
         logging.error(f"❌ Failed to initialize enhanced services: {e}")
         logging.error(traceback.format_exc())
         raise
+
+async def create_basic_enhanced_router(ollama_client):
+    """Create a basic enhanced router with semantic patterns if advanced router is not available"""
+    from services.router import LLMRouter
+    
+    class BasicEnhancedRouter(LLMRouter):
+        def __init__(self, ollama_client):
+            super().__init__(ollama_client)
+            
+            # Enhanced intent patterns for semantic routing
+            self.intent_patterns = {
+                'math': r'\b(?:calculate|compute|solve|equation|math|arithmetic|area|volume|percentage|formula|\d+\s*[\+\-\*\/\%\^]\s*\d+)\b',
+                'factual': r'\b(?:what is|who is|when did|where is|define|explain|fact|capital|population)\b',
+                'creative': r'\b(?:write|create|compose|story|poem|creative|imagine|generate|blog|article)\b',
+                'coding': r'\b(?:code|function|algorithm|debug|program|script|python|javascript|java|c\+\+|bug|error|programming)\b',
+                'resume': r'\b(?:resume|cv|experience|skills|qualifications|work history|analyze.*resume|technical skills)\b',
+                'interview': r'\b(?:interview|job|career|hiring|prepare.*interview|interview.*questions|google|microsoft|amazon)\b',
+                'analysis': r'\b(?:analyze|review|evaluate|assess|compare|examine|advantages|disadvantages|pros.*cons|microservices|architecture)\b'
+            }
+            
+            # Intent to model mapping
+            self.intent_model_map = {
+                'coding': 'deepseek-v2:7b-q4_0',
+                'resume': 'deepseek-v2:7b-q4_0',
+                'analysis': 'deepseek-v2:7b-q4_0',
+                'interview': 'llama3:8b-instruct-q4_0',
+                'creative': 'llama3:8b-instruct-q4_0',
+                'math': 'mistral:7b-instruct-q4_0',
+                'factual': 'mistral:7b-instruct-q4_0',
+                'general': 'mistral:7b-instruct-q4_0'
+            }
+            
+            logging.info("Basic Enhanced Router created with semantic patterns")
+        
+        def classify_intent(self, text: str, explicit_intent: Optional[str] = None) -> str:
+            """Enhanced intent classification"""
+            if explicit_intent:
+                return explicit_intent
+            
+            import re
+            text_lower = text.lower()
+            
+            # Enhanced pattern matching with scoring
+            intent_scores = {}
+            for intent, pattern in self.intent_patterns.items():
+                matches = re.findall(pattern, text_lower)
+                if matches:
+                    score = len(matches)
+                    
+                    # Boost scores for specific keywords
+                    if intent == 'coding' and any(word in text_lower for word in ['debug', 'error', 'bug']):
+                        score += 2
+                    elif intent == 'resume' and any(word in text_lower for word in ['technical skills', 'analyze']):
+                        score += 2
+                    elif intent == 'interview' and 'prepare' in text_lower:
+                        score += 2
+                    elif intent == 'analysis' and any(word in text_lower for word in ['compare', 'advantages']):
+                        score += 2
+                    elif intent == 'math' and any(word in text_lower for word in ['calculate', 'area']):
+                        score += 2
+                    
+                    intent_scores[intent] = score
+            
+            if intent_scores:
+                best_intent = max(intent_scores, key=intent_scores.get)
+                logging.info(f"Classified '{text[:50]}...' as '{best_intent}'")
+                return best_intent
+            
+            # Fallback
+            return 'general'
+        
+        async def route_request(self, request) -> str:
+            """Enhanced routing with semantic classification"""
+            if request.model in self.available_models:
+                return request.model
+            
+            # Extract text for classification
+            text_content = ' '.join(
+                msg.get('content', '') for msg in 
+                [{"role": msg.role, "content": msg.content} for msg in request.messages]
+                if msg.get('role') == 'user'
+            )
+            
+            # Classify intent
+            intent = self.classify_intent(text_content, getattr(request, 'intent', None))
+            
+            # Select model by intent
+            preferred_model = self.intent_model_map.get(intent, 'mistral:7b-instruct-q4_0')
+            
+            # Check availability
+            if preferred_model in self.available_models:
+                selected_model = preferred_model
+            else:
+                selected_model = list(self.available_models.keys())[0] if self.available_models else 'mistral:7b-instruct-q4_0'
+            
+            logging.info(f"SEMANTIC ROUTING: '{text_content[:50]}...' -> intent='{intent}' -> model='{selected_model}'")
+            return selected_model
+        
+        def get_classification_stats(self):
+            return {
+                'enhanced_patterns': True,
+                'available_intents': list(self.intent_patterns.keys()),
+                'semantic_enabled': True
+            }
+    
+    router = BasicEnhancedRouter(ollama_client)
+    await router.initialize()
+    logging.info("✅ Basic Enhanced Router with semantic patterns initialized")
+    return router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -194,7 +291,7 @@ async def lifespan(app: FastAPI):
         log_startup_summary()
     except Exception as e:
         logging.error(f"❌ Failed to start services: {e}")
-        raise  # Fail fast if critical services don't start
+        raise
     
     yield
     
@@ -227,7 +324,7 @@ def log_startup_summary():
         logging.info(f"   • {feature}: {status}")
     logging.info("=" * 60)
 
-# Create FastAPI app with enhanced features
+# Create FastAPI app
 app = FastAPI(
     title="Enhanced LLM Proxy with Semantic Routing",
     description="Production-ready LLM routing proxy with semantic classification",
@@ -246,7 +343,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# FIXED: Dependency for getting the router
+# Dependencies
 async def get_llm_router():
     """Dependency to get the LLM router"""
     if not llm_router:
@@ -259,7 +356,7 @@ async def get_ollama_client():
         raise HTTPException(status_code=503, detail="Ollama client not available")
     return ollama_client
 
-# FIXED: Enhanced chat completions endpoint with proper dependency injection
+# Enhanced endpoints
 @app.post("/v1/chat/completions", response_model=ChatCompletionResponse)
 async def chat_completions(
     request: ChatCompletionRequest,
@@ -274,28 +371,20 @@ async def chat_completions(
     try:
         logging.info(f"📨 Processing request with router: {type(router).__name__}")
         
-        # FIXED: Extract text content for semantic classification
-        text_content = ' '.join(
-            msg.content for msg in request.messages 
-            if hasattr(msg, 'content') and msg.role == 'user'
-        )
-        
-        # FIXED: Use enhanced routing if available
+        # Use enhanced routing
         if hasattr(router, 'route_request'):
             selected_model = await router.route_request(request)
-            routing_reason = "semantic_classification" if hasattr(router, 'semantic_classifier') else "rule_based"
+            routing_reason = "enhanced_semantic" if hasattr(router, 'classify_intent') else "rule_based"
         else:
-            # Fallback routing
             selected_model = getattr(settings, 'DEFAULT_MODEL', 'mistral:7b-instruct-q4_0')
             routing_reason = "fallback"
         
         logging.info(f"🎯 Routed to model: {selected_model} (reason: {routing_reason})")
         
-        # Process request with selected model
+        # Process request
         if hasattr(router, 'process_chat_completion'):
             response = await router.process_chat_completion(request, selected_model)
         else:
-            # Fallback processing
             messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
             response = await client.generate_completion(
                 model=selected_model,
@@ -305,7 +394,7 @@ async def chat_completions(
                 top_p=request.top_p
             )
         
-        # FIXED: Add enhanced metadata to response
+        # Add enhanced metadata
         processing_time = (datetime.now() - start_time).total_seconds()
         
         if isinstance(response, dict):
@@ -337,7 +426,6 @@ async def completions(
     """Completions endpoint with semantic routing"""
     
     try:
-        # Convert to chat format for routing
         chat_request = ChatCompletionRequest(
             model=request.model,
             messages=[Message(role="user", content=request.prompt)],
@@ -349,7 +437,6 @@ async def completions(
         
         response = await chat_completions(chat_request, http_request, router, client)
         
-        # Convert back to completion format
         if not request.stream:
             return {
                 "id": response.id,
@@ -399,7 +486,7 @@ async def health_check():
         # Check Router
         if llm_router:
             router_type = type(llm_router).__name__
-            has_semantic = hasattr(llm_router, 'semantic_classifier')
+            has_semantic = hasattr(llm_router, 'classify_intent')
             services_status.append({
                 "name": "router",
                 "status": "healthy",
@@ -435,19 +522,6 @@ async def list_available_models(router: Any = Depends(get_llm_router)):
     
     try:
         models = await router.get_available_models()
-        
-        # Add routing information if available
-        if hasattr(router, 'model_config'):
-            for model in models:
-                model_name = model.get('id')
-                if model_name in router.model_config:
-                    config = router.model_config[model_name]
-                    model.update({
-                        'good_for': config.get('good_for', []),
-                        'priority': config.get('priority', 1),
-                        'cost_per_token': config.get('cost_per_token', 0.0001)
-                    })
-        
         return {"object": "list", "data": models}
         
     except HTTPException:
@@ -464,7 +538,7 @@ async def get_router_status(router: Any = Depends(get_llm_router)):
         status = {
             "router_type": type(router).__name__,
             "router_module": type(router).__module__,
-            "semantic_enabled": hasattr(router, 'semantic_classifier'),
+            "semantic_enabled": hasattr(router, 'classify_intent'),
             "enhanced_capabilities": enhanced_capabilities,
             "timestamp": datetime.now().isoformat()
         }
@@ -472,8 +546,8 @@ async def get_router_status(router: Any = Depends(get_llm_router)):
         if hasattr(router, 'get_classification_stats'):
             status['classification_stats'] = router.get_classification_stats()
         
-        if hasattr(router, 'model_config'):
-            status['model_config'] = router.model_config
+        if hasattr(router, 'intent_model_map'):
+            status['intent_model_mapping'] = router.intent_model_map
         
         return status
         
