@@ -1,3 +1,4 @@
+# Replace the downloaded integrate_wrapper.py with the correct Python version
 cat > integrate_wrapper.py << 'EOF'
 #!/usr/bin/env python3
 """Safe integration of semantic routing with existing system"""
@@ -7,7 +8,12 @@ import shutil
 import logging
 from pathlib import Path
 
+def setup_logging():
+    logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+
 def main():
+    setup_logging()
+    
     print("🔧 Integrating Semantic Routing (Safe)")
     print("=" * 40)
     
@@ -24,25 +30,20 @@ def main():
                 print("📋 Backed up existing semantic_classifier.py")
             shutil.copy("semantic_classifier.py", dst)
             print("✅ Added semantic_classifier.py")
+        else:
+            print("❌ semantic_classifier.py not found")
+            return 1
         
-        # Copy or rename the router file
-        router_files = [
-            "semantic_router_wrapper.py",
-            "enhanced_router.py", 
-            "semantic_enhanced_router.py"
-        ]
-        
-        router_copied = False
-        for router_file in router_files:
-            if Path(router_file).exists():
-                dst = services_dir / "semantic_enhanced_router.py"
-                shutil.copy(router_file, dst)
-                print(f"✅ Added {router_file} as semantic_enhanced_router.py")
-                router_copied = True
-                break
-        
-        if not router_copied:
-            print("❌ No router file found to copy")
+        # Copy semantic enhanced router
+        if Path("semantic_enhanced_router.py").exists():
+            dst = services_dir / "semantic_enhanced_router.py"
+            if dst.exists():
+                shutil.copy(dst, dst.with_suffix('.backup'))
+                print("📋 Backed up existing semantic_enhanced_router.py")
+            shutil.copy("semantic_enhanced_router.py", dst)
+            print("✅ Added semantic_enhanced_router.py")
+        else:
+            print("❌ semantic_enhanced_router.py not found")
             return 1
         
         # Update main.py safely
@@ -57,9 +58,8 @@ def main():
                 print("📋 Backed up main.py")
                 
                 # Add import for semantic router
-                if "from services.enhanced_router import" in content:
-                    semantic_import = """
-# Semantic enhanced routing
+                semantic_import = """
+# Enhanced semantic routing
 try:
     from services.semantic_enhanced_router import EnhancedLLMRouter as SemanticEnhancedRouter
     SEMANTIC_ROUTING_AVAILABLE = True
@@ -69,33 +69,61 @@ except ImportError as e:
     SEMANTIC_ROUTING_AVAILABLE = False
     SemanticEnhancedRouter = None
 """
-                    # Insert after the existing enhanced router import
-                    content = content.replace(
-                        "from services.enhanced_router import",
-                        "from services.enhanced_router import" + semantic_import + "\n# Original router:"
-                    )
                 
-                # Find router initialization and enhance it
+                # Find where to insert the import (after existing imports)
+                lines = content.split('\n')
+                import_index = -1
+                
+                for i, line in enumerate(lines):
+                    if "from services" in line and "import" in line:
+                        import_index = i + 1
+                        break
+                    elif "import logging" in line:
+                        import_index = i + 1
+                
+                if import_index > 0:
+                    lines.insert(import_index, semantic_import)
+                
+                # Find and replace router initialization
+                content = '\n'.join(lines)
+                
+                # Look for various router initialization patterns
                 router_patterns = [
-                    "llm_router = EnhancedLLMRouter(",
-                    "llm_router = LLMRouter(",
-                    "router = EnhancedLLMRouter(",
-                    "router = LLMRouter("
+                    ("llm_router = EnhancedLLMRouter(ollama_client)", "enhanced_router"),
+                    ("llm_router = LLMRouter(ollama_client)", "base_router"),
+                    ("router = EnhancedLLMRouter(ollama_client)", "enhanced_router"),
+                    ("router = LLMRouter(ollama_client)", "base_router")
                 ]
                 
-                for pattern in router_patterns:
+                router_replaced = False
+                for pattern, router_type in router_patterns:
                     if pattern in content:
-                        # Replace with semantic version
-                        enhanced_init = f"""        # Use semantic enhanced router if available
+                        if router_type == "enhanced_router":
+                            replacement = f"""        # Use semantic enhanced router if available
         if SEMANTIC_ROUTING_AVAILABLE:
-            {pattern.replace('EnhancedLLMRouter', 'SemanticEnhancedRouter').replace('LLMRouter', 'SemanticEnhancedRouter')}
-            logging.info("🧠 Using Semantic Enhanced Router")
+            base_router = EnhancedLLMRouter(ollama_client)
+            llm_router = SemanticEnhancedRouter(ollama_client, base_router)
+            logging.info("🧠 Using Semantic Enhanced Router with base EnhancedLLMRouter")
         else:
             {pattern}
-            logging.info("🔧 Using standard enhanced router")"""
+            logging.info("🔧 Using standard EnhancedLLMRouter")"""
+                        else:
+                            replacement = f"""        # Use semantic enhanced router if available
+        if SEMANTIC_ROUTING_AVAILABLE:
+            base_router = LLMRouter(ollama_client)
+            llm_router = SemanticEnhancedRouter(ollama_client, base_router)
+            logging.info("🧠 Using Semantic Enhanced Router with base LLMRouter")
+        else:
+            {pattern}
+            logging.info("🔧 Using standard LLMRouter")"""
                         
-                        content = content.replace(pattern, enhanced_init)
+                        content = content.replace(pattern, replacement)
+                        router_replaced = True
                         break
+                
+                if not router_replaced:
+                    print("⚠️  Could not find router initialization pattern to replace")
+                    print("   You may need to manually integrate the semantic router")
                 
                 # Write updated content
                 with open(main_file, 'w') as f:
@@ -104,6 +132,9 @@ except ImportError as e:
                 print("✅ Enhanced main.py with semantic routing")
             else:
                 print("ℹ️  main.py already has semantic routing")
+        else:
+            print("❌ main.py not found")
+            return 1
         
         print("\n🎉 Integration Complete!")
         print("=" * 40)
@@ -128,8 +159,16 @@ except ImportError as e:
         
     except Exception as e:
         print(f"❌ Integration failed: {e}")
+        import traceback
+        traceback.print_exc()
         return 1
 
 if __name__ == "__main__":
     sys.exit(main())
 EOF
+
+# Make it executable
+chmod +x integrate_wrapper.py
+
+# Now run the correct Python script
+python3 integrate_wrapper.py
