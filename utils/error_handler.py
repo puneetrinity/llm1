@@ -1,22 +1,31 @@
-# utils/error_handler.py - Standardized Error Handling
+# utils/error_handler.py - Enhanced Error Handling with Circuit Breaker Integration
 import logging
 import traceback
 import asyncio
+import time
 from typing import Dict, Any, Optional, Callable, Type, Union
 from datetime import datetime
 from functools import wraps
 from enum import Enum
 import json
 
+# Import circuit breaker components
+from services.circuit_breaker import (
+    get_circuit_breaker_manager, 
+    CircuitBreakerConfig,
+    CircuitBreakerOpenError,
+    CircuitBreakerTimeoutError
+)
+
 class ErrorSeverity(Enum):
-    """Error severity levels"""
+    """Error severity levels with circuit breaker integration"""
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
     CRITICAL = "critical"
 
 class ErrorCategory(Enum):
-    """Error categories for better classification"""
+    """Error categories for better classification and routing"""
     NETWORK = "network"
     AUTHENTICATION = "authentication"
     AUTHORIZATION = "authorization"
@@ -25,9 +34,10 @@ class ErrorCategory(Enum):
     EXTERNAL_SERVICE = "external_service"
     INTERNAL = "internal"
     CONFIGURATION = "configuration"
+    CIRCUIT_BREAKER = "circuit_breaker"  # New category
 
 class LLMProxyError(Exception):
-    """Base exception for LLM Proxy with standardized structure"""
+    """Enhanced base exception with circuit breaker awareness"""
     
     def __init__(
         self, 
@@ -37,7 +47,8 @@ class LLMProxyError(Exception):
         severity: ErrorSeverity = ErrorSeverity.MEDIUM,
         details: Dict[str, Any] = None,
         user_message: str = None,
-        retry_after: Optional[int] = None
+        retry_after: Optional[int] = None,
+        circuit_breaker_name: str = None
     ):
         super().__init__(message)
         self.message = message
@@ -47,6 +58,7 @@ class LLMProxyError(Exception):
         self.details = details or {}
         self.user_message = user_message or "An error occurred while processing your request"
         self.retry_after = retry_after
+        self.circuit_breaker_name = circuit_breaker_name
         self.timestamp = datetime.now()
         
     def to_dict(self) -> Dict[str, Any]:
@@ -58,173 +70,217 @@ class LLMProxyError(Exception):
             "severity": self.severity.value,
             "timestamp": self.timestamp.isoformat(),
             "details": self.details,
-            "retry_after": self.retry_after
+            "retry_after": self.retry_after,
+            "circuit_breaker": self.circuit_breaker_name
         }
 
+# Enhanced specific exceptions with circuit breaker integration
 class OllamaConnectionError(LLMProxyError):
-    """Ollama service connection error"""
-    def __init__(self, message: str, ollama_url: str = None):
+    """Ollama service connection error with circuit breaker awareness"""
+    def __init__(self, message: str, ollama_url: str = None, circuit_breaker_triggered: bool = False):
         super().__init__(
             message=message,
             error_code="OLLAMA_CONNECTION_ERROR",
             category=ErrorCategory.EXTERNAL_SERVICE,
             severity=ErrorSeverity.HIGH,
-            details={"ollama_url": ollama_url},
-            user_message="Unable to connect to the AI service. Please try again later."
+            details={"ollama_url": ollama_url, "circuit_breaker_triggered": circuit_breaker_triggered},
+            user_message="AI service is temporarily unavailable. Please try again later.",
+            retry_after=60 if circuit_breaker_triggered else 30
         )
 
-class ModelNotFoundError(LLMProxyError):
-    """Model not found error"""
-    def __init__(self, model_name: str):
+class CircuitBreakerTriggeredError(LLMProxyError):
+    """Circuit breaker has been triggered"""
+    def __init__(self, service_name: str, failure_rate: float, retry_after: int = 60):
         super().__init__(
-            message=f"Model '{model_name}' not found or not available",
-            error_code="MODEL_NOT_FOUND",
-            category=ErrorCategory.RESOURCE,
-            severity=ErrorSeverity.MEDIUM,
-            details={"model_name": model_name},
-            user_message=f"The requested model '{model_name}' is not available. Please check the model name."
-        )
-
-class RateLimitExceededError(LLMProxyError):
-    """Rate limit exceeded error"""
-    def __init__(self, limit: int, retry_after: int = 60):
-        super().__init__(
-            message=f"Rate limit of {limit} requests exceeded",
-            error_code="RATE_LIMIT_EXCEEDED",
-            category=ErrorCategory.RESOURCE,
-            severity=ErrorSeverity.LOW,
-            details={"limit": limit},
-            user_message=f"Rate limit exceeded. Please wait {retry_after} seconds before retrying.",
-            retry_after=retry_after
-        )
-
-class AuthenticationError(LLMProxyError):
-    """Authentication error"""
-    def __init__(self, message: str = "Invalid or missing API key"):
-        super().__init__(
-            message=message,
-            error_code="AUTHENTICATION_ERROR",
-            category=ErrorCategory.AUTHENTICATION,
+            message=f"Circuit breaker for {service_name} is open (failure rate: {failure_rate:.1f}%)",
+            error_code="CIRCUIT_BREAKER_OPEN",
+            category=ErrorCategory.CIRCUIT_BREAKER,
             severity=ErrorSeverity.HIGH,
-            user_message="Authentication failed. Please check your API key."
+            details={"service_name": service_name, "failure_rate": failure_rate},
+            user_message=f"Service temporarily unavailable due to high error rate. Please try again in {retry_after} seconds.",
+            retry_after=retry_after,
+            circuit_breaker_name=service_name
         )
 
-class ValidationError(LLMProxyError):
-    """Request validation error"""
-    def __init__(self, message: str, field: str = None):
+class ServiceTimeoutError(LLMProxyError):
+    """Service timeout with circuit breaker tracking"""
+    def __init__(self, service_name: str, timeout_duration: float):
         super().__init__(
-            message=message,
-            error_code="VALIDATION_ERROR",
-            category=ErrorCategory.VALIDATION,
-            severity=ErrorSeverity.LOW,
-            details={"field": field} if field else {},
-            user_message=f"Invalid request: {message}"
-        )
-
-class MemoryError(LLMProxyError):
-    """Memory-related error"""
-    def __init__(self, message: str, requested_mb: int = None, available_mb: int = None):
-        super().__init__(
-            message=message,
-            error_code="MEMORY_ERROR",
-            category=ErrorCategory.RESOURCE,
-            severity=ErrorSeverity.HIGH,
-            details={"requested_mb": requested_mb, "available_mb": available_mb},
-            user_message="Insufficient memory to process request. Please try again later."
-        )
-
-class ServiceUnavailableError(LLMProxyError):
-    """Service temporarily unavailable"""
-    def __init__(self, service_name: str, retry_after: int = 30):
-        super().__init__(
-            message=f"Service '{service_name}' is temporarily unavailable",
-            error_code="SERVICE_UNAVAILABLE",
+            message=f"Service {service_name} timed out after {timeout_duration:.1f}s",
+            error_code="SERVICE_TIMEOUT",
             category=ErrorCategory.EXTERNAL_SERVICE,
             severity=ErrorSeverity.HIGH,
-            details={"service_name": service_name},
-            user_message=f"Service temporarily unavailable. Please try again in {retry_after} seconds.",
-            retry_after=retry_after
+            details={"service_name": service_name, "timeout_duration": timeout_duration},
+            user_message="Request timed out. Please try again.",
+            retry_after=30
         )
 
-class ErrorHandler:
-    """Centralized error handling with consistent patterns"""
+class EnhancedErrorHandler:
+    """Enhanced error handling with circuit breaker integration and analytics"""
     
     def __init__(self):
         self.error_counts: Dict[str, int] = {}
         self.error_callbacks: Dict[str, Callable] = {}
+        self.circuit_breaker_manager = get_circuit_breaker_manager()
         
-    def register_callback(self, error_code: str, callback: Callable):
-        """Register callback for specific error types"""
-        self.error_callbacks[error_code] = callback
+        # Error analytics
+        self.error_history = []
+        self.service_health = {}
+        
+        # Setup default circuit breaker configurations
+        self._setup_default_circuit_breakers()
     
-    async def handle_error(
+    def _setup_default_circuit_breakers(self):
+        """Setup default circuit breakers for common services"""
+        configs = {
+            'ollama': CircuitBreakerConfig(
+                failure_threshold=5,
+                recovery_timeout=60,
+                timeout_threshold=30.0,
+                slow_request_threshold=10.0
+            ),
+            'redis': CircuitBreakerConfig(
+                failure_threshold=3,
+                recovery_timeout=30,
+                timeout_threshold=5.0
+            ),
+            'semantic_model': CircuitBreakerConfig(
+                failure_threshold=3,
+                recovery_timeout=120,
+                timeout_threshold=15.0
+            )
+        }
+        
+        for service_name, config in configs.items():
+            self.circuit_breaker_manager.get_circuit_breaker(service_name, config)
+    
+    async def call_with_protection(
         self, 
-        error: Exception, 
+        service_name: str, 
+        func: Callable, 
+        *args, 
         context: Dict[str, Any] = None,
-        request_id: str = None
-    ) -> LLMProxyError:
-        """Handle and standardize any error"""
+        **kwargs
+    ) -> Any:
+        """Execute function with circuit breaker protection and enhanced error handling"""
         
         context = context or {}
+        start_time = time.time()
         
-        # Convert to standardized error if needed
-        if isinstance(error, LLMProxyError):
-            std_error = error
-        else:
-            std_error = self._convert_to_standard_error(error, context)
+        try:
+            # Execute with circuit breaker protection
+            result = await self.circuit_breaker_manager.call_with_circuit_breaker(
+                service_name, func, *args, **kwargs
+            )
+            
+            # Update service health on success
+            response_time = time.time() - start_time
+            self._update_service_health(service_name, True, response_time)
+            
+            return result
+            
+        except CircuitBreakerOpenError as e:
+            # Handle circuit breaker open state
+            circuit_breaker = self.circuit_breaker_manager.get_circuit_breaker(service_name)
+            status = circuit_breaker.get_status()
+            
+            error = CircuitBreakerTriggeredError(
+                service_name=service_name,
+                failure_rate=status['stats']['failure_rate'],
+                retry_after=circuit_breaker.config.recovery_timeout
+            )
+            
+            await self._handle_error(error, context, service_name)
+            raise error
+            
+        except CircuitBreakerTimeoutError as e:
+            # Handle timeout through circuit breaker
+            response_time = time.time() - start_time
+            error = ServiceTimeoutError(service_name, response_time)
+            
+            self._update_service_health(service_name, False, response_time)
+            await self._handle_error(error, context, service_name)
+            raise error
+            
+        except Exception as e:
+            # Handle other exceptions
+            response_time = time.time() - start_time
+            std_error = await self._convert_to_standard_error(e, context, service_name)
+            
+            self._update_service_health(service_name, False, response_time)
+            await self._handle_error(std_error, context, service_name)
+            raise std_error
+    
+    async def _handle_error(
+        self, 
+        error: LLMProxyError, 
+        context: Dict[str, Any] = None,
+        service_name: str = None
+    ):
+        """Enhanced error handling with circuit breaker analytics"""
         
         # Track error
-        self._track_error(std_error)
+        self._track_error(error, service_name)
         
-        # Log error with context
-        self._log_error(std_error, context, request_id)
+        # Log error with enhanced context
+        self._log_error(error, context, service_name)
         
-        # Execute callback if registered
-        if std_error.error_code in self.error_callbacks:
+        # Execute callbacks
+        if error.error_code in self.error_callbacks:
             try:
-                await self.error_callbacks[std_error.error_code](std_error, context)
+                callback = self.error_callbacks[error.error_code]
+                if asyncio.iscoroutinefunction(callback):
+                    await callback(error, context)
+                else:
+                    callback(error, context)
             except Exception as callback_error:
-                logging.error(f"Error in error callback: {callback_error}")
-        
-        return std_error
+                logging.error(f"Error callback failed: {callback_error}")
     
-    def _convert_to_standard_error(self, error: Exception, context: Dict[str, Any]) -> LLMProxyError:
-        """Convert any exception to standardized LLMProxyError"""
+    async def _convert_to_standard_error(
+        self, 
+        error: Exception, 
+        context: Dict[str, Any], 
+        service_name: str = None
+    ) -> LLMProxyError:
+        """Convert any exception to standardized LLMProxyError with service context"""
         
         error_type = type(error).__name__
         error_message = str(error)
         
-        # Map common exceptions to standardized errors
+        # Enhanced error mapping with service awareness
         if "connection" in error_message.lower() or "timeout" in error_message.lower():
-            return OllamaConnectionError(
-                message=error_message,
-                ollama_url=context.get("ollama_url")
-            )
+            if service_name == "ollama":
+                return OllamaConnectionError(
+                    message=error_message,
+                    ollama_url=context.get("ollama_url"),
+                    circuit_breaker_triggered=False
+                )
+            else:
+                return LLMProxyError(
+                    message=error_message,
+                    error_code="CONNECTION_ERROR",
+                    category=ErrorCategory.NETWORK,
+                    severity=ErrorSeverity.HIGH,
+                    details={"service": service_name, "original_type": error_type}
+                )
         
         elif "memory" in error_message.lower() or error_type == "MemoryError":
-            return MemoryError(
+            return LLMProxyError(
                 message=error_message,
-                requested_mb=context.get("requested_mb"),
-                available_mb=context.get("available_mb")
+                error_code="MEMORY_ERROR",
+                category=ErrorCategory.RESOURCE,
+                severity=ErrorSeverity.HIGH,
+                details={"service": service_name, "original_type": error_type}
             )
         
-        elif "validation" in error_message.lower() or error_type == "ValidationError":
-            return ValidationError(
+        elif "redis" in error_message.lower() and service_name == "redis":
+            return LLMProxyError(
                 message=error_message,
-                field=context.get("field")
+                error_code="CACHE_ERROR",
+                category=ErrorCategory.EXTERNAL_SERVICE,
+                severity=ErrorSeverity.MEDIUM,
+                details={"service": service_name, "cache_backend": "redis"}
             )
-        
-        elif "not found" in error_message.lower():
-            return ModelNotFoundError(context.get("model_name", "unknown"))
-        
-        elif "rate limit" in error_message.lower():
-            return RateLimitExceededError(
-                limit=context.get("rate_limit", 60),
-                retry_after=context.get("retry_after", 60)
-            )
-        
-        elif "auth" in error_message.lower() or "forbidden" in error_message.lower():
-            return AuthenticationError(error_message)
         
         else:
             # Generic internal error
@@ -233,29 +289,73 @@ class ErrorHandler:
                 error_code="INTERNAL_ERROR",
                 category=ErrorCategory.INTERNAL,
                 severity=ErrorSeverity.MEDIUM,
-                details={"original_type": error_type, "traceback": traceback.format_exc()},
-                user_message="An internal error occurred. Please try again later."
+                details={
+                    "service": service_name,
+                    "original_type": error_type, 
+                    "traceback": traceback.format_exc()
+                }
             )
     
-    def _track_error(self, error: LLMProxyError):
-        """Track error occurrence for metrics"""
+    def _track_error(self, error: LLMProxyError, service_name: str = None):
+        """Enhanced error tracking with service analytics"""
         self.error_counts[error.error_code] = self.error_counts.get(error.error_code, 0) + 1
+        
+        # Track error history for analytics
+        self.error_history.append({
+            'timestamp': error.timestamp,
+            'error_code': error.error_code,
+            'category': error.category.value,
+            'severity': error.severity.value,
+            'service': service_name,
+            'circuit_breaker': error.circuit_breaker_name
+        })
+        
+        # Limit history size
+        if len(self.error_history) > 1000:
+            self.error_history = self.error_history[-500:]
     
-    def _log_error(self, error: LLMProxyError, context: Dict[str, Any], request_id: str = None):
-        """Log error with appropriate level and context"""
+    def _update_service_health(self, service_name: str, success: bool, response_time: float):
+        """Update service health metrics"""
+        if service_name not in self.service_health:
+            self.service_health[service_name] = {
+                'total_requests': 0,
+                'successful_requests': 0,
+                'failed_requests': 0,
+                'avg_response_time': 0,
+                'last_success': None,
+                'last_failure': None
+            }
+        
+        health = self.service_health[service_name]
+        health['total_requests'] += 1
+        
+        if success:
+            health['successful_requests'] += 1
+            health['last_success'] = datetime.now()
+        else:
+            health['failed_requests'] += 1
+            health['last_failure'] = datetime.now()
+        
+        # Update rolling average response time
+        current_avg = health['avg_response_time']
+        total_requests = health['total_requests']
+        health['avg_response_time'] = ((current_avg * (total_requests - 1)) + response_time) / total_requests
+    
+    def _log_error(self, error: LLMProxyError, context: Dict[str, Any], service_name: str = None):
+        """Enhanced error logging with service context"""
         
         log_data = {
             "error_code": error.error_code,
             "category": error.category.value,
             "severity": error.severity.value,
             "message": error.message,
-            "details": error.details,
+            "service": service_name,
+            "circuit_breaker": error.circuit_breaker_name,
             "context": context,
-            "request_id": request_id,
             "timestamp": error.timestamp.isoformat()
         }
         
-        log_message = f"[{request_id or 'NO_ID'}] {error.error_code}: {error.message}"
+        log_message = f"[{service_name or 'UNKNOWN'}] {error.error_code}: {error.message}"
         
         if error.severity == ErrorSeverity.CRITICAL:
             logging.critical(log_message, extra=log_data)
@@ -266,9 +366,26 @@ class ErrorHandler:
         else:
             logging.info(log_message, extra=log_data)
     
-    def get_error_stats(self) -> Dict[str, Any]:
-        """Get error statistics"""
+    def get_error_analytics(self) -> Dict[str, Any]:
+        """Get comprehensive error analytics with circuit breaker status"""
         total_errors = sum(self.error_counts.values())
+        
+        # Circuit breaker status
+        circuit_breaker_status = self.circuit_breaker_manager.get_health_summary()
+        
+        # Service health summary
+        service_summary = {}
+        for service, health in self.service_health.items():
+            failure_rate = 0
+            if health['total_requests'] > 0:
+                failure_rate = (health['failed_requests'] / health['total_requests']) * 100
+            
+            service_summary[service] = {
+                'health_status': 'healthy' if failure_rate < 5 else 'degraded' if failure_rate < 20 else 'unhealthy',
+                'failure_rate': failure_rate,
+                'avg_response_time': health['avg_response_time'],
+                'total_requests': health['total_requests']
+            }
         
         return {
             "total_errors": total_errors,
@@ -277,99 +394,101 @@ class ErrorHandler:
                 self.error_counts.items(),
                 key=lambda x: x[1],
                 reverse=True
-            )[:10]
+            )[:10],
+            "circuit_breakers": circuit_breaker_status,
+            "service_health": service_summary,
+            "recent_errors": self.error_history[-10:] if self.error_history else []
         }
-
-# Decorator for automatic error handling
-def handle_errors(
-    context_func: Callable = None,
-    reraise: bool = True,
-    default_return: Any = None
-):
-    """Decorator for automatic error handling
     
-    Args:
-        context_func: Function to generate context dict from function args
-        reraise: Whether to reraise the standardized error
-        default_return: Default return value if not reraising
-    """
+    def register_callback(self, error_code: str, callback: Callable):
+        """Register error callback"""
+        self.error_callbacks[error_code] = callback
+    
+    def get_service_recommendations(self) -> List[str]:
+        """Get service optimization recommendations based on error patterns"""
+        recommendations = []
+        
+        # Analyze circuit breaker status
+        cb_status = self.circuit_breaker_manager.get_health_summary()
+        if cb_status['open'] > 0:
+            recommendations.append(f"{cb_status['open']} service(s) have circuit breakers open - check service health")
+        
+        # Analyze service health
+        for service, health in self.service_health.items():
+            failure_rate = (health['failed_requests'] / max(1, health['total_requests'])) * 100
+            
+            if failure_rate > 20:
+                recommendations.append(f"Service '{service}' has high failure rate ({failure_rate:.1f}%) - investigate")
+            elif health['avg_response_time'] > 10:
+                recommendations.append(f"Service '{service}' has slow response times ({health['avg_response_time']:.1f}s)")
+        
+        return recommendations
+
+# Enhanced decorator with circuit breaker integration
+def handle_errors_with_circuit_breaker(
+    service_name: str,
+    context_func: Callable = None,
+    reraise: bool = True
+):
+    """Enhanced error handling decorator with circuit breaker protection"""
+    
     def decorator(func):
         @wraps(func)
         async def async_wrapper(*args, **kwargs):
-            try:
-                return await func(*args, **kwargs)
-            except Exception as e:
-                context = {}
-                if context_func:
-                    try:
-                        context = context_func(*args, **kwargs)
-                    except Exception:
-                        pass
-                
-                std_error = await error_handler.handle_error(e, context)
-                
-                if reraise:
-                    raise std_error
-                else:
-                    return default_return
+            context = {}
+            if context_func:
+                try:
+                    context = context_func(*args, **kwargs)
+                except Exception:
+                    pass
+            
+            return await error_handler.call_with_protection(
+                service_name, func, *args, context=context, **kwargs
+            )
         
         @wraps(func)
         def sync_wrapper(*args, **kwargs):
-            try:
+            # For sync functions, create async wrapper
+            async def async_func():
                 return func(*args, **kwargs)
-            except Exception as e:
-                context = {}
-                if context_func:
-                    try:
-                        context = context_func(*args, **kwargs)
-                    except Exception:
-                        pass
-                
-                # For sync functions, we can't await, so handle synchronously
-                std_error = error_handler._convert_to_standard_error(e, context)
-                error_handler._track_error(std_error)
-                error_handler._log_error(std_error, context)
-                
-                if reraise:
-                    raise std_error
-                else:
-                    return default_return
+            
+            context = {}
+            if context_func:
+                try:
+                    context = context_func(*args, **kwargs)
+                except Exception:
+                    pass
+            
+            loop = asyncio.get_event_loop()
+            return loop.run_until_complete(
+                error_handler.call_with_protection(
+                    service_name, async_func, context=context
+                )
+            )
         
         return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper
     
     return decorator
 
-# Async context manager for error handling
-class ErrorContext:
-    """Async context manager for error handling"""
-    
-    def __init__(self, context: Dict[str, Any] = None, request_id: str = None):
-        self.context = context or {}
-        self.request_id = request_id
-        self.error: Optional[LLMProxyError] = None
-    
-    async def __aenter__(self):
-        return self
-    
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if exc_val:
-            self.error = await error_handler.handle_error(exc_val, self.context, self.request_id)
-            # Don't suppress the exception - let it propagate as standardized error
-            return False
-
-# Global error handler instance
-error_handler = ErrorHandler()
+# Global enhanced error handler instance
+error_handler = EnhancedErrorHandler()
 
 # Convenience functions
-async def handle_error(error: Exception, context: Dict[str, Any] = None, request_id: str = None) -> LLMProxyError:
-    """Convenience function for handling errors"""
-    return await error_handler.handle_error(error, context, request_id)
+async def handle_error_with_circuit_breaker(
+    service_name: str, 
+    func: Callable, 
+    *args, 
+    context: Dict[str, Any] = None,
+    **kwargs
+) -> Any:
+    """Convenience function for handling errors with circuit breaker protection"""
+    return await error_handler.call_with_protection(service_name, func, *args, context=context, **kwargs)
 
 def register_error_callback(error_code: str, callback: Callable):
     """Register error callback"""
     error_handler.register_callback(error_code, callback)
 
-# Example usage context functions for common scenarios
+# Context functions for common scenarios
 def ollama_context(*args, **kwargs) -> Dict[str, Any]:
     """Generate context for Ollama-related functions"""
     return {
@@ -377,19 +496,9 @@ def ollama_context(*args, **kwargs) -> Dict[str, Any]:
         "ollama_url": getattr(args[0], 'base_url', None) if args else None
     }
 
-def model_context(*args, **kwargs) -> Dict[str, Any]:
-    """Generate context for model-related functions"""
+def cache_context(*args, **kwargs) -> Dict[str, Any]:
+    """Generate context for cache-related functions"""
     return {
-        "component": "model",
-        "model_name": kwargs.get("model") or (args[1] if len(args) > 1 else None)
-    }
-
-def request_context(*args, **kwargs) -> Dict[str, Any]:
-    """Generate context for request processing"""
-    request = args[0] if args else None
-    return {
-        "component": "request_processing",
-        "model": getattr(request, 'model', None),
-        "stream": getattr(request, 'stream', None),
-        "max_tokens": getattr(request, 'max_tokens', None)
+        "component": "cache",
+        "cache_key": kwargs.get("key") or (args[1] if len(args) > 1 else None)
     }
