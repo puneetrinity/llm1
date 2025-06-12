@@ -67,5 +67,17 @@ HEALTHCHECK --interval=30s --timeout=20s --start-period=300s --retries=3 \
 # Expose ports
 EXPOSE 8000 11434
 
+# ADD these lines after your existing system dependencies
+# Install Node.js 18.x for React dashboard
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && apt-get install -y nodejs
+
+# ADD this before EXPOSE commands
+# Build React dashboard during image build
+COPY frontend ./frontend
+COPY build_dashboard.sh ./
+RUN chmod +x build_dashboard.sh
+RUN ./build_dashboard.sh || echo "Dashboard build failed - will build at runtime"
+
 # Use enhanced startup script
 CMD ["./enhanced_start.sh"]
