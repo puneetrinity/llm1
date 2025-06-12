@@ -8,7 +8,7 @@ class WebSocketDashboard:
     def __init__(self, enhanced_dashboard, metrics_collector=None, performance_monitor=None):
         self.dashboard = enhanced_dashboard
         self.metrics_collector = metrics_collector
-self.performance_monitor = performance_monitor
+        self.performance_monitor = performance_monitor
         self.active_connections: Set[WebSocket] = set()
         self.broadcast_task = None
         
