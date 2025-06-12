@@ -55,7 +55,7 @@ class OptimizedConnectionPool:
             use_dns_cache=True,
             
             # TCP optimization
-            tcp_nodelay=self.config.tcp_nodelay,
+           # tcp_nodelay=self.config.tcp_nodelay,  # Compatibility fix
             
             # SSL optimization (if needed)
             ssl=False,  # Ollama typically uses HTTP
