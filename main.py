@@ -1,4 +1,4 @@
-# main.py - Complete Production-Ready LLM Proxy
+# main.py - Complete Production-Ready LLM Proxy with Optimized Router
 import os
 import sys
 import json
@@ -17,6 +17,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import HTTPBearer
 import uvicorn
+
+# Add this line with your other imports - OPTIMIZED ROUTER
+from services.enhanced_router import EnhancedLLMRouter as OptimizedModelRouter
 
 # Configuration with graceful fallbacks
 try:
@@ -235,54 +238,63 @@ async def initialize_core_services():
                 enhanced_capabilities = {"mock": True}
                 logging.warning("⚠️ Using mock Ollama client - service may not work properly")
         
-        # Initialize router
+        # Initialize optimized router for your model fleet - REPLACED ROUTER INITIALIZATION
         try:
-            if enhanced_capabilities.get('enhanced_router'):
-                from services.enhanced_router import EnhancedLLMRouter
-                llm_router = EnhancedLLMRouter(ollama_client)
-            else:
+            llm_router = OptimizedModelRouter(ollama_client)
+            await llm_router.initialize()
+            logging.info("✅ Optimized model router initialized")
+            
+            # Log available models and their specialties
+            if hasattr(llm_router, 'available_models'):
+                for model, config in llm_router.available_models.items():
+                    specialties = ', '.join(config.get('good_for', ['general']))
+                    logging.info(f"   📍 {model}: {specialties}")
+            
+        except Exception as e:
+            logging.error(f"Optimized router initialization failed: {e}")
+            # Keep your existing fallback logic here
+            try:
                 from services.router import LLMRouter
                 llm_router = LLMRouter(ollama_client)
-            
-            await llm_router.initialize()
-            logging.info("✅ LLM router initialized")
-        except Exception as e:
-            logging.error(f"Router initialization failed: {e}")
-            # Create basic router fallback
-            class BasicRouter:
-                def __init__(self, client):
-                    self.ollama_client = client
-                    self.default_model = getattr(settings, 'DEFAULT_MODEL', 'mistral:7b-instruct-q4_0')
-                
-                async def initialize(self):
-                    pass
-                
-                async def route_request(self, request):
-                    return getattr(request, 'model', self.default_model)
-                
-                async def process_chat_completion(self, request, model):
-                    messages = []
-                    for msg in request.messages:
-                        if hasattr(msg, 'role') and hasattr(msg, 'content'):
-                            messages.append({"role": msg.role, "content": msg.content})
+                await llm_router.initialize()
+                logging.info("✅ Basic router fallback initialized")
+            except Exception as e2:
+                logging.error(f"All router options failed: {e2}")
+                # Create basic router fallback
+                class BasicRouter:
+                    def __init__(self, client):
+                        self.ollama_client = client
+                        self.default_model = getattr(settings, 'DEFAULT_MODEL', 'mistral:7b-instruct-q4_0')
                     
-                    return await self.ollama_client.generate_completion(
-                        model=model,
-                        messages=messages,
-                        temperature=getattr(request, 'temperature', 0.7),
-                        max_tokens=getattr(request, 'max_tokens', 150)
-                    )
+                    async def initialize(self):
+                        pass
+                    
+                    async def route_request(self, request):
+                        return getattr(request, 'model', self.default_model)
+                    
+                    async def process_chat_completion(self, request, model):
+                        messages = []
+                        for msg in request.messages:
+                            if hasattr(msg, 'role') and hasattr(msg, 'content'):
+                                messages.append({"role": msg.role, "content": msg.content})
+                        
+                        return await self.ollama_client.generate_completion(
+                            model=model,
+                            messages=messages,
+                            temperature=getattr(request, 'temperature', 0.7),
+                            max_tokens=getattr(request, 'max_tokens', 150)
+                        )
+                    
+                    async def get_available_models(self):
+                        try:
+                            models = await self.ollama_client.list_models()
+                            return [{"id": model.get("name", "unknown"), "object": "model"} for model in models]
+                        except:
+                            return [{"id": self.default_model, "object": "model"}]
                 
-                async def get_available_models(self):
-                    try:
-                        models = await self.ollama_client.list_models()
-                        return [{"id": model.get("name", "unknown"), "object": "model"} for model in models]
-                    except:
-                        return [{"id": self.default_model, "object": "model"}]
-            
-            llm_router = BasicRouter(ollama_client)
-            await llm_router.initialize()
-            logging.info("✅ Basic router fallback initialized")
+                llm_router = BasicRouter(ollama_client)
+                await llm_router.initialize()
+                logging.info("✅ Basic router fallback initialized")
         
         # Initialize optional enhanced services
         try:
@@ -365,7 +377,7 @@ def log_startup_summary():
     logging.info(f"   • Rate Limiting: {settings.ENABLE_RATE_LIMITING}")
     logging.info(f"🎯 Services:")
     logging.info(f"   • Ollama Client: {'✅' if ollama_client else '❌'}")
-    logging.info(f"   • LLM Router: {'✅' if llm_router else '❌'}")
+    logging.info(f"   • LLM Router: {'✅ Optimized' if llm_router else '❌'}")
     logging.info(f"   • Auth Service: {'✅' if auth_service else '❌'}")
     logging.info(f"   • Metrics: {'✅' if metrics_collector else '❌'}")
     logging.info(f"   • Memory Manager: {'✅' if memory_manager else '❌'}")
@@ -377,7 +389,7 @@ def log_startup_summary():
 # Create FastAPI application
 app = FastAPI(
     title="LLM Proxy",
-    description="Production-ready LLM routing proxy with advanced features",
+    description="Production-ready LLM routing proxy with optimized model routing",
     version="2.2.0",
     lifespan=lifespan,
     docs_url="/docs",
@@ -503,9 +515,21 @@ async def chat_completions(
         # Process request
         response = await llm_router.process_chat_completion(request, selected_model)
         
+        # Add routing metadata to response (NEW ENHANCEMENT)
+        duration = time.time() - start_time
+        if isinstance(response, dict) and hasattr(llm_router, 'classify_intent'):
+            text_content = ' '.join(msg.content for msg in request.messages if hasattr(msg, 'content'))
+            intent = llm_router.classify_intent(text_content)
+            
+            response["routing_metadata"] = {
+                "selected_model": selected_model,
+                "intent_classification": intent,
+                "processing_time": duration,
+                "routing_strategy": "optimized_intent_based"
+            }
+        
         # Track metrics
         success = True
-        duration = time.time() - start_time
         track_request_metrics("/v1/chat/completions", duration, success)
         
         # Track model usage if metrics available
@@ -813,6 +837,76 @@ async def admin_status(current_user: Optional[Dict[str, Any]] = Depends(get_curr
         logging.error(f"Admin status error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# NEW ADMIN ENDPOINTS - OPTIMIZED ROUTING
+@app.get("/admin/routing/stats")
+async def admin_routing_stats(current_user: Optional[Dict[str, Any]] = Depends(get_current_user)):
+    """Get intelligent routing statistics"""
+    
+    if settings.ENABLE_AUTH and current_user:
+        permissions = current_user.get("permissions", [])
+        if "admin" not in permissions and "read" not in permissions:
+            raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        if not llm_router or not hasattr(llm_router, 'get_classification_stats'):
+            raise HTTPException(status_code=503, detail="Optimized routing not available")
+        
+        routing_stats = llm_router.get_classification_stats()
+        
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "routing_strategy": "optimized_intent_based",
+            "model_fleet": routing_stats
+        }
+        
+    except Exception as e:
+        logging.error(f"Routing stats error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/admin/routing/test")
+async def admin_test_routing(
+    test_request: dict,
+    current_user: Optional[Dict[str, Any]] = Depends(get_current_user)
+):
+    """Test the routing logic with sample text"""
+    
+    if settings.ENABLE_AUTH and current_user:
+        permissions = current_user.get("permissions", [])
+        if "admin" not in permissions:
+            raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        if not llm_router or not hasattr(llm_router, 'classify_intent'):
+            raise HTTPException(status_code=503, detail="Optimized routing not available")
+        
+        text = test_request.get('text', '')
+        if not text:
+            raise HTTPException(status_code=400, detail="Text field required")
+        
+        # Test intent classification
+        intent = llm_router.classify_intent(text)
+        
+        # Create mock request for routing test
+        class MockRequest:
+            def __init__(self, text):
+                self.messages = [type('MockMessage', (), {'role': 'user', 'content': text})()]
+                self.model = "test"
+        
+        mock_request = MockRequest(text)
+        selected_model = await llm_router.route_request(mock_request)
+        
+        return {
+            "test_text": text,
+            "classified_intent": intent,
+            "selected_model": selected_model,
+            "routing_reason": f"Optimized for {intent} tasks",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logging.error(f"Routing test error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/metrics")
 async def get_metrics():
     """Get comprehensive system metrics"""
@@ -964,9 +1058,12 @@ async def root():
             "models": "/models",
             "health": "/health",
             "metrics": "/metrics",
+            "admin_routing_stats": "/admin/routing/stats",
+            "admin_routing_test": "/admin/routing/test",
             "docs": "/docs"
         },
-        "features": enhanced_capabilities
+        "features": enhanced_capabilities,
+        "routing": "optimized_intent_based"
     }
 
 # Main execution
@@ -980,7 +1077,7 @@ if __name__ == "__main__":
         if settings.MAX_MEMORY_MB < 2048:
             logging.warning("⚠️ Memory limit is very low - may cause issues")
         
-        logging.info(f"🚀 Starting LLM Proxy on {settings.HOST}:{settings.PORT}")
+        logging.info(f"🚀 Starting LLM Proxy with Optimized Routing on {settings.HOST}:{settings.PORT}")
         
         uvicorn.run(
             "main:app",
