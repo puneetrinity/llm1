@@ -1,76 +1,93 @@
-# requirements_advanced.txt - Full Feature Set with GPU Support
-# For maximum performance with all enhanced features
-# Install with: pip install -r requirements_advanced.txt
-
-# ========================================
-# CORE DEPENDENCIES
-# ========================================
+# requirements.txt - Comprehensive Production Requirements
+# Core FastAPI dependencies - REQUIRED
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 pydantic==2.5.0
 pydantic-settings==2.1.0
-aiohttp==3.9.1
-psutil==5.9.6
 python-multipart==0.0.6
-PyJWT==2.8.0
-numpy>=1.21.0
-websockets>=11.0.0
-# ========================================
-# CACHING AND STORAGE
-# ========================================
+
+# HTTP client and async support - REQUIRED
+aiohttp==3.9.1
+httpx>=0.24.0
+
+# System monitoring - REQUIRED
+psutil==5.9.6
+
+# Enhanced Features - OPTIONAL (graceful degradation if missing)
+# Caching and Redis support
 redis>=4.5.0
 aioredis>=2.0.0
 
-# ========================================
-# MACHINE LEARNING AND AI
-# ========================================
+# Machine Learning and Semantic Features
 sentence-transformers>=2.2.0
 transformers>=4.21.0
-huggingface-hub>=0.20.0
+huggingface-hub>=0.20.0,<0.25.0
 scikit-learn>=1.1.0
 scipy>=1.9.0
+numpy>=1.21.0,<1.25.0
 
-# PyTorch with GPU support (CUDA 11.8)
-torch>=1.12.0
-torchvision>=0.13.0
-torchaudio>=0.12.0
+# Vector similarity search
+faiss-cpu==1.7.4
 
-# ========================================
-# PERFORMANCE AND MONITORING
-# ========================================
+# Streaming support
+sse-starlette==1.6.5
+
+# Security and authentication
+PyJWT>=2.8.0
+cryptography>=3.4.8
+
+# Performance monitoring
 prometheus-client>=0.19.0
-python-json-logger>=2.0.7
-sse-starlette>=1.6.5
 
-# GPU monitoring
-GPUtil>=1.4.0
-nvidia-ml-py>=12.535.0
-
-# ========================================
-# DEVELOPMENT TOOLS
-# ========================================
+# Development and testing (optional)
 pytest>=7.1.0
 pytest-asyncio>=0.21.0
 pytest-cov>=4.0.0
-black>=22.3.0
-isort>=5.10.0
-flake8>=4.0.0
 
-# ========================================
-# PERFORMANCE TESTING
-# ========================================
-locust>=2.10.0
+# GPU monitoring (optional, for systems with NVIDIA GPUs)
+# GPUtil>=1.4.0  # Uncomment if you have NVIDIA GPUs and want GPU monitoring
 
-# This advanced setup provides:
-# ✅ All LLM proxy functionality
-# ✅ 60% faster response times (connection pooling + caching)
-# ✅ 95% better reliability (circuit breakers + monitoring)
-# ✅ Semantic similarity caching
-# ✅ GPU acceleration for ML features
-# ✅ Comprehensive monitoring and metrics
-# ✅ Development and testing tools
-# ✅ Load testing capabilities
+# Additional utilities
+python-json-logger>=2.0.7
+click>=8.0.0
 
-# Memory usage: ~1-2GB (including ML models)
-# GPU VRAM: 1-2GB (for semantic models)
-# Recommended: 8GB+ RAM, NVIDIA GPU with CUDA
+# ============================================
+# DEPLOYMENT NOTES:
+# ============================================
+# 
+# REQUIRED DEPENDENCIES (app will not start without these):
+# - fastapi, uvicorn, pydantic, aiohttp, psutil
+#
+# OPTIONAL DEPENDENCIES (graceful degradation):
+# - redis: Enables smart caching (falls back to memory cache)
+# - sentence-transformers: Enables semantic classification (falls back to rule-based)
+# - faiss-cpu: Enables vector similarity search (falls back to exact matching)
+# - sse-starlette: Enables streaming responses (falls back to regular responses)
+#
+# INSTALLATION COMMANDS:
+# 
+# Minimal installation (core features only):
+# pip install fastapi uvicorn pydantic pydantic-settings aiohttp psutil
+#
+# Full installation (all features):
+# pip install -r requirements.txt
+#
+# Docker installation with error handling:
+# pip install -r requirements.txt || echo "Some features may be limited"
+#
+# ============================================
+# FEATURE MATRIX:
+# ============================================
+#
+# ✅ Core API functionality: Always available
+# ✅ Health monitoring: Always available  
+# ✅ Basic metrics: Always available
+# ✅ React dashboard: Available if built
+# ✅ WebSocket dashboard: Always available
+# 🔄 Smart caching: Requires redis
+# 🔄 Semantic classification: Requires sentence-transformers + faiss-cpu
+# 🔄 Streaming responses: Requires sse-starlette
+# 🔄 Circuit breakers: No external dependencies (always available)
+# 🔄 Enhanced connection pooling: No external dependencies (always available)
+#
+# ============================================
