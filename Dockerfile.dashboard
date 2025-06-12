@@ -1,0 +1,105 @@
+FROM nvidia/cuda:12.1.0-base-ubuntu22.04
+
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV CUDA_VISIBLE_DEVICES=0
+ENV NVIDIA_VISIBLE_DEVICES=all
+
+# Install system dependencies INCLUDING Node.js for React dashboard
+RUN apt-get update && apt-get install -y \
+    curl \
+    python3 \
+    python3-pip \
+    python3-dev \
+    build-essential \
+    git \
+    dos2unix \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js 18.x for React dashboard
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && apt-get install -y nodejs
+
+# Install Ollama
+RUN curl -fsSL https://ollama.com/install.sh | sh
+
+# Environment variables for Ollama
+ENV OLLAMA_HOST=0.0.0.0:11434
+ENV OLLAMA_NUM_PARALLEL=2
+ENV OLLAMA_MAX_LOADED_MODELS=2
+
+# Memory management for RunPod A5000
+ENV MAX_MEMORY_MB=16384
+ENV CACHE_MEMORY_LIMIT_MB=1024
+ENV MODEL_MEMORY_LIMIT_MB=8192
+
+# Enhanced features (enable gradually)
+ENV ENABLE_SEMANTIC_CLASSIFICATION=false
+ENV ENABLE_STREAMING=true
+ENV ENABLE_MODEL_WARMUP=true
+ENV ENABLE_DETAILED_METRICS=true
+
+WORKDIR /app
+
+# Copy requirements and install Python dependencies
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir --upgrade pip && \
+    pip3 install --no-cache-dir -r requirements.txt
+
+# Copy all application files
+COPY . .
+
+# Build React dashboard
+COPY frontend ./frontend
+COPY build_dashboard.sh .
+RUN chmod +x build_dashboard.sh
+
+# Build the React dashboard (with error handling)
+RUN ./build_dashboard.sh || echo "Dashboard build failed - will use fallback"
+
+# Create directories
+RUN mkdir -p /app/cache /app/logs /app/models /app/static
+
+# Fix line endings and make scripts executable
+RUN find . -name "*.sh" -exec dos2unix {} \; -exec chmod +x {} \;
+
+# Health check
+HEALTHCHECK --interval=60s --timeout=30s --start-period=300s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Expose ports
+EXPOSE 8000 11434
+
+# Enhanced startup with dashboard
+CMD ["/bin/bash", "-c", "\
+    echo '🚀 Starting LLM Proxy with Dashboard...' && \
+    \
+    # Start Ollama \
+    CUDA_VISIBLE_DEVICES=0 ollama serve & \
+    OLLAMA_PID=$! && \
+    \
+    # Wait for Ollama \
+    echo '⏳ Waiting for Ollama...' && \
+    for i in {1..60}; do \
+        if curl -f http://localhost:11434/api/tags >/dev/null 2>&1; then \
+            echo '✅ Ollama ready!'; \
+            break; \
+        fi; \
+        sleep 5; \
+    done && \
+    \
+    # Pull priority model \
+    echo '📦 Pulling Mistral model...' && \
+    ollama pull mistral:7b-instruct-q4_0 && \
+    \
+    # Verify dashboard is built \
+    if [ ! -f '/app/static/index.html' ]; then \
+        echo '⚠️ Dashboard not found, building now...'; \
+        cd /app && ./build_dashboard.sh || echo 'Dashboard build failed'; \
+    fi && \
+    \
+    # Start FastAPI with dashboard \
+    echo '🌐 Starting LLM Proxy with Dashboard...' && \
+    python3 main.py \
+"]
