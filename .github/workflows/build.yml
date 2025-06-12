@@ -1,24 +1,171 @@
-name: Build Docker
-on:
-  push:
-    branches: [ main ]
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-    - uses: actions/checkout@v4
-    - name: Login to GitHub Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    - name: Build and push
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: true
-        tags: ghcr.io/${{ github.repository }}:latest
+version: '3.8'
+
+services:
+  llm-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile.enhanced
+    container_name: llm-proxy-enhanced
+    ports:
+      - "8000:8000"    # FastAPI + Dashboard
+      - "11434:11434"  # Ollama API
+    environment:
+      # Feature toggles
+      - ENABLE_SEMANTIC_CLASSIFICATION=false  # Start conservative
+      - ENABLE_STREAMING=true
+      - ENABLE_MODEL_WARMUP=true
+      - ENABLE_DETAILED_METRICS=true
+      - ENABLE_DASHBOARD=true
+      - ENABLE_WEBSOCKET_DASHBOARD=true
+      
+      # Memory management
+      - MAX_MEMORY_MB=12288
+      - MODEL_MEMORY_LIMIT_MB=6144
+      - CACHE_MEMORY_LIMIT_MB=1024
+      
+      # Caching
+      - ENABLE_REDIS_CACHE=true
+      - REDIS_URL=redis://redis:6379
+      - ENABLE_SEMANTIC_CACHE=true
+      
+      # Performance
+      - ENABLE_CIRCUIT_BREAKER=true
+      - ENABLE_CONNECTION_POOLING=true
+      - ENABLE_PERFORMANCE_MONITORING=true
+      
+      # Security (CHANGE IN PRODUCTION!)
+      - ENABLE_AUTH=false
+      - DEFAULT_API_KEY=sk-change-me-in-production
+      - CORS_ORIGINS=["*"]
+      
+      # GPU settings
+      - CUDA_VISIBLE_DEVICES=0
+      - NVIDIA_VISIBLE_DEVICES=all
+      - GPU_MEMORY_FRACTION=0.9
+      
+    volumes:
+      # Persistent data
+      - ./data/models:/root/.ollama        # Ollama models
+      - ./data/cache:/app/cache           # Application cache
+      - ./data/logs:/app/logs             # Logs
+      - ./data/static:/app/static         # Dashboard (optional)
+      
+    restart: unless-stopped
+    
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 300s
+    
+    depends_on:
+      - redis
+    
+    networks:
+      - llm-proxy-network
+
+  # Redis for enhanced caching
+  redis:
+    image: redis:7-alpine
+    container_name: llm-proxy-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: >
+      redis-server 
+      --maxmemory 512mb 
+      --maxmemory-policy allkeys-lru
+      --save 60 1000
+      --appendonly yes
+    restart: unless-stopped
+    networks:
+      - llm-proxy-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Optional: Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: llm-proxy-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    restart: unless-stopped
+    networks:
+      - llm-proxy-network
+    profiles:
+      - monitoring
+
+  # Optional: Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: llm-proxy-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/:/etc/grafana/provisioning/
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    restart: unless-stopped
+    networks:
+      - llm-proxy-network
+    profiles:
+      - monitoring
+    depends_on:
+      - prometheus
+
+volumes:
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  llm-proxy-network:
+    driver: bridge
+
+# Usage Examples:
+# ================
+# 
+# Basic deployment:
+#   docker-compose up -d llm-proxy redis
+#
+# With monitoring:
+#   docker-compose --profile monitoring up -d
+#
+# Build and start:
+#   docker-compose up --build -d
+#
+# View logs:
+#   docker-compose logs -f llm-proxy
+#
+# Stop all:
+#   docker-compose down
+#
+# Remove everything:
+#   docker-compose down -v --remove-orphans
