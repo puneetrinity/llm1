@@ -165,18 +165,32 @@ fi
 
 echo -e "\n${BLUE}🐍 Step 3: Python Environment${NC}"
 
+# Check Python version
+if ! python3 -c "import sys; exit(0) if sys.version_info >= (3, 8) else exit(1)"; then
+    print_error "Python 3.8 or higher is required"
+    exit 1
+fi
+
 # Create Python virtual environment (loop-safe)
 if [ ! -d "venv" ]; then
     print_info "Creating new Python virtual environment..."
-    python3 -m venv venv
+    python3 -m venv venv || {
+        print_error "Failed to create Python virtual environment"
+        exit 1
+    }
     print_status "Python virtual environment created"
 else
     print_info "Using existing Python virtual environment"
 fi
 
-# Activate virtual environment
-source venv/bin/activate
-print_status "Python virtual environment activated"
+# Activate virtual environment only if it exists
+if [ -d "venv" ] && [ -f "venv/bin/activate" ]; then
+    source venv/bin/activate
+    print_status "Python virtual environment activated"
+else
+    print_error "Failed to activate Python virtual environment"
+    exit 1
+fi
 
 # Upgrade pip
 pip install --upgrade pip
@@ -189,7 +203,10 @@ pip install --no-cache-dir \
     aiohttp==3.9.1 \
     pydantic==2.5.0 \
     pydantic-settings==2.1.0 \
-    psutil==5.9.6
+    psutil==5.9.6 || {
+    print_error "Failed to install core dependencies"
+    exit 1
+}
 
 print_status "Core dependencies installed"
 
@@ -202,13 +219,19 @@ if [ "$ENABLE_ALL_FEATURES" = true ]; then
         redis>=4.5.0 \
         aioredis>=2.0.0 \
         prometheus-client \
-        sse-starlette>=1.6.5
+        sse-starlette>=1.6.5 || {
+        print_error "Failed to install enhanced features"
+        exit 1
+    }
     print_status "Enhanced features installed"
 else
     print_info "Installing basic enhanced features..."
     pip install --no-cache-dir \
         redis>=4.5.0 \
-        sse-starlette>=1.6.5
+        sse-starlette>=1.6.5 || {
+        print_error "Failed to install basic enhanced features"
+        exit 1
+    }
     print_status "Basic enhanced features installed"
 fi
 
@@ -217,18 +240,10 @@ echo -e "\n${BLUE}🤖 Step 4: Ollama Setup${NC}"
 # Install Ollama if not present
 if ! command -v ollama &> /dev/null; then
     print_info "Installing Ollama..."
-    curl -fsSL https://ollama.com/install.sh | sh
-    print_status "Ollama installed"
-else
-    print_status "Ollama already installed"
-fi
-
-echo -e "\n${BLUE}🤖 Step 4: Ollama Setup${NC}"
-
-# Install Ollama if not present
-if ! command -v ollama &> /dev/null; then
-    print_info "Installing Ollama..."
-    curl -fsSL https://ollama.com/install.sh | sh
+    curl -fsSL https://ollama.com/install.sh | sh || {
+        print_error "Failed to install Ollama"
+        exit 1
+    }
     print_status "Ollama installed"
 else
     print_status "Ollama already installed"
@@ -271,7 +286,9 @@ else
         print_info "Downloading Mistral 7B model..."
         ollama pull mistral:7b-instruct-q4_0 &
         MISTRAL_PID=$!
-        wait $MISTRAL_PID
+        wait $MISTRAL_PID || {
+            print_warning "Mistral model download had issues"
+        }
         print_status "Mistral 7B model ready"
     else
         print_status "Mistral 7B model already available"
@@ -297,8 +314,8 @@ else
         fi
         
         # Wait for any downloads that started
-        if [ -n "$DEEPSEEK_PID" ]; then wait $DEEPSEEK_PID; fi
-        if [ -n "$LLAMA_PID" ]; then wait $LLAMA_PID; fi
+        if [ -n "$DEEPSEEK_PID" ]; then wait $DEEPSEEK_PID || print_warning "DeepSeek download had issues"; fi
+        if [ -n "$LLAMA_PID" ]; then wait $LLAMA_PID || print_warning "LLaMA3 download had issues"; fi
         print_status "All models ready"
     fi
 fi
@@ -311,7 +328,10 @@ if [ "$SKIP_REDIS" = true ]; then
 elif [ "$ENABLE_ALL_FEATURES" = true ]; then
     if ! command -v redis-server &> /dev/null; then
         print_info "Installing Redis..."
-        apt-get update -qq && apt-get install -y redis-server
+        apt-get update -qq && apt-get install -y redis-server || {
+            print_error "Failed to install Redis"
+            exit 1
+        }
         print_status "Redis installed"
     else
         print_status "Redis already installed"
