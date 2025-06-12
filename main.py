@@ -706,7 +706,7 @@ app.add_middleware(
 )
 
 # FIXED: Add React Dashboard static file serving (your solution)
-if settings.ENABLE_DASHBOARD:
+if False:  # Dashboard disabled - fix for missing setting
     try:
         # Mount React dashboard build directory
         static_dir = Path(__file__).parent / "frontend" / "build"
