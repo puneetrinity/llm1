@@ -72,7 +72,7 @@ echo "🎯 All models loaded successfully!"
 
 # Start the FastAPI application
 echo "🌐 Starting FastAPI application..."
-python3 main_enhanced.py
+python3 main.py
 
 # Cleanup function
 cleanup() {
