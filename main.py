@@ -13,6 +13,7 @@ from typing import Optional, Dict, Any, List
 from contextlib import asynccontextmanager
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from fastapi import WebSocket
 from pathlib import Path
 from typing import Set
 
