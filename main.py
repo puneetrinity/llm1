@@ -535,7 +535,7 @@ class ComprehensiveMetrics:
     """Comprehensive metrics collector"""
     
     def __init__(self):
-        self.start_time = datetime.now()
+        self.start_time = datetime.now().isoformat()
         self.request_counts = {}
         self.response_times = []
         self.model_usage = {}
@@ -543,7 +543,7 @@ class ComprehensiveMetrics:
     
     async def get_all_metrics(self):
         """Get comprehensive metrics"""
-        uptime = datetime.now() - self.start_time
+        uptime = datetime.now().isoformat() - self.start_time
         total_requests = sum(self.request_counts.values())
         avg_response_time = sum(self.response_times) / len(self.response_times) if self.response_times else 0
         
@@ -1125,7 +1125,7 @@ async def root():
             "models": "/models",
             "chat_completions": "/v1/chat/completions",
             "completions": "/v1/completions",
-            "dashboard": settings.DASHBOARD_PATH if settings.ENABLE_DASHBOARD else None,
+            "dashboard": getattr(settings, 'DASHBOARD_PATH', '/dashboard') if getattr(settings, 'ENABLE_DASHBOARD', False) else None,
             "websocket": "/ws/dashboard",
             "admin": "/admin/status",
             "docs": "/docs"
