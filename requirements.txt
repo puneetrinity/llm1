@@ -5,6 +5,8 @@ uvicorn[standard]==0.24.0
 pydantic==2.5.0
 pydantic-settings==2.1.0
 python-multipart==0.0.6
+websockets>=11.0.0
+aiofiles>=23.0.0
 
 # HTTP client and async support - REQUIRED
 aiohttp==3.9.1
