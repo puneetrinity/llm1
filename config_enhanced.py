@@ -77,6 +77,11 @@ class EnhancedSettings(BaseSettings):
     METRICS_EXPORT_INTERVAL: int = Field(default=60, description="Metrics export interval in seconds")
     PERFORMANCE_LOGGING: bool = Field(default=True, description="Enable performance logging")
 
+# Dashboard Settings (Added for compatibility)
+ENABLE_DASHBOARD: bool = Field(default=True, description="Enable dashboard")
+ENABLE_WEBSOCKET_DASHBOARD: bool = Field(default=True, description="Enable WebSocket dashboard")
+DASHBOARD_UPDATE_INTERVAL: int = Field(default=10, description="Dashboard update interval")
+
 def get_settings() -> EnhancedSettings:
     """Get application settings"""
     return EnhancedSettings()
