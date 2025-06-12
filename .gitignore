@@ -39,3 +39,13 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# Dashboard build artifacts
+frontend/build/
+frontend/node_modules/
+static/
+.dashboard_building
+
+# Backups
+*.backup*
+main.py.backup_*
