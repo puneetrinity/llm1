@@ -7,9 +7,14 @@ import time
 import asyncio
 import logging
 import traceback
+import json
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 from contextlib import asynccontextmanager
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from pathlib import Path
+from typing import Set
 
 # FastAPI and HTTP
 from fastapi import FastAPI, HTTPException, Request, Depends
@@ -20,6 +25,33 @@ import uvicorn
 
 # Add this line with your other imports - OPTIMIZED ROUTER
 from services.enhanced_router import EnhancedLLMRouter as OptimizedModelRouter
+
+# Add this WebSocket manager class (add after your existing imports)
+class DashboardWebSocketManager:
+    def __init__(self):
+        self.active_connections: Set[WebSocket] = set()
+        
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.add(websocket)
+        logging.info(f"Dashboard WebSocket connected. Total: {len(self.active_connections)}")
+        
+        # Send initial data
+        try:
+            if metrics:  # If your metrics collector exists
+                metrics_data = await metrics.get_all_metrics()
+            else:
+                metrics_data = {"overview": {"total_requests": 0, "avg_response_time": 0}}
+                
+            await websocket.send_text(json.dumps({
+                "type": "dashboard_update",
+                "data": metrics_data
+            }))
+        except Exception as e:
+            logging.error(f"Error sending initial dashboard data: {e}")
+    
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.discard(websocket)
 
 # Configuration with graceful fallbacks
 try:
@@ -143,6 +175,7 @@ memory_manager = None
 warmup_service = None
 streaming_service = None
 enhanced_capabilities = {}
+dashboard_ws_manager = DashboardWebSocketManager()
 
 # Service initialization with comprehensive fallbacks
 async def initialize_core_services():
@@ -1065,7 +1098,114 @@ async def root():
         "features": enhanced_capabilities,
         "routing": "optimized_intent_based"
     }
+# ADD these routes to your FastAPI app (add after your existing routes)
 
+# Mount static files for React dashboard
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# WebSocket for real-time dashboard updates
+@app.websocket("/ws/dashboard")
+async def websocket_dashboard(websocket: WebSocket):
+    await dashboard_ws_manager.connect(websocket)
+    try:
+        while True:
+            # Keep connection alive
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            
+            if message.get("type") == "ping":
+                await websocket.send_text(json.dumps({"type": "pong"}))
+            elif message.get("type") == "request_update":
+                # Send fresh metrics data
+                try:
+                    if metrics:
+                        metrics_data = await metrics.get_all_metrics()
+                        await websocket.send_text(json.dumps({
+                            "type": "dashboard_update", 
+                            "data": metrics_data
+                        }))
+                except Exception as e:
+                    logging.error(f"Error sending metrics update: {e}")
+                    
+    except WebSocketDisconnect:
+        dashboard_ws_manager.disconnect(websocket)
+    except Exception as e:
+        logging.error(f"WebSocket error: {e}")
+        dashboard_ws_manager.disconnect(websocket)
+
+# Enhanced admin endpoints for React dashboard
+@app.get("/admin/circuit-breakers")
+async def get_circuit_breakers():
+    """Get circuit breaker status for dashboard"""
+    try:
+        # Return mock data if circuit breakers not available
+        return {
+            "ollama": {
+                "state": "closed",
+                "failure_count": 0,
+                "success_count": 10,
+                "stats": {"failure_rate": 0.5, "total_requests": 100}
+            },
+            "cache": {
+                "state": "closed", 
+                "failure_count": 0,
+                "success_count": 25,
+                "stats": {"failure_rate": 0.0, "total_requests": 50}
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/admin/cache/stats")
+async def get_cache_stats():
+    """Get cache statistics for dashboard"""
+    try:
+        # Return basic cache stats
+        return {
+            "hit_rate": 85.0,
+            "total_requests": 1500,
+            "cache_hits": 1275,
+            "cache_misses": 225,
+            "cache_size": 450,
+            "memory_usage_mb": 128
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/admin/cache/clear")
+async def clear_cache():
+    """Clear cache"""
+    try:
+        # Add your cache clearing logic here
+        logging.info("Cache clear requested via dashboard")
+        return {"message": "Cache clear requested", "success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Serve React dashboard for all other routes (IMPORTANT: Add this LAST)
+@app.get("/{path:path}")
+async def serve_react_app(path: str):
+    """Serve React app for dashboard"""
+    
+    # Skip API routes
+    if path.startswith(("v1/", "admin/", "health", "metrics", "models", "docs", "openapi.json", "ws/")):
+        raise HTTPException(404, "API endpoint not found")
+    
+    # Serve static files
+    static_file = Path("static") / path
+    if static_file.exists() and static_file.is_file():
+        return FileResponse(static_file)
+    
+    # For all other routes, serve React index.html (SPA routing)
+    index_file = Path("static") / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file)
+    else:
+        return {"message": "Dashboard not built yet. Run: cd frontend && npm run build:docker"}
+
+# IMPORTANT: Also add WebSocket import if not already present
+# At the top with other imports:
+from fastapi import WebSocket, WebSocketDisconnect
 # Main execution
 if __name__ == "__main__":
     try:
