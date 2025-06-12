@@ -1,29 +1,12 @@
 #!/bin/bash
-# runpod_complete_install.sh - Complete RunPod Installation Script
-# Optimized for RunPod A5000 with 24GB VRAM
-# FULLY AUTOMATED - No interactive prompts
+# runpod.sh - Complete RunPod Installation Script for LLM Proxy
+# Usage: curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/runpod.sh | bash
 
 set -e
 
-echo "🚀 Complete LLM Proxy Installation for RunPod (Automated)"
-echo "========================================================="
+echo "🚀 Enhanced LLM Proxy - RunPod Installation"
+echo "==========================================="
 echo ""
-echo "🤖 Automation Options (set as environment variables):"
-echo "   FORCE_REINSTALL=true     - Force complete reinstall"
-echo "   SKIP_MODELS=true         - Skip model downloads"
-echo "   SKIP_REDIS=true          - Skip Redis installation"  
-echo "   SKIP_TESTING=true        - Skip endpoint testing"
-echo "   CUSTOM_API_KEY=sk-xxx    - Use custom API key"
-echo ""
-echo "📝 Example: SKIP_MODELS=true ./runpod_complete_install.sh"
-echo ""
-
-# Environment variables for automation control
-FORCE_REINSTALL=${FORCE_REINSTALL:-false}
-SKIP_MODELS=${SKIP_MODELS:-false}
-SKIP_REDIS=${SKIP_REDIS:-false}
-SKIP_TESTING=${SKIP_TESTING:-false}
-CUSTOM_API_KEY=${CUSTOM_API_KEY:-""}
 
 # Colors for output
 RED='\033[0;31m'
@@ -37,167 +20,72 @@ print_warning() { echo -e "${YELLOW}⚠️  $1${NC}"; }
 print_error() { echo -e "${RED}❌ $1${NC}"; }
 print_info() { echo -e "${BLUE}ℹ️  $1${NC}"; }
 
-# Set workspace directory for RunPod
-WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
+# Configuration
+GITHUB_REPO="https://github.com/YOUR_USERNAME/YOUR_REPO.git"  # UPDATE THIS
+WORKSPACE_DIR="/workspace"
+PROJECT_DIR="$WORKSPACE_DIR/llm-proxy"
+
+# Move to workspace
 cd "$WORKSPACE_DIR"
 
-# Check if this is a re-run (automated mode)
-if [ -f "$WORKSPACE_DIR/llm-proxy/.installation_info" ] && [ "$FORCE_REINSTALL" != true ]; then
-    print_warning "Previous installation detected - updating existing setup"
-    print_info "Auto-mode: Will skip existing components and update configurations"
-    print_info "Use FORCE_REINSTALL=true to completely reinstall"
-    RERUN_MODE=true
-elif [ "$FORCE_REINSTALL" = true ]; then
-    print_warning "Force reinstall mode - will overwrite existing installation"
-    RERUN_MODE=false
-else
-    print_info "Fresh installation mode"
-    RERUN_MODE=false
-fi
+echo -e "\n${BLUE}📋 Step 1: Environment Check${NC}"
 
-echo -e "\n${BLUE}🔧 Step 1: RunPod Environment Setup${NC}"
-
-# Check GPU availability
+# Check GPU
 if nvidia-smi > /dev/null 2>&1; then
     GPU_INFO=$(nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits | head -1)
     print_status "GPU detected: $GPU_INFO"
     GPU_MEMORY=$(echo $GPU_INFO | cut -d',' -f2 | tr -d ' ')
     
     if [ "$GPU_MEMORY" -gt 20000 ]; then
-        print_status "High VRAM GPU detected - enabling all enhanced features"
-        ENABLE_ALL_FEATURES=true
-        MAX_MEMORY_MB=16384
+        ENABLE_ENHANCED=true
+        MAX_MEMORY=16384
     else
-        print_warning "Lower VRAM GPU - using conservative settings"
-        ENABLE_ALL_FEATURES=false
-        MAX_MEMORY_MB=8192
+        ENABLE_ENHANCED=false
+        MAX_MEMORY=8192
     fi
 else
-    print_warning "No GPU detected - CPU-only mode"
-    ENABLE_ALL_FEATURES=false
-    MAX_MEMORY_MB=4096
+    print_warning "No GPU detected - CPU mode"
+    ENABLE_ENHANCED=false
+    MAX_MEMORY=4096
 fi
 
-# Check available system memory
+# Check system memory
 TOTAL_MEMORY=$(free -m | awk 'NR==2{printf "%.0f", $2}')
 print_info "System memory: ${TOTAL_MEMORY}MB"
 
-# Create project directory
-mkdir -p "$WORKSPACE_DIR/llm-proxy"
-cd "$WORKSPACE_DIR/llm-proxy"
+echo -e "\n${BLUE}📥 Step 2: Download Project${NC}"
 
-echo -e "\n${BLUE}📋 Step 2: Project Setup${NC}"
-
-# Create directory structure
-mkdir -p {data/{cache,logs,models},services,utils,middleware,tests,config}
-print_status "Project structure created"
-
-# Create optimized .env for RunPod (automated mode)
-if [ ! -f .env ]; then
-    print_info "Creating new .env configuration..."
-    CREATE_ENV=true
-elif [ "$RERUN_MODE" = true ]; then
-    print_info "Rerun detected - backing up and updating .env configuration..."
-    cp .env .env.backup.$(date +%s)
-    print_status "Existing .env backed up"
-    CREATE_ENV=true
-else
-    print_info "Creating fresh .env configuration..."
-    CREATE_ENV=true
+# Remove existing directory if present
+if [ -d "$PROJECT_DIR" ]; then
+    print_warning "Removing existing installation"
+    rm -rf "$PROJECT_DIR"
 fi
 
-if [ "$CREATE_ENV" = true ]; then
-cat > .env << EOF
-# RunPod Optimized Configuration
-ENVIRONMENT=production
-DEBUG=false
-LOG_LEVEL=INFO
+# Clone repository
+print_info "Cloning repository..."
+git clone "$GITHUB_REPO" "$PROJECT_DIR" || {
+    print_error "Failed to clone repository"
+    print_error "Make sure to update GITHUB_REPO in the script with your actual repo URL"
+    exit 1
+}
 
-# Server Configuration  
-HOST=0.0.0.0
-PORT=8000
-OLLAMA_BASE_URL=http://localhost:11434
+cd "$PROJECT_DIR"
+print_status "Project downloaded"
 
-# Memory Management (Optimized for RunPod)
-MAX_MEMORY_MB=$MAX_MEMORY_MB
-CACHE_MEMORY_LIMIT_MB=$((MAX_MEMORY_MB / 8))
-MODEL_MEMORY_LIMIT_MB=$((MAX_MEMORY_MB / 2))
-SEMANTIC_MODEL_MAX_MEMORY_MB=500
+echo -e "\n${BLUE}🐍 Step 3: Python Setup${NC}"
 
-# Enhanced Features
-ENABLE_SEMANTIC_CLASSIFICATION=$ENABLE_ALL_FEATURES
-ENABLE_STREAMING=true
-ENABLE_MODEL_WARMUP=true
-ENABLE_DETAILED_METRICS=true
-
-# GPU Configuration (RunPod specific)
-GPU_MEMORY_FRACTION=0.9
-OLLAMA_NUM_PARALLEL=2
-OLLAMA_MAX_LOADED_MODELS=2
-
-# Security (Production ready)
-ENABLE_AUTH=true
-DEFAULT_API_KEY=${CUSTOM_API_KEY:-sk-$(openssl rand -hex 16)}
-CORS_ORIGINS=["*"]
-
-# Enhanced Connection Pooling
-ENHANCED_CONNECTION_POOLING_ENABLED=true
-ENHANCED_CONNECTION_POOLING_TOTAL_LIMIT=100
-ENHANCED_CONNECTION_POOLING_PER_HOST_LIMIT=20
-
-# Circuit Breaker Protection  
-ENHANCED_CIRCUIT_BREAKER_ENABLED=true
-ENHANCED_CIRCUIT_BREAKER_FAILURE_THRESHOLD=5
-ENHANCED_CIRCUIT_BREAKER_RECOVERY_TIMEOUT=60
-
-# Smart Caching
-ENHANCED_SMART_CACHE_ENABLED=true
-ENHANCED_SMART_CACHE_REDIS_ENABLED=true
-ENHANCED_SMART_CACHE_REDIS_URL=redis://localhost:6379
-ENHANCED_SMART_CACHE_SEMANTIC_ENABLED=$ENABLE_ALL_FEATURES
-ENHANCED_SMART_CACHE_SIMILARITY_THRESHOLD=0.85
-EOF
-
-    print_status "RunPod-optimized configuration created"
-else
-    print_status "Using existing configuration"
-fi
-
-echo -e "\n${BLUE}🐍 Step 3: Python Environment${NC}"
-
-# Check Python version
-if ! python3 -c "import sys; exit(0) if sys.version_info >= (3, 8) else exit(1)"; then
-    print_error "Python 3.8 or higher is required"
+# Check Python
+if ! python3 --version > /dev/null 2>&1; then
+    print_error "Python3 not found"
     exit 1
 fi
 
-# Create Python virtual environment (loop-safe)
-if [ ! -d "venv" ]; then
-    print_info "Creating new Python virtual environment..."
-    python3 -m venv venv || {
-        print_error "Failed to create Python virtual environment"
-        exit 1
-    }
-    print_status "Python virtual environment created"
-else
-    print_info "Using existing Python virtual environment"
-fi
+# Install core dependencies system-wide (RunPod friendly)
+print_info "Installing Python dependencies..."
+pip3 install --upgrade pip --quiet
 
-# Activate virtual environment only if it exists
-if [ -d "venv" ] && [ -f "venv/bin/activate" ]; then
-    source venv/bin/activate
-    print_status "Python virtual environment activated"
-else
-    print_error "Failed to activate Python virtual environment"
-    exit 1
-fi
-
-# Upgrade pip
-pip install --upgrade pip
-
-# Install core dependencies
-print_info "Installing core dependencies..."
-pip install --no-cache-dir \
+# Core dependencies
+pip3 install --no-cache-dir \
     fastapi==0.104.1 \
     uvicorn[standard]==0.24.0 \
     aiohttp==3.9.1 \
@@ -210,34 +98,64 @@ pip install --no-cache-dir \
 
 print_status "Core dependencies installed"
 
-# Install enhanced features if enabled
-if [ "$ENABLE_ALL_FEATURES" = true ]; then
-    print_info "Installing enhanced AI features..."
-    pip install --no-cache-dir \
-        sentence-transformers>=2.2.0 \
-        scikit-learn>=1.1.0 \
-        redis>=4.5.0 \
-        aioredis>=2.0.0 \
-        prometheus-client \
-        sse-starlette>=1.6.5 || {
-        print_error "Failed to install enhanced features"
-        exit 1
+# Enhanced features if GPU is good
+if [ "$ENABLE_ENHANCED" = true ]; then
+    print_info "Installing enhanced features..."
+    pip3 install --no-cache-dir \
+        sentence-transformers \
+        scikit-learn \
+        redis \
+        sse-starlette || {
+        print_warning "Enhanced features failed - continuing with basic setup"
+        ENABLE_ENHANCED=false
     }
-    print_status "Enhanced features installed"
-else
-    print_info "Installing basic enhanced features..."
-    pip install --no-cache-dir \
-        redis>=4.5.0 \
-        sse-starlette>=1.6.5 || {
-        print_error "Failed to install basic enhanced features"
-        exit 1
-    }
-    print_status "Basic enhanced features installed"
+    
+    if [ "$ENABLE_ENHANCED" = true ]; then
+        print_status "Enhanced features installed"
+    fi
 fi
 
-echo -e "\n${BLUE}🤖 Step 4: Ollama Setup${NC}"
+echo -e "\n${BLUE}⚙️ Step 4: Configuration${NC}"
 
-# Install Ollama if not present
+# Create optimized .env file
+cat > .env << EOF
+# RunPod Configuration
+ENVIRONMENT=production
+DEBUG=false
+LOG_LEVEL=INFO
+
+# Server
+HOST=0.0.0.0
+PORT=8000
+OLLAMA_BASE_URL=http://localhost:11434
+
+# Memory Management
+MAX_MEMORY_MB=$MAX_MEMORY
+CACHE_MEMORY_LIMIT_MB=$((MAX_MEMORY / 8))
+MODEL_MEMORY_LIMIT_MB=$((MAX_MEMORY / 2))
+
+# Features
+ENABLE_SEMANTIC_CLASSIFICATION=$ENABLE_ENHANCED
+ENABLE_STREAMING=true
+ENABLE_MODEL_WARMUP=true
+ENABLE_DETAILED_METRICS=true
+
+# GPU
+GPU_MEMORY_FRACTION=0.9
+OLLAMA_NUM_PARALLEL=2
+OLLAMA_MAX_LOADED_MODELS=2
+
+# Security
+ENABLE_AUTH=false
+DEFAULT_API_KEY=sk-$(openssl rand -hex 16)
+CORS_ORIGINS=["*"]
+EOF
+
+print_status "Configuration created"
+
+echo -e "\n${BLUE}🤖 Step 5: Ollama Setup${NC}"
+
+# Install Ollama if needed
 if ! command -v ollama &> /dev/null; then
     print_info "Installing Ollama..."
     curl -fsSL https://ollama.com/install.sh | sh || {
@@ -245,151 +163,83 @@ if ! command -v ollama &> /dev/null; then
         exit 1
     }
     print_status "Ollama installed"
-else
-    print_status "Ollama already installed"
 fi
 
-# Start Ollama service (loop-safe)
-if pgrep -f "ollama serve" > /dev/null; then
-    print_info "Ollama is already running"
-else
-    print_info "Starting Ollama service..."
+# Start Ollama service
+if ! pgrep -f "ollama serve" > /dev/null; then
+    print_info "Starting Ollama..."
     ollama serve &
-    OLLAMA_PID=$!
     sleep 10
     
-    # Wait for Ollama to be ready
-    print_info "Waiting for Ollama to start..."
+    # Wait for Ollama
     for i in {1..30}; do
         if curl -f http://localhost:11434/api/tags >/dev/null 2>&1; then
             print_status "Ollama is ready!"
             break
         fi
-        print_info "   Attempt $i/30 - waiting 3 seconds..."
+        print_info "Waiting for Ollama... ($i/30)"
         sleep 3
     done
     
-    # Verify Ollama started successfully
     if ! curl -f http://localhost:11434/api/tags >/dev/null 2>&1; then
-        print_error "Failed to start Ollama service"
+        print_error "Ollama failed to start"
         exit 1
     fi
-fi
-
-# Pull essential models (check if already exists)
-if [ "$SKIP_MODELS" = true ]; then
-    print_info "Skipping model downloads (SKIP_MODELS=true)"
 else
-    print_info "Checking/pulling essential models..."
-
-    if ! ollama list | grep -q "mistral:7b-instruct-q4_0"; then
-        print_info "Downloading Mistral 7B model..."
-        ollama pull mistral:7b-instruct-q4_0 &
-        MISTRAL_PID=$!
-        wait $MISTRAL_PID || {
-            print_warning "Mistral model download had issues"
-        }
-        print_status "Mistral 7B model ready"
-    else
-        print_status "Mistral 7B model already available"
-    fi
-
-    if [ "$ENABLE_ALL_FEATURES" = true ]; then
-        if ! ollama list | grep -q "deepseek-v2:7b-q4_0"; then
-            print_info "Downloading DeepSeek V2 model..."
-            ollama pull deepseek-v2:7b-q4_0 &
-            DEEPSEEK_PID=$!
-        else
-            print_status "DeepSeek V2 model already available"
-            DEEPSEEK_PID=""
-        fi
-        
-        if ! ollama list | grep -q "llama3:8b-instruct-q4_0"; then
-            print_info "Downloading LLaMA3 model..."
-            ollama pull llama3:8b-instruct-q4_0 &
-            LLAMA_PID=$!
-        else
-            print_status "LLaMA3 model already available"
-            LLAMA_PID=""
-        fi
-        
-        # Wait for any downloads that started
-        if [ -n "$DEEPSEEK_PID" ]; then wait $DEEPSEEK_PID || print_warning "DeepSeek download had issues"; fi
-        if [ -n "$LLAMA_PID" ]; then wait $LLAMA_PID || print_warning "LLaMA3 download had issues"; fi
-        print_status "All models ready"
-    fi
+    print_status "Ollama already running"
 fi
 
-echo -e "\n${BLUE}🗄️ Step 5: Redis Setup (Optional)${NC}"
+echo -e "\n${BLUE}📦 Step 6: Model Download${NC}"
 
-# Install and start Redis if enhanced features enabled and not skipped
-if [ "$SKIP_REDIS" = true ]; then
-    print_info "Skipping Redis setup (SKIP_REDIS=true)"
-elif [ "$ENABLE_ALL_FEATURES" = true ]; then
+# Download essential model
+print_info "Downloading Mistral 7B model (this may take a few minutes)..."
+ollama pull mistral:7b-instruct-q4_0 || {
+    print_error "Failed to download Mistral model"
+    exit 1
+}
+print_status "Mistral 7B model ready"
+
+# Download additional models if enhanced features enabled
+if [ "$ENABLE_ENHANCED" = true ]; then
+    print_info "Downloading additional models for enhanced features..."
+    ollama pull deepseek-v2:7b-q4_0 &
+    DEEPSEEK_PID=$!
+    
+    # Wait for download
+    wait $DEEPSEEK_PID || print_warning "DeepSeek download failed"
+    print_status "Enhanced models ready"
+fi
+
+echo -e "\n${BLUE}🗄️ Step 7: Cache Setup${NC}"
+
+# Install Redis if enhanced features enabled
+if [ "$ENABLE_ENHANCED" = true ]; then
     if ! command -v redis-server &> /dev/null; then
         print_info "Installing Redis..."
         apt-get update -qq && apt-get install -y redis-server || {
-            print_error "Failed to install Redis"
-            exit 1
+            print_warning "Redis installation failed - using memory cache"
+            ENABLE_ENHANCED=false
         }
-        print_status "Redis installed"
-    else
-        print_status "Redis already installed"
     fi
     
-    # Start Redis (loop-safe)
-    if pgrep redis-server > /dev/null; then
-        print_info "Redis is already running"
-    else
-        print_info "Starting Redis..."
-        redis-server --daemonize yes --port 6379 --bind 127.0.0.1
-        sleep 2
-    fi
-    
-    # Test Redis connection
-    if redis-cli ping | grep -q PONG; then
-        print_status "Redis is running and accessible"
-    else
-        print_warning "Redis failed to start - will use memory cache"
+    if [ "$ENABLE_ENHANCED" = true ]; then
+        # Start Redis
+        if ! pgrep redis-server > /dev/null; then
+            redis-server --daemonize yes --port 6379 --bind 127.0.0.1
+            sleep 2
+        fi
+        
+        if redis-cli ping | grep -q PONG; then
+            print_status "Redis cache ready"
+        else
+            print_warning "Redis failed - using memory cache"
+        fi
     fi
 else
-    print_info "Skipping Redis (using memory cache only)"
+    print_info "Using memory cache only"
 fi
 
-echo -e "\n${BLUE}📝 Step 6: Application Files${NC}"
-
-# Create minimal main.py if not exists
-if [ ! -f main.py ]; then
-    print_info "Creating basic application..."
-    cat > main.py << 'EOF'
-import uvicorn
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-import os
-
-app = FastAPI(title="Enhanced LLM Proxy", version="2.0.0")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-@app.get("/health")
-async def health():
-    return {"status": "healthy", "version": "2.0.0"}
-
-@app.get("/")
-async def root():
-    return {"message": "Enhanced LLM Proxy API Ready"}
-
-if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
-EOF
-    print_status "Basic application created"
-fi
+echo -e "\n${BLUE}🚀 Step 8: Application Setup${NC}"
 
 # Create startup script
 cat > start.sh << 'EOF'
@@ -398,232 +248,112 @@ set -e
 
 echo "🚀 Starting Enhanced LLM Proxy..."
 
-# Activate virtual environment
-if [ -f venv/bin/activate ]; then
-    source venv/bin/activate
-    echo "✅ Python environment activated"
-else
-    echo "❌ Python virtual environment not found!"
-    echo "Run the installation script first"
-    exit 1
-fi
-
 # Start Ollama if not running
 if ! pgrep -f "ollama serve" > /dev/null; then
     echo "📡 Starting Ollama..."
     ollama serve &
     sleep 8
     
-    # Verify Ollama started
+    # Wait for Ollama
     for i in {1..15}; do
         if curl -f http://localhost:11434/api/tags >/dev/null 2>&1; then
-            echo "✅ Ollama is ready"
+            echo "✅ Ollama ready"
             break
         fi
-        echo "   Waiting for Ollama... ($i/15)"
+        echo "   Waiting... ($i/15)"
         sleep 2
     done
-    
-    if ! curl -f http://localhost:11434/api/tags >/dev/null 2>&1; then
-        echo "❌ Failed to start Ollama"
-        exit 1
-    fi
-else
-    echo "✅ Ollama already running"
 fi
 
-# Start Redis if available and not running
-if command -v redis-server &> /dev/null; then
-    if ! pgrep redis-server > /dev/null; then
-        echo "🗄️ Starting Redis..."
-        redis-server --daemonize yes --port 6379 --bind 127.0.0.1
-        sleep 2
-        
-        if redis-cli ping | grep -q PONG; then
-            echo "✅ Redis started successfully"
-        else
-            echo "⚠️ Redis failed to start - using memory cache"
-        fi
-    else
-        echo "✅ Redis already running"
-    fi
+# Start Redis if available
+if command -v redis-server &> /dev/null && ! pgrep redis-server > /dev/null; then
+    echo "🗄️ Starting Redis..."
+    redis-server --daemonize yes --port 6379 --bind 127.0.0.1
+    sleep 2
 fi
 
-# Warm up priority model
-echo "🔥 Warming up models..."
-if curl -X POST http://localhost:11434/api/chat \
+# Warm up model
+echo "🔥 Warming up model..."
+curl -X POST http://localhost:11434/api/chat \
   -H "Content-Type: application/json" \
   -d '{"model": "mistral:7b-instruct-q4_0", "messages": [{"role": "user", "content": "Hello"}], "stream": false, "options": {"num_predict": 5}}' \
-  >/dev/null 2>&1; then
-    echo "✅ Model warmup successful"
-else
-    echo "⚠️ Model warmup failed (this is normal on first run)"
-fi
+  >/dev/null 2>&1 || echo "⚠️ Warmup failed (normal on first run)"
 
-# Check if port 8000 is already in use
+# Check port
 if ss -tulpn | grep -q ":8000 "; then
-    echo "⚠️ Port 8000 is already in use"
-    echo "Kill existing process or use a different port"
-    echo "To kill existing: pkill -f 'python.*main.py'"
-    exit 1
+    echo "⚠️ Port 8000 in use - killing existing process"
+    pkill -f 'python.*main.py' || true
+    sleep 3
 fi
 
-# Start FastAPI application
-echo "🌐 Starting FastAPI application on http://localhost:8000"
-echo "📚 API docs available at: http://localhost:8000/docs"
-echo "🏥 Health check: http://localhost:8000/health"
+# Start application
+echo "🌐 Starting LLM Proxy on http://localhost:8000"
+echo "📚 API docs: http://localhost:8000/docs"
+echo "🏥 Health: http://localhost:8000/health"
 echo ""
-echo "Press Ctrl+C to stop the service"
-echo "=================================="
+echo "Press Ctrl+C to stop"
+echo "===================="
 
-python main.py
+python3 main.py
 EOF
 
 chmod +x start.sh
 print_status "Startup script created"
 
-echo -e "\n${BLUE}🧪 Step 7: Testing Installation${NC}"
+echo -e "\n${BLUE}🧪 Step 9: Quick Test${NC}"
 
-if [ "$SKIP_TESTING" = true ]; then
-    print_info "Skipping tests (SKIP_TESTING=true)"
-    TESTS_PASSED=true
-else
-    # Test basic functionality
-    source venv/bin/activate
+# Test the installation
+print_info "Testing installation..."
 
-    # Cleanup function for testing
-    cleanup_test() {
-        if [ -n "$APP_PID" ] && kill -0 $APP_PID 2>/dev/null; then
-            print_info "Cleaning up test processes..."
-            kill $APP_PID 2>/dev/null || true
-            sleep 3
-            # Force kill if still running
-            kill -9 $APP_PID 2>/dev/null || true
-        fi
-    }
+# Start app briefly for test
+python3 main.py &
+APP_PID=$!
+sleep 8
 
-    # Set trap for cleanup on script exit
-    trap cleanup_test EXIT
+# Test endpoints
+HEALTH_TEST=false
+ROOT_TEST=false
 
-    # Start the application in background for testing
-    print_info "Starting test instance..."
-    python main.py &
-    APP_PID=$!
-
-    # Wait for application to start
-    sleep 8
-
-    # Test endpoints with timeout
-    print_info "Testing endpoints..."
-
-    if timeout 10 curl -f http://localhost:8000/health >/dev/null 2>&1; then
-        print_status "Health endpoint working"
-        HEALTH_OK=true
-    else
-        print_warning "Health endpoint test failed"
-        HEALTH_OK=false
-    fi
-
-    if timeout 10 curl -f http://localhost:8000/ >/dev/null 2>&1; then
-        print_status "Root endpoint working"
-        ROOT_OK=true
-    else
-        print_warning "Root endpoint test failed"
-        ROOT_OK=false
-    fi
-
-    # Test Ollama integration
-    if timeout 15 curl -X POST http://localhost:11434/api/chat \
-      -H "Content-Type: application/json" \
-      -d '{"model": "mistral:7b-instruct-q4_0", "messages": [{"role": "user", "content": "test"}], "stream": false, "options": {"num_predict": 1}}' \
-      >/dev/null 2>&1; then
-        print_status "Ollama integration working"
-        OLLAMA_OK=true
-    else
-        print_warning "Ollama integration test failed"
-        OLLAMA_OK=false
-    fi
-
-    # Cleanup test instance
-    cleanup_test
-    trap - EXIT  # Remove the trap
-
-    # Summary
-    if [ "$HEALTH_OK" = true ] && [ "$ROOT_OK" = true ] && [ "$OLLAMA_OK" = true ]; then
-        print_status "All tests passed!"
-        TESTS_PASSED=true
-    else
-        print_warning "Some tests failed - check logs for details"
-        TESTS_PASSED=false
-    fi
+if timeout 10 curl -f http://localhost:8000/health >/dev/null 2>&1; then
+    print_status "Health endpoint working"
+    HEALTH_TEST=true
 fi
+
+if timeout 10 curl -f http://localhost:8000/ >/dev/null 2>&1; then
+    print_status "Root endpoint working"
+    ROOT_TEST=true
+fi
+
+# Stop test app
+kill $APP_PID 2>/dev/null || true
+sleep 2
 
 echo -e "\n${GREEN}🎉 Installation Complete!${NC}"
 echo "=================================="
-
-# Show what was actually done this run
-print_info "This Run Summary:"
-echo "   📁 Project: $([ -d "$WORKSPACE_DIR/llm-proxy" ] && echo "✅ Ready" || echo "❌ Missing")"
-echo "   🐍 Python: $([ -d venv ] && echo "✅ Virtual env ready" || echo "❌ Missing")" 
-echo "   🤖 Ollama: $(pgrep -f "ollama serve" > /dev/null && echo "✅ Running" || echo "❌ Not running")"
-echo "   🗄️ Redis: $([ "$ENABLE_ALL_FEATURES" = true ] && (pgrep redis-server > /dev/null && echo "✅ Running" || echo "❌ Not running") || echo "⏸️ Disabled")"
-echo "   🧪 Tests: $([ "$TESTS_PASSED" = true ] && echo "✅ Passed" || echo "⚠️ Some failed")"
 echo ""
 
 print_info "Installation Summary:"
-echo "   📍 Location: $WORKSPACE_DIR/llm-proxy"
-echo "   🧠 GPU Support: $([ "$ENABLE_ALL_FEATURES" = true ] && echo "✅ Enabled" || echo "⏸️ Basic")"
-echo "   💾 Memory Limit: ${MAX_MEMORY_MB}MB"
-echo "   🤖 Models: Mistral 7B $([ "$ENABLE_ALL_FEATURES" = true ] && echo "+ DeepSeek + LLaMA3" || echo "only")"
-echo "   🗄️ Cache: $([ "$ENABLE_ALL_FEATURES" = true ] && echo "Redis + Memory" || echo "Memory only")"
+echo "   📍 Location: $PROJECT_DIR"
+echo "   🧠 GPU Support: $([ "$ENABLE_ENHANCED" = true ] && echo "✅ Enabled" || echo "⏸️ Basic")"
+echo "   💾 Memory: ${MAX_MEMORY}MB"
+echo "   🤖 Models: Mistral 7B $([ "$ENABLE_ENHANCED" = true ] && echo "+ Enhanced models" || echo "")"
+echo "   🗄️ Cache: $([ "$ENABLE_ENHANCED" = true ] && echo "Redis + Memory" || echo "Memory only")"
+echo "   🧪 Tests: $([ "$HEALTH_TEST" = true ] && echo "✅ Passed" || echo "⚠️ Check needed")"
 echo ""
-print_info "Next Steps:"
-echo "1. Start the service: ./start.sh"
-echo "2. Test API: curl http://localhost:8000/health"
-echo "3. View logs: tail -f logs/app.log"
-echo "4. Stop services: pkill -f 'ollama\\|redis\\|python'"
+
+print_info "Ready to Use:"
+echo "1. Start service:  ./start.sh"
+echo "2. Test API:       curl http://localhost:8000/health"
+echo "3. View docs:      http://localhost:8000/docs"
+echo "4. Stop service:   Ctrl+C or pkill -f 'python.*main.py'"
 echo ""
-print_info "API Endpoints:"
-echo "   🌐 API: http://localhost:8000"
-echo "   📚 Docs: http://localhost:8000/docs"
-echo "   🏥 Health: http://localhost:8000/health"
-echo ""
-if [ "$ENABLE_ALL_FEATURES" = true ]; then
-    echo "🚀 All enhanced features enabled for maximum performance!"
+
+if [ "$HEALTH_TEST" = true ] && [ "$ROOT_TEST" = true ]; then
+    echo "🚀 All systems ready! Run './start.sh' to begin."
 else
-    echo "⚡ Basic features enabled - upgrade GPU for full features"
+    echo "⚠️ Some tests failed - check the installation and try './start.sh'"
 fi
 
-# Save installation info
-cat > .installation_info << EOF
-Enhanced LLM Proxy Installation
-==============================
-Installation Date: $(date)
-Last Run: $(date)
-Location: $WORKSPACE_DIR/llm-proxy
-GPU: $(nvidia-smi --query-gpu=name --format=csv,noheader | head -1 || echo "None")
-System Memory: ${TOTAL_MEMORY}MB
-Max Memory Setting: ${MAX_MEMORY_MB}MB
-Enhanced Features: $ENABLE_ALL_FEATURES
-Models: mistral:7b-instruct-q4_0$([ "$ENABLE_ALL_FEATURES" = true ] && echo ", deepseek-v2:7b-q4_0, llama3:8b-instruct-q4_0" || echo "")
-Tests Passed: ${TESTS_PASSED:-unknown}
-
-Status Check:
-- Ollama: $(pgrep -f "ollama serve" > /dev/null && echo "Running" || echo "Not running")
-- Redis: $([ "$ENABLE_ALL_FEATURES" = true ] && (pgrep redis-server > /dev/null && echo "Running" || echo "Not running") || echo "Disabled")
-- Python Env: $([ -d venv ] && echo "Available" || echo "Missing")
-
-To start: ./start.sh
-To update: Re-run this script (loop-safe)
-To check status: cat .installation_info
-EOF
-
-print_status "Installation info saved to .installation_info"
 echo ""
-echo "🎯 Ready to start your Enhanced LLM Proxy!"
-echo ""
-echo "🤖 Automation Tips for Future Runs:"
-echo "   Fast model skip:    SKIP_MODELS=true ./runpod_complete_install.sh"
-echo "   Quick update:       SKIP_TESTING=true ./runpod_complete_install.sh"  
-echo "   Memory-only mode:   SKIP_REDIS=true ./runpod_complete_install.sh"
-echo "   Complete reinstall: FORCE_REINSTALL=true ./runpod_complete_install.sh"
+echo "💡 Pro tip: Run 'screen -S llm-proxy ./start.sh' to run in background"
+echo "         Then 'screen -r llm-proxy' to reconnect"
