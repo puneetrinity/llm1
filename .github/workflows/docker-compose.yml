@@ -1,66 +1,19 @@
 version: '3.8'
 
 services:
-  # Main LLM Proxy Application
   llm-proxy:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: llm-proxy
+    build: .
+    container_name: llm-proxy-basic
     restart: unless-stopped
     ports:
-      - "8001:8001"   # API and Dashboard
-      - "11434:11434" # Ollama
+      - "8001:8001"
+      - "11434:11434"
     environment:
-      # Core Settings
-      - HOST=0.0.0.0
-      - PORT=8001
-      - DEBUG=false
-      - LOG_LEVEL=INFO
-      
-      # GPU and Memory Management
-      - CUDA_VISIBLE_DEVICES=0
-      - NVIDIA_VISIBLE_DEVICES=all
-      - MAX_MEMORY_MB=12288
-      - CACHE_MEMORY_LIMIT_MB=1024
-      - MODEL_MEMORY_LIMIT_MB=6144
-      - SEMANTIC_MODEL_MAX_MEMORY_MB=500
-      
-      # Ollama Configuration
-      - OLLAMA_HOST=0.0.0.0:11434
-      - OLLAMA_NUM_PARALLEL=2
-      - OLLAMA_MAX_LOADED_MODELS=2
-      - OLLAMA_GPU_OVERHEAD=0
-      
-      # Enhanced Features (Enable as needed)
       - ENABLE_SEMANTIC_CLASSIFICATION=false
-      - ENABLE_STREAMING=true
       - ENABLE_MODEL_WARMUP=false
-      - ENABLE_DETAILED_METRICS=true
-      - ENABLE_DASHBOARD=true
-      - ENABLE_WEBSOCKET_DASHBOARD=true
-      
-      # Performance Features
-      - ENABLE_REDIS_CACHE=true
-      - REDIS_URL=redis://redis:6379
-      - ENABLE_SEMANTIC_CACHE=true
-      - ENABLE_CIRCUIT_BREAKER=true
-      - ENABLE_CONNECTION_POOLING=true
-      - ENABLE_PERFORMANCE_MONITORING=true
-      
-      # Security (Change in production)
-      - ENABLE_AUTH=false
-      - DEFAULT_API_KEY=sk-change-me-in-production
-      - API_KEY_HEADER=X-API-Key
-      - CORS_ORIGINS=["*"]
-      
-    volumes:
-      # Persistent data storage
-      - ./data/cache:/app/cache
-      - ./data/logs:/app/logs
-      - ./data/models:/app/models
-      - ollama-data:/root/.ollama
-      
+      - ENABLE_REDIS_CACHE=false
+      - MAX_MEMORY_MB=4096
+      - CACHE_MEMORY_LIMIT_MB=512
     deploy:
       resources:
         reservations:
@@ -69,47 +22,4 @@ services:
               count: 1
               capabilities: [gpu]
         limits:
-          memory: 16G
-        reservations:
-          memory: 12G
-    
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
-      interval: 60s
-      timeout: 30s
-      retries: 3
-      start_period: 300s
-    
-    depends_on:
-      - redis
-    
-    networks:
-      - llm-proxy-network
-
-  # Redis for caching
-  redis:
-    image: redis:7-alpine
-    container_name: llm-proxy-redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
-    volumes:
-      - redis-data:/data
-    networks:
-      - llm-proxy-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-volumes:
-  redis-data:
-    driver: local
-  ollama-data:
-    driver: local
-
-networks:
-  llm-proxy-network:
-    driver: bridge
+          memory: 6G
