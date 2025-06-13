@@ -1,33 +1,25 @@
-# Dockerfile - SIMPLIFIED to avoid parsing errors
-# CUDA + Ollama + FastAPI with minimal dashboard
-
+# Base image with CUDA
 FROM nvidia/cuda:12.1.0-base-ubuntu22.04
 
 # Set environment variables
-ENV DEBIAN_FRONTEND=noninteractive
-ENV PYTHONUNBUFFERED=1
-ENV CUDA_VISIBLE_DEVICES=0
-ENV NVIDIA_VISIBLE_DEVICES=all
-ENV PATH=/usr/local/cuda/bin:$PATH
-ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
-
-# Ollama configuration
-ENV OLLAMA_HOST=0.0.0.0:11434
-ENV OLLAMA_NUM_PARALLEL=2
-ENV OLLAMA_MAX_LOADED_MODELS=2
-ENV OLLAMA_GPU_OVERHEAD=0
-
-# App configuration
-ENV HOST=0.0.0.0
-ENV PORT=8001
-ENV LOG_LEVEL=INFO
-ENV DEBUG=false
-ENV ENABLE_AUTH=false
-ENV ENABLE_DASHBOARD=true
-
-# Memory management
-ENV MAX_MEMORY_MB=12288
-ENV CACHE_MEMORY_LIMIT_MB=1024
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    CUDA_VISIBLE_DEVICES=0 \
+    NVIDIA_VISIBLE_DEVICES=all \
+    PATH=/usr/local/cuda/bin:$PATH \
+    LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH \
+    OLLAMA_HOST=0.0.0.0:11434 \
+    OLLAMA_NUM_PARALLEL=2 \
+    OLLAMA_MAX_LOADED_MODELS=2 \
+    OLLAMA_GPU_OVERHEAD=0 \
+    HOST=0.0.0.0 \
+    PORT=8001 \
+    LOG_LEVEL=INFO \
+    DEBUG=false \
+    ENABLE_AUTH=false \
+    ENABLE_DASHBOARD=true \
+    MAX_MEMORY_MB=12288 \
+    CACHE_MEMORY_LIMIT_MB=1024
 
 WORKDIR /app
 
@@ -44,49 +36,41 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js 18.x
-RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
-    && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/*
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
+    apt-get install -y nodejs && \
+    rm -rf /var/lib/apt/lists/*
 
 # Install Ollama
 RUN curl -fsSL https://ollama.com/install.sh | sh
 
-# Copy requirements and install Python dependencies
+# Copy and install Python requirements
 COPY requirements.txt .
 RUN pip3 install --no-cache-dir --upgrade pip && \
-    pip3 install --no-cache-dir -r requirements.txt
+    pip3 install --no-cache-dir -r requirements.txt && \
+    pip3 install --no-cache-dir \
+        sentence-transformers==2.2.2 \
+        faiss-cpu==1.7.4 \
+        sse-starlette==1.6.5 \
+        redis \
+        aioredis \
+        prometheus-client
 
-# Install enhanced dependencies with fallbacks
-RUN pip3 install --no-cache-dir \
-    "sentence-transformers>=2.2.0,<3.0.0" \
-    "faiss-cpu==1.7.4" \
-    "sse-starlette==1.6.5" \
-    || echo "Some ML features may be limited"
-
-RUN pip3 install --no-cache-dir \
-    "redis>=4.5.0" \
-    "aioredis>=2.0.0" \
-    "prometheus-client>=0.19.0" \
-    || echo "Some performance features may be limited"
-
-# Copy all application files
+# Copy all app code
 COPY . .
 
-# Handle frontend build (simplified approach)
-RUN mkdir -p frontend/build
-
-# Try to build React frontend if it exists
-RUN if [ -f "frontend/package.json" ] && [ -d "frontend/src" ]; then \
-      echo "Building React frontend..." && \
-      cd frontend && \
-      npm install --legacy-peer-deps && \
-      CI=true npm run build && \
-      cd .. && \
-      echo "React build completed"; \
+# Build frontend if React source exists
+RUN mkdir -p frontend/build && \
+    if [ -f "frontend/package.json" ] && [ -d "frontend/src" ]; then \
+        echo "📦 Building React frontend..." && \
+        cd frontend && \
+        npm install --legacy-peer-deps && \
+        CI=true npm run build && \
+        cd .. && \
+        echo "✅ React build completed."; \
     else \
-      echo "Creating simple fallback dashboard..." && \
-      mkdir -p frontend/build && \
-      cat > frontend/build/index.html <<'EOF' \
+        echo "⚠️ React frontend not found, creating fallback page..." && \
+        mkdir -p frontend/build && \
+        cat > frontend/build/index.html <<'EOF' && \
 <!DOCTYPE html>
 <html>
 <head>
@@ -118,45 +102,34 @@ RUN if [ -f "frontend/package.json" ] && [ -d "frontend/src" ]; then \
 EOF
     fi
 
-# Fix permissions
-RUN find . -name "*.py" -exec dos2unix {} \; 2>/dev/null || true
-RUN find . -name "*.sh" -exec dos2unix {} \; -exec chmod +x {} \; 2>/dev/null || true
+# Fix permissions and convert line endings
+RUN find . -name "*.py" -exec dos2unix {} \; 2>/dev/null || true && \
+    find . -name "*.sh" -exec dos2unix {} \; -exec chmod +x {} \; 2>/dev/null || true
 
-# Create directories
+# Create necessary directories
 RUN mkdir -p logs cache models data
 
-# Verify setup
-RUN echo "Setup verification:" && \
-    ls -la && \
-    echo "Frontend build:" && \
-    ls -la frontend/build/ 2>/dev/null || echo "No frontend build"
-
-# Health check
+# Healthcheck
 HEALTHCHECK --interval=60s --timeout=30s --start-period=300s --retries=3 \
     CMD curl -f http://localhost:8001/health || exit 1
 
-# Expose ports
 EXPOSE 8001 11434
 
-# Simple startup command
+# Startup command
 CMD ["/bin/bash", "-c", "\
     echo '🚀 Starting LLM Proxy...' && \
-    echo 'Starting Ollama service...' && \
+    echo '🧠 Starting Ollama service...' && \
     ollama serve & \
-    echo 'Waiting for Ollama...' && \
+    echo '⏳ Waiting for Ollama to be ready...' && \
     for i in {1..12}; do \
         if curl -s http://localhost:11434/api/tags >/dev/null 2>&1; then \
-            echo 'Ollama ready!'; break; \
+            echo '✅ Ollama is ready!'; break; \
         fi; \
         sleep 5; \
     done && \
-    (ollama pull mistral:7b-instruct-q4_0 2>/dev/null &) && \
+    echo '⬇️ Pulling default model (mistral:7b-instruct-q4_0)...' && \
+    (ollama pull mistral:7b-instruct-q4_0 2>/dev/null || true) & \
     [ ! -f .env ] && echo 'PORT=8001' > .env || true && \
-    echo '' && \
-    echo 'System Ready!' && \
-    echo 'API: http://localhost:8001' && \
-    echo 'Dashboard: http://localhost:8001/app' && \
-    echo 'Docs: http://localhost:8001/docs' && \
-    echo '' && \
+    echo '✅ System Ready: http://localhost:8001' && \
     python3 main_master.py \
 "]
