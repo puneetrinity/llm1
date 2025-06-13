@@ -526,7 +526,7 @@ function Performance({ metrics, circuitBreakers }) {
 
 // Admin Component
 function Admin({ cacheStats }) {
-  const [logs, setLogs] = useState([]);
+
 
   const clearCache = async () => {
     try {
