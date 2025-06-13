@@ -9,17 +9,20 @@
     "react-scripts": "5.0.1",
     "axios": "^1.6.2",
     "web-vitals": "^3.5.0",
-    "ajv": "^8.12.0"
+    "ajv": "^8.12.0",
+    "recharts": "^2.8.0"
   },
   "scripts": {
     "start": "react-scripts start",
     "build": "GENERATE_SOURCEMAP=false react-scripts build",
     "test": "react-scripts test --watchAll=false",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "build:docker": "npm run build && cp -r build/* ../static/"
   },
   "eslintConfig": {
     "extends": [
-      "react-app"
+      "react-app",
+      "react-app/jest"
     ],
     "rules": {
       "no-unused-vars": "warn",
@@ -42,5 +45,8 @@
   "engines": {
     "node": ">=16.0.0",
     "npm": ">=8.0.0"
+  },
+  "resolutions": {
+    "ajv": "^8.12.0"
   }
 }
