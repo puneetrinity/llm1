@@ -79,7 +79,7 @@ RUN mkdir -p frontend/build
 RUN if [ -f "frontend/package.json" ] && [ -d "frontend/src" ]; then \
         echo "Building React frontend..." && \
         cd frontend && \
-        npm install --omit=dev --legacy-peer-deps && \
+        npm install --legacy-peer-deps && \
         CI=true npm run build && \
         cd .. && \
         echo "React build completed"; \
