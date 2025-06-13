@@ -77,15 +77,50 @@ RUN mkdir -p frontend/build
 
 # Try to build React frontend if it exists
 RUN if [ -f "frontend/package.json" ] && [ -d "frontend/src" ]; then \
-        echo "Building React frontend..." && \
-        cd frontend && \
-        npm install --legacy-peer-deps && \
-        CI=true npm run build && \
-        cd .. && \
-        echo "React build completed"; \
+      echo "Building React frontend..." && \
+      cd frontend && \
+      npm install --legacy-peer-deps && \
+      CI=true npm run build && \
+      cd .. && \
+      echo "React build completed"; \
     else \
-        echo "Creating simple fallback dashboard..." && \
-        echo '<html><head><title>LLM Proxy API</title><style>body{font-family:Arial;text-align:center;padding:50px;background:#f0f0f0}h1{color:#333}.link{display:block;margin:10px;padding:15px;background:#007bff;color:white;text-decoration:none;border-radius:5px}</style></head><body><h1>🚀 LLM Proxy API</h1><p>Enhanced FastAPI with GPU Support</p><a href="/health" class="link">Health Check</a><a href="/docs" class="link">API Documentation</a><a href="/api/status" class="link">Status API</a><a href="/metrics" class="link">Metrics</a><p><strong>Ollama:</strong> localhost:11434</p></body></html>' > frontend/build/index.html; \
+      echo "Creating simple fallback dashboard..." && \
+      mkdir -p frontend/build && \
+      cat > frontend/build/index.html <<'EOF'
+<!DOCTYPE html>
+<html>
+<head>
+  <title>LLM Proxy API</title>
+  <style>
+    body {
+      font-family: Arial;
+      text-align: center;
+      padding: 50px;
+      background: #f0f0f0;
+    }
+    h1 { color: #333; }
+    .link {
+      display: block;
+      margin: 10px;
+      padding: 15px;
+      background: #007bff;
+      color: white;
+      text-decoration: none;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🚀 LLM Proxy API</h1>
+  <p>Enhanced FastAPI with GPU Support</p>
+  <a href="/health" class="link">Health Check</a>
+  <a href="/docs" class="link">API Documentation</a>
+  <a href="/api/status" class="link">Status API</a>
+  <a href="/metrics" class="link">Metrics</a>
+  <p><strong>Ollama:</strong> localhost:11434</p>
+</body>
+</html>
+EOF
     fi
 
 # Fix permissions
