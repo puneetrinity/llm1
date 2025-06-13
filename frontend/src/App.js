@@ -1,5 +1,5 @@
-// frontend/src/App.js - Complete React Dashboard
-import React, { useState, useEffect, useRef } from 'react';
+// frontend/src/App.js - Complete React Dashboard (FIXED)
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, 
   BarChart, Bar, PieChart, Pie, Cell, ResponsiveContainer 
@@ -18,19 +18,8 @@ function App() {
   const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef(null);
 
-  // Initialize WebSocket for real-time updates
-  useEffect(() => {
-    connectWebSocket();
-    loadInitialData();
-    
-    return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
-    };
-  }, []);
-
-  const connectWebSocket = () => {
+  // FIXED: Wrapped connectWebSocket in useCallback to fix dependency warning
+  const connectWebSocket = useCallback(() => {
     try {
       wsRef.current = new WebSocket(`${WS_BASE}/ws/dashboard`);
       
@@ -54,7 +43,19 @@ function App() {
     } catch (error) {
       console.error('WebSocket connection failed:', error);
     }
-  };
+  }, []);
+
+  // Initialize WebSocket for real-time updates
+  useEffect(() => {
+    connectWebSocket();
+    loadInitialData();
+    
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, [connectWebSocket]); // FIXED: Added connectWebSocket to dependency array
 
   const loadInitialData = async () => {
     try {
@@ -526,7 +527,7 @@ function Performance({ metrics, circuitBreakers }) {
 
 // Admin Component
 function Admin({ cacheStats }) {
-
+  // FIXED: Removed unused logs state variables that were causing no-unused-vars warnings
 
   const clearCache = async () => {
     try {
