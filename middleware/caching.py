@@ -41,9 +41,13 @@ def create_caching_middleware(
             cache_ttl=cache_ttl
         )
     
-    return middleware_factorydef __init__(
+    return middleware_factory
+    
+class SmartCachingMiddleware(BaseHTTPMiddleware):
+    def __init__(
         self, 
-        app, 
+        app,
+    
         cache_config: CacheConfig = None,
         enable_cache: bool = True,
         cacheable_paths: list = None,
