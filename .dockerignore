@@ -1,0 +1,115 @@
+# .dockerignore - Optimize container builds for GitHub Container Registry
+
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+README.md
+CHANGELOG.md
+LICENSE
+docs/
+
+# Development files
+.env
+.env.*
+!.env.template
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/
+.tmp
+
+# Test files
+tests/
+test/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Frontend development files (we copy built version)
+frontend/node_modules/
+frontend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# Build artifacts (except the built frontend)
+*.tar.gz
+*.zip
+
+# Backup files
+backup_*/
+*_backup*
+*_EXISTING_*
+
+# Old/conflicting files
+main.py
+main_fixed.py
+main_with_react.py
+config_*.py
+build_*.sh
+react_*.sh
+quick_*.sh
+create_*.sh
+
+# Docker
+Dockerfile.dev
+docker-compose.override.yml
+.dockerignore
+
+# GitHub (workflows are needed for build context)
+# .github/
