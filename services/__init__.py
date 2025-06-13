@@ -1,18 +1,43 @@
-# services/__init__.py - Updated with Enhanced Import System
-from services.ollama_client import OllamaClient
-from services.router import LLMRouter
-from services.auth import AuthService
+# services/__init__.py - Safe imports without circular dependencies
+"""
+Core services package with safe import handling
+"""
 
-# Use the enhanced import manager instead of manual imports
-from services.enhanced_imports import import_manager, ENHANCED_IMPORTS_AVAILABLE
+# Basic imports that are always safe
+try:
+    from .ollama_client import OllamaClient
+except ImportError as e:
+    print(f"Warning: Could not import OllamaClient: {e}")
+    OllamaClient = None
 
-# Re-export for backward compatibility
+try:
+    from .router import LLMRouter
+except ImportError as e:
+    print(f"Warning: Could not import LLMRouter: {e}")
+    LLMRouter = None
+
+try:
+    from .auth import AuthService
+except ImportError as e:
+    print(f"Warning: Could not import AuthService: {e}")
+    AuthService = None
+
+# Enhanced imports with fallbacks
+try:
+    from .circuit_breaker import CircuitBreakerManager, get_circuit_breaker_manager
+    CIRCUIT_BREAKER_AVAILABLE = True
+except ImportError as e:
+    print(f"Info: Circuit breaker not available: {e}")
+    CircuitBreakerManager = None
+    get_circuit_breaker_manager = lambda: None
+    CIRCUIT_BREAKER_AVAILABLE = False
+
 __all__ = [
     "OllamaClient",
     "LLMRouter", 
     "AuthService",
-    "ENHANCED_IMPORTS_AVAILABLE"
+    "CIRCUIT_BREAKER_AVAILABLE"
 ]
 
-# Enhanced services will be available through the enhanced_imports module
-# This avoids circular imports and provides better error handling
+if CIRCUIT_BREAKER_AVAILABLE:
+    __all__.extend(["CircuitBreakerManager", "get_circuit_breaker_manager"])

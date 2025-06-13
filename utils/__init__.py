@@ -1,37 +1,36 @@
-# utils/__init__.py
-from .metrics import MetricsCollector
-from .health import HealthChecker
+# utils/__init__.py - Safe utility imports
+"""
+Utilities package with graceful import handling
+"""
 
-# Optional enhanced utilities - import safely
-ENHANCED_UTILS_AVAILABLE = False
+# Core utilities (always needed)
+try:
+    from .metrics import MetricsCollector
+except ImportError as e:
+    print(f"Warning: Could not import MetricsCollector: {e}")
+    MetricsCollector = None
 
 try:
-    from .performance_monitor import PerformanceMonitor
-    ENHANCED_UTILS_AVAILABLE = True
-except ImportError:
-    PerformanceMonitor = None
+    from .health import HealthChecker
+except ImportError as e:
+    print(f"Warning: Could not import HealthChecker: {e}")
+    HealthChecker = None
 
+# Memory manager (important for enhanced features)
 try:
-    from .dashboard import EnhancedDashboard
-    ENHANCED_UTILS_AVAILABLE = True
-except ImportError:
-    EnhancedDashboard = None
-
-try:
-    from .websocket_dashboard import WebSocketDashboard
-    ENHANCED_UTILS_AVAILABLE = True
-except ImportError:
-    WebSocketDashboard = None
+    from .memory_manager import get_memory_manager, MemoryManager
+    MEMORY_MANAGER_AVAILABLE = True
+except ImportError as e:
+    print(f"Info: Memory manager not available: {e}")
+    get_memory_manager = lambda: None
+    MemoryManager = None
+    MEMORY_MANAGER_AVAILABLE = False
 
 __all__ = [
     "MetricsCollector",
     "HealthChecker",
-    "ENHANCED_UTILS_AVAILABLE"
+    "MEMORY_MANAGER_AVAILABLE"
 ]
 
-if ENHANCED_UTILS_AVAILABLE:
-    __all__.extend([
-        "PerformanceMonitor",
-        "EnhancedDashboard", 
-        "WebSocketDashboard"
-    ])
+if MEMORY_MANAGER_AVAILABLE:
+    __all__.extend(["get_memory_manager", "MemoryManager"])

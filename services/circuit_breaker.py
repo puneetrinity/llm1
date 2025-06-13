@@ -1,4 +1,4 @@
-# services/circuit_breaker.py - Advanced Circuit Breaker Implementation
+# services/circuit_breaker.py - Complete Circuit Breaker Implementation
 import time
 import asyncio
 import logging
@@ -22,7 +22,7 @@ class CircuitBreakerConfig:
     timeout_threshold: float = 30.0     # Request timeout threshold
     slow_request_threshold: float = 10.0 # Slow request threshold
     max_requests_half_open: int = 5     # Max requests in half-open state
-    
+
 class CircuitBreakerStats:
     """Statistics tracking for circuit breaker"""
     
@@ -105,6 +105,64 @@ class CircuitBreaker:
                 )
             
             # Track request in half-open state
+            if self.state == CircuitState.HALF_OPEN:
+                self._half_open_requests += 1
+        
+        # Execute the function with monitoring
+        start_time = time.time()
+        try:
+            result = await asyncio.wait_for(
+                func(*args, **kwargs),
+                timeout=self.config.timeout_threshold
+            )
+            
+            response_time = time.time() - start_time
+            await self._on_success(response_time)
+            return result
+            
+        except asyncio.TimeoutError:
+            response_time = time.time() - start_time
+            await self._on_failure("timeout")
+            raise CircuitBreakerTimeoutError(
+                f"Request timed out after {response_time:.1f}s (threshold: {self.config.timeout_threshold}s)"
+            )
+            
+        except Exception as e:
+            response_time = time.time() - start_time
+            await self._on_failure("general")
+            raise
+    
+    async def _should_allow_request(self) -> bool:
+        """Determine if request should be allowed based on current state"""
+        if self.state == CircuitState.CLOSED:
+            return True
+        
+        if self.state == CircuitState.OPEN:
+            # Check if recovery timeout has passed
+            if self._should_attempt_reset():
+                await self._transition_to_half_open()
+                return True
+            return False
+        
+        if self.state == CircuitState.HALF_OPEN:
+            # Allow limited requests in half-open state
+            return self._half_open_requests < self.config.max_requests_half_open
+        
+        return False
+    
+    async def _on_success(self, response_time: float):
+        """Handle successful request"""
+        async with self._lock:
+            self.stats.record_success(response_time)
+            
+            # Check for slow requests
+            if response_time > self.config.slow_request_threshold:
+                self.stats.record_slow_request(response_time)
+                logging.warning(
+                    f"Circuit breaker '{self.name}': Slow request detected "
+                    f"({response_time:.1f}s > {self.config.slow_request_threshold}s)"
+                )
+            
             if self.state == CircuitState.HALF_OPEN:
                 self._success_count += 1
                 if self._success_count >= self.config.success_threshold:
@@ -319,62 +377,48 @@ def get_circuit_breaker(service_name: str, config: CircuitBreakerConfig = None) 
 
 async def call_with_circuit_breaker(service_name: str, func: Callable[..., Coroutine], *args, **kwargs) -> Any:
     """Execute function with circuit breaker protection"""
-    return await get_circuit_breaker_manager().call_with_circuit_breaker(service_name, func, *args, **kwargs) CircuitState.HALF_OPEN:
-                self._half_open_requests += 1
-        
-        # Execute the function with monitoring
-        start_time = time.time()
+    return await get_circuit_breaker_manager().call_with_circuit_breaker(service_name, func, *args, **kwargs)
+
+# Decorator for easy use
+def circuit_breaker(service_name: str, config: CircuitBreakerConfig = None):
+    """Decorator to add circuit breaker protection to async functions"""
+    def decorator(func):
+        async def wrapper(*args, **kwargs):
+            return await call_with_circuit_breaker(service_name, func, *args, **kwargs)
+        return wrapper
+    return decorator
+
+# Example usage and testing functions
+async def test_circuit_breaker():
+    """Test circuit breaker functionality"""
+    
+    # Create a test function that fails sometimes
+    failure_count = 0
+    async def test_function():
+        nonlocal failure_count
+        failure_count += 1
+        if failure_count < 6:
+            raise Exception(f"Test failure {failure_count}")
+        return f"Success after {failure_count} attempts"
+    
+    # Create circuit breaker
+    cb = CircuitBreaker("test", CircuitBreakerConfig(failure_threshold=3))
+    
+    # Test failures
+    for i in range(10):
         try:
-            result = await asyncio.wait_for(
-                func(*args, **kwargs),
-                timeout=self.config.timeout_threshold
-            )
-            
-            response_time = time.time() - start_time
-            await self._on_success(response_time)
-            return result
-            
-        except asyncio.TimeoutError:
-            response_time = time.time() - start_time
-            await self._on_failure("timeout")
-            raise CircuitBreakerTimeoutError(
-                f"Request timed out after {response_time:.1f}s (threshold: {self.config.timeout_threshold}s)"
-            )
-            
+            result = await cb.call(test_function)
+            print(f"Attempt {i+1}: {result}")
         except Exception as e:
-            response_time = time.time() - start_time
-            await self._on_failure("general")
-            raise
-    
-    async def _should_allow_request(self) -> bool:
-        """Determine if request should be allowed based on current state"""
-        if self.state == CircuitState.CLOSED:
-            return True
+            print(f"Attempt {i+1}: {type(e).__name__}: {e}")
         
-        if self.state == CircuitState.OPEN:
-            # Check if recovery timeout has passed
-            if self._should_attempt_reset():
-                await self._transition_to_half_open()
-                return True
-            return False
+        # Show circuit breaker status
+        status = cb.get_status()
+        print(f"  State: {status['state']}, Failures: {status['failure_count']}")
         
-        if self.state == CircuitState.HALF_OPEN:
-            # Allow limited requests in half-open state
-            return self._half_open_requests < self.config.max_requests_half_open
-        
-        return False
-    
-    async def _on_success(self, response_time: float):
-        """Handle successful request"""
-        async with self._lock:
-            self.stats.record_success(response_time)
-            
-            # Check for slow requests
-            if response_time > self.config.slow_request_threshold:
-                self.stats.record_slow_request(response_time)
-                logging.warning(
-                    f"Circuit breaker '{self.name}': Slow request detected "
-                    f"({response_time:.1f}s > {self.config.slow_request_threshold}s)"
-                )
-            
-            if self.state ==
+        # Wait a bit between attempts
+        await asyncio.sleep(0.1)
+
+if __name__ == "__main__":
+    # Run test
+    asyncio.run(test_circuit_breaker())
