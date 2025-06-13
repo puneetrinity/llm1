@@ -136,7 +136,7 @@ def setup_enhanced_imports():
     # Enhanced Router - FIXED: Use correct import path
     enhanced_router = import_manager.safe_import(
         'enhanced_router',
-        'services.router.LLMRouter', 
+        'services.enhanced_router.EnhancedLLMRouter', 
         fallback_class=LLMRouter,
         critical=False  # Not critical, can fall back
     )
