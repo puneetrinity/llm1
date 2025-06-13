@@ -58,48 +58,33 @@ RUN pip3 install --no-cache-dir --upgrade pip && \
 # Copy all app code
 COPY . .
 
-# Build frontend if React source exists
-RUN mkdir -p frontend/build && \
-    if [ -f "frontend/package.json" ] && [ -d "frontend/src" ]; then \
+# Create frontend directory
+RUN mkdir -p frontend/build
+
+# Build React frontend if source exists, otherwise create fallback
+RUN if [ -f "frontend/package.json" ] && [ -d "frontend/src" ]; then \
         echo "📦 Building React frontend..." && \
         cd frontend && \
         npm install --legacy-peer-deps && \
         CI=true npm run build && \
-        cd .. && \
         echo "✅ React build completed."; \
     else \
-        echo "⚠️ React frontend not found, creating fallback page..." && \
-        mkdir -p frontend/build && \
-        cat > frontend/build/index.html <<'EOF' && \
-<!DOCTYPE html>
-<html>
-<head>
-  <title>LLM Proxy API</title>
-  <style>
-    body { font-family: Arial; text-align: center; padding: 50px; background: #f0f0f0; }
-    h1 { color: #333; }
-    .link {
-      display: block;
-      margin: 10px;
-      padding: 15px;
-      background: #007bff;
-      color: white;
-      text-decoration: none;
-      border-radius: 5px;
-    }
-  </style>
-</head>
-<body>
-  <h1>🚀 LLM Proxy API</h1>
-  <p>Enhanced FastAPI with GPU Support</p>
-  <a href="/health" class="link">Health Check</a>
-  <a href="/docs" class="link">API Documentation</a>
-  <a href="/api/status" class="link">Status API</a>
-  <a href="/metrics" class="link">Metrics</a>
-  <p><strong>Ollama:</strong> localhost:11434</p>
-</body>
-</html>
-EOF
+        echo "⚠️ React frontend not found, creating fallback page..."; \
+    fi
+
+# Create fallback HTML page if React build doesn't exist
+RUN if [ ! -f "frontend/build/index.html" ]; then \
+        echo '<!DOCTYPE html>' > frontend/build/index.html && \
+        echo '<html><head><title>LLM Proxy API</title>' >> frontend/build/index.html && \
+        echo '<style>body{font-family:Arial;text-align:center;padding:50px;background:#f0f0f0;}' >> frontend/build/index.html && \
+        echo 'h1{color:#333;}.link{display:block;margin:10px;padding:15px;background:#007bff;' >> frontend/build/index.html && \
+        echo 'color:white;text-decoration:none;border-radius:5px;}</style></head>' >> frontend/build/index.html && \
+        echo '<body><h1>🚀 LLM Proxy API</h1><p>Enhanced FastAPI with GPU Support</p>' >> frontend/build/index.html && \
+        echo '<a href="/health" class="link">Health Check</a>' >> frontend/build/index.html && \
+        echo '<a href="/docs" class="link">API Documentation</a>' >> frontend/build/index.html && \
+        echo '<a href="/api/status" class="link">Status API</a>' >> frontend/build/index.html && \
+        echo '<a href="/metrics" class="link">Metrics</a>' >> frontend/build/index.html && \
+        echo '<p><strong>Ollama:</strong> localhost:11434</p></body></html>' >> frontend/build/index.html; \
     fi
 
 # Fix permissions and convert line endings
