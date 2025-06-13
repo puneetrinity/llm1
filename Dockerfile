@@ -125,7 +125,8 @@ RUN echo "🔍 Checking for frontend files..." && \
     else \
         echo "ℹ️ No frontend found - creating fallback dashboard..." && \
         mkdir -p frontend/build && \
-        echo '<!DOCTYPE html>
+        cat > frontend/build/index.html << 'EOF'
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -177,10 +178,10 @@ RUN echo "🔍 Checking for frontend files..." && \
             try {
                 const response = await fetch("/health");
                 const data = await response.json();
-                status.innerHTML = `<span style="color: #4CAF50;">✅ Healthy</span> | Version: ${data.version || "Unknown"}`;
+                status.innerHTML = "<span style='color: #4CAF50;'>✅ Healthy</span> | Version: " + (data.version || "Unknown");
                 btn.textContent = "🔄 Refresh Status";
             } catch (error) {
-                status.innerHTML = `<span style="color: #f44336;">❌ Connection Error</span>`;
+                status.innerHTML = "<span style='color: #f44336;'>❌ Connection Error</span>";
                 btn.textContent = "🔄 Retry";
             }
             
@@ -189,7 +190,7 @@ RUN echo "🔍 Checking for frontend files..." && \
         
         window.onload = function() {
             checkHealth();
-            setInterval(checkHealth, 60000); // Check every minute
+            setInterval(checkHealth, 60000);
         };
     </script>
 </head>
@@ -221,7 +222,9 @@ RUN echo "🔍 Checking for frontend files..." && \
         </div>
     </div>
 </body>
-</html>' > frontend/build/index.html; \
+</html>
+EOF
+; \
     fi
 
 # ============================================================================
