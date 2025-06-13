@@ -1,5 +1,5 @@
 # main_master.py - Master FastAPI Application (Single Source of Truth)
-from fastapi import FastAPI, HTTPException, Request, Depends
+from fastapi import FastAPI, HTTPException, Request, Depends, WebSocket, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, FileResponse
@@ -7,7 +7,9 @@ from contextlib import asynccontextmanager
 import uvicorn
 import logging
 import sys
-from datetime import datetime
+import json
+import secrets
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from pydantic import BaseModel
@@ -42,6 +44,9 @@ services_state = {
     "dashboard_available": False,
     "initialization_complete": False
 }
+
+# WebSocket session storage (simple in-memory for development)
+websocket_sessions = {}
 
 async def initialize_services():
     """Initialize all services with proper error handling"""
@@ -190,6 +195,113 @@ async def get_current_user(request: Request) -> Optional[Dict[str, Any]]:
     
     return {"user_id": "authenticated", "permissions": ["read", "write"]}
 
+# OPTION 3: Session-based WebSocket authentication
+@app.post("/auth/websocket-session")
+async def create_websocket_session(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Create a session token for WebSocket authentication"""
+    try:
+        # Create session using your auth service
+        if 'auth_service' in globals() and auth_service:
+            session_token = auth_service.create_session(
+                user_id=current_user["user_id"],
+                expires_in_hours=24
+            )
+            return {
+                "session_token": session_token,
+                "expires_in": 24 * 3600,  # 24 hours in seconds
+                "websocket_url": f"ws://localhost:8000/ws/dashboard?session={session_token}"
+            }
+        else:
+            # Fallback for basic setups
+            session_token = secrets.token_urlsafe(32)
+            # Store session in a simple in-memory dict (use Redis in production)
+            websocket_sessions[session_token] = {
+                "user_id": current_user["user_id"],
+                "created_at": datetime.now(),
+                "expires_at": datetime.now() + timedelta(hours=24)
+            }
+            
+            return {
+                "session_token": session_token,
+                "expires_in": 24 * 3600,
+                "websocket_url": f"ws://{settings.HOST}:{settings.PORT}/ws/dashboard?session={session_token}"
+            }
+    except Exception as e:
+        logging.error(f"Failed to create WebSocket session: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create session")
+
+@app.websocket("/ws/dashboard")
+async def websocket_dashboard(websocket: WebSocket, session: str = Query(None)):
+    """WebSocket endpoint with session-based authentication"""
+    
+    # Handle authentication if enabled
+    if settings.ENABLE_AUTH:
+        if not session:
+            await websocket.close(code=1008, reason="Session token required")
+            return
+            
+        # Validate session token
+        try:
+            user_info = None
+            
+            # Try auth service first
+            if 'auth_service' in globals() and auth_service:
+                session_info = auth_service.validate_session(session)
+                if session_info:
+                    user_info = session_info
+            else:
+                # Fallback to simple session store
+                if session in websocket_sessions:
+                    session_data = websocket_sessions[session]
+                    if session_data["expires_at"] > datetime.now():
+                        user_info = {
+                            "user_id": session_data["user_id"],
+                            "permissions": ["read", "write"]
+                        }
+                    else:
+                        # Session expired
+                        del websocket_sessions[session]
+            
+            if not user_info:
+                await websocket.close(code=1008, reason="Invalid or expired session")
+                return
+                
+        except Exception as e:
+            logging.error(f"WebSocket session validation error: {e}")
+            await websocket.close(code=1011, reason="Session validation failed")
+            return
+    
+    # Rest of your WebSocket logic remains the same...
+    await websocket.accept()
+    try:
+        while True:
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            
+            if message.get("type") == "ping":
+                await websocket.send_text(json.dumps({"type": "pong"}))
+            elif message.get("type") == "request_update":
+                try:
+                    basic_data = {
+                        "timestamp": datetime.now().isoformat(),
+                        "system_overview": {"status": "healthy", "total_requests": 0},
+                        "services": services_state
+                    }
+                    await websocket.send_text(json.dumps({
+                        "type": "dashboard_update", 
+                        "data": basic_data
+                    }))
+                except Exception as e:
+                    logging.error(f"Error sending dashboard update: {e}")
+                    
+    except WebSocketDisconnect:
+        logging.info("WebSocket client disconnected")
+    except Exception as e:
+        logging.error(f"Dashboard WebSocket error: {e}")
+        await websocket.close()
+
 # Core API Endpoints
 @app.get("/")
 async def root():
@@ -203,7 +315,8 @@ async def root():
             "status": "/api/status",
             "dashboard": "/app",
             "docs": "/docs",
-            "api_docs": "/redoc"
+            "api_docs": "/redoc",
+            "websocket_auth": "/auth/websocket-session"
         },
         "services": services_state
     }
@@ -251,7 +364,8 @@ async def get_config(user: Dict[str, Any] = Depends(get_current_user)):
         "features": {
             "enhanced_features": settings.ENABLE_ENHANCED_FEATURES,
             "dashboard": settings.ENABLE_DASHBOARD,
-            "authentication": settings.ENABLE_AUTH
+            "authentication": settings.ENABLE_AUTH,
+            "websocket": settings.ENABLE_WEBSOCKET
         },
         "limits": {
             "max_memory_mb": settings.MAX_MEMORY_MB,
@@ -297,6 +411,7 @@ if __name__ == "__main__":
     logging.info(f"🚀 Starting Consolidated LLM Proxy Server")
     logging.info(f"📍 Server will be available at: http://{settings.HOST}:{settings.PORT}")
     logging.info(f"📊 Dashboard will be available at: http://{settings.HOST}:{settings.PORT}/app")
+    logging.info(f"🔌 WebSocket will be available at: ws://{settings.HOST}:{settings.PORT}/ws/dashboard")
     
     uvicorn.run(
         "main_master:app",
