@@ -86,18 +86,13 @@ RUN if [ -f "frontend/package.json" ] && [ -d "frontend/src" ]; then \
     else \
       echo "Creating simple fallback dashboard..." && \
       mkdir -p frontend/build && \
-      cat > frontend/build/index.html <<'EOF'
+      cat > frontend/build/index.html <<'EOF' \
 <!DOCTYPE html>
 <html>
 <head>
   <title>LLM Proxy API</title>
   <style>
-    body {
-      font-family: Arial;
-      text-align: center;
-      padding: 50px;
-      background: #f0f0f0;
-    }
+    body { font-family: Arial; text-align: center; padding: 50px; background: #f0f0f0; }
     h1 { color: #333; }
     .link {
       display: block;
@@ -146,12 +141,8 @@ EXPOSE 8001 11434
 # Simple startup command
 CMD ["/bin/bash", "-c", "\
     echo '🚀 Starting LLM Proxy...' && \
-    \
-    # Start Ollama \
     echo 'Starting Ollama service...' && \
     ollama serve & \
-    \
-    # Wait for Ollama \
     echo 'Waiting for Ollama...' && \
     for i in {1..12}; do \
         if curl -s http://localhost:11434/api/tags >/dev/null 2>&1; then \
@@ -159,21 +150,13 @@ CMD ["/bin/bash", "-c", "\
         fi; \
         sleep 5; \
     done && \
-    \
-    # Download model in background \
-    (ollama pull mistral:7b-instruct-q4_0 2>/dev/null) & \
-    \
-    # Create .env if needed \
+    (ollama pull mistral:7b-instruct-q4_0 2>/dev/null &) && \
     [ ! -f .env ] && echo 'PORT=8001' > .env || true && \
-    \
-    # Show access info \
     echo '' && \
     echo 'System Ready!' && \
     echo 'API: http://localhost:8001' && \
     echo 'Dashboard: http://localhost:8001/app' && \
     echo 'Docs: http://localhost:8001/docs' && \
     echo '' && \
-    \
-    # Start FastAPI \
     python3 main_master.py \
 "]
