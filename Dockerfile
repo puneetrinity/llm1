@@ -67,7 +67,7 @@ ENV ENABLE_REDIS_CACHE=true \
 ENV ENABLE_AUTH=false \
     DEFAULT_API_KEY=sk-change-me-in-production \
     API_KEY_HEADER=X-API-Key \
-    CORS_ORIGINS=["*"]
+    CORS_ORIGINS='["*"]'
 
 # Advanced features
 ENV ENABLE_CIRCUIT_BREAKER=true \
@@ -84,7 +84,7 @@ WORKDIR /app
 
 # Copy package files first for better caching
 COPY requirements.txt .
-COPY frontend/package*.json frontend/ 2>/dev/null || echo "No frontend package files"
+COPY frontend/package*.json ./frontend/
 
 # Install Python dependencies
 RUN pip3 install --no-cache-dir --upgrade pip && \
@@ -99,8 +99,7 @@ RUN pip3 install --no-cache-dir \
     aioredis>=2.0.0 \
     numpy>=1.21.0 \
     scikit-learn>=1.1.0 \
-    prometheus-client \
-    || echo "Some enhanced features may be limited"
+    prometheus-client
 
 # Install Node.js dependencies and build React dashboard
 WORKDIR /app/frontend
@@ -114,7 +113,7 @@ RUN if [ -f "package.json" ]; then \
     fi
 
 # Copy frontend source and build
-COPY frontend/ . 2>/dev/null || echo "No frontend source"
+COPY frontend/ .
 RUN if [ -f "package.json" ] && [ -d "src" ]; then \
         echo "Building React frontend..." && \
         GENERATE_SOURCEMAP=false CI=true NODE_OPTIONS="--max-old-space-size=4096" npm run build && \
@@ -174,13 +173,12 @@ EOF
     fi
 
 # Fix line endings and permissions
-RUN find . -name "*.py" -exec dos2unix {} \; 2>/dev/null || true && \
-    find . -name "*.sh" -exec dos2unix {} \; -exec chmod +x {} \; 2>/dev/null || true
+RUN find . -name "*.py" -exec dos2unix {} \; && \
+    find . -name "*.sh" -exec dos2unix {} \; -exec chmod +x {} \;
 
 # Create required directories with proper structure
 RUN mkdir -p /app/cache /app/logs /app/models /app/data \
-             /app/static /app/frontend/build \
-             logs cache models data
+             /app/static /app/frontend/build
 
 # Comprehensive health check
 HEALTHCHECK --interval=60s --timeout=30s --start-period=300s --retries=3 \
@@ -189,56 +187,58 @@ HEALTHCHECK --interval=60s --timeout=30s --start-period=300s --retries=3 \
 # Expose ports
 EXPOSE 8001 11434
 
-# Use comprehensive startup script
-CMD ["/bin/bash", "-c", "\
-    echo '🚀 Starting Comprehensive Enhanced LLM Proxy...' && \
-    \
-    # Export GPU environment variables \
-    export CUDA_VISIBLE_DEVICES=0 && \
-    export NVIDIA_VISIBLE_DEVICES=all && \
-    export OLLAMA_HOST=0.0.0.0:11434 && \
-    \
-    # Verify GPU detection \
-    echo '🔍 Checking GPU availability...' && \
-    nvidia-smi || echo 'GPU detection may have issues - continuing with CPU' && \
-    \
-    # Start Ollama service \
-    echo '📡 Starting Ollama service...' && \
-    CUDA_VISIBLE_DEVICES=0 ollama serve & \
-    OLLAMA_PID=$! && \
-    \
-    # Wait for Ollama with comprehensive timeout \
-    echo '⏳ Waiting for Ollama to start...' && \
-    for i in {1..60}; do \
-        if curl -f http://localhost:11434/api/tags >/dev/null 2>&1; then \
-            echo '✅ Ollama is ready!'; \
-            break; \
-        fi; \
-        echo \"   Attempt $i/60 - waiting 5 seconds...\"; \
-        sleep 5; \
-    done && \
-    \
-    # Verify Ollama started successfully \
-    if ! curl -f http://localhost:11434/api/tags >/dev/null 2>&1; then \
-        echo '❌ Failed to start Ollama service after 5 minutes'; \
-        echo '🔧 Attempting fallback startup...'; \
-        pkill ollama || true; \
-        sleep 5; \
-        ollama serve & \
-        sleep 30; \
-    fi && \
-    \
-    # Pull essential models in background \
-    echo '📦 Pulling essential models in background...' && \
-    (CUDA_VISIBLE_DEVICES=0 ollama pull mistral:7b-instruct-q4_0 >/dev/null 2>&1 &) && \
-    \
-    # Create default .env if not exists \
-    [ ! -f .env ] && echo 'PORT=8001' > .env || true && \
-    \
-    # Start the comprehensive FastAPI application \
-    echo '🌐 Starting Enhanced FastAPI application...' && \
-    echo '✅ System Ready: http://localhost:8001' && \
-    echo '📚 API Documentation: http://localhost:8001/docs' && \
-    echo '🏥 Health Check: http://localhost:8001/health' && \
-    python3 main_master.py \
-"]
+# Create startup script
+RUN echo '#!/bin/bash\n\
+echo "🚀 Starting Comprehensive Enhanced LLM Proxy..."\n\
+\n\
+# Export GPU environment variables\n\
+export CUDA_VISIBLE_DEVICES=0\n\
+export NVIDIA_VISIBLE_DEVICES=all\n\
+export OLLAMA_HOST=0.0.0.0:11434\n\
+\n\
+# Verify GPU detection\n\
+echo "🔍 Checking GPU availability..."\n\
+nvidia-smi || echo "GPU detection may have issues - continuing with CPU"\n\
+\n\
+# Start Ollama service\n\
+echo "📡 Starting Ollama service..."\n\
+CUDA_VISIBLE_DEVICES=0 ollama serve &\n\
+OLLAMA_PID=$!\n\
+\n\
+# Wait for Ollama with comprehensive timeout\n\
+echo "⏳ Waiting for Ollama to start..."\n\
+for i in {1..60}; do\n\
+    if curl -f http://localhost:11434/api/tags >/dev/null 2>&1; then\n\
+        echo "✅ Ollama is ready!"\n\
+        break\n\
+    fi\n\
+    echo "   Attempt $i/60 - waiting 5 seconds..."\n\
+    sleep 5\n\
+done\n\
+\n\
+# Verify Ollama started successfully\n\
+if ! curl -f http://localhost:11434/api/tags >/dev/null 2>&1; then\n\
+    echo "❌ Failed to start Ollama service after 5 minutes"\n\
+    echo "🔧 Attempting fallback startup..."\n\
+    pkill ollama || true\n\
+    sleep 5\n\
+    ollama serve &\n\
+    sleep 30\n\
+fi\n\
+\n\
+# Pull essential models in background\n\
+echo "📦 Pulling essential models in background..."\n\
+(CUDA_VISIBLE_DEVICES=0 ollama pull mistral:7b-instruct-q4_0 >/dev/null 2>&1 &)\n\
+\n\
+# Create default .env if not exists\n\
+[ ! -f .env ] && echo "PORT=8001" > .env || true\n\
+\n\
+# Start the comprehensive FastAPI application\n\
+echo "🌐 Starting Enhanced FastAPI application..."\n\
+echo "✅ System Ready: http://localhost:8001"\n\
+echo "📚 API Documentation: http://localhost:8001/docs"\n\
+echo "🏥 Health Check: http://localhost:8001/health"\n\
+python3 main_master.py\n' > /app/start.sh && chmod +x /app/start.sh
+
+# Use the startup script
+CMD ["/app/start.sh"]
