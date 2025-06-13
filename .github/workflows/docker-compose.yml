@@ -2,7 +2,8 @@ version: '3.8'
 
 services:
   llm-proxy:
-    build: .
+    build:
+      context: .
     container_name: llm-proxy-dev
     restart: unless-stopped
     ports:
@@ -15,13 +16,10 @@ services:
       - ENABLE_SEMANTIC_CLASSIFICATION=true
       - MAX_MEMORY_MB=8192
     volumes:
-      # Mount source code for development
       - .:/app
-      - /app/node_modules
-      - /app/frontend/node_modules
     depends_on:
       - redis
-    
+
   redis:
     image: redis:7-alpine
     ports:
