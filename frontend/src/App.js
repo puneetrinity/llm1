@@ -538,7 +538,7 @@ function Admin({ cacheStats }) {
   };
 
   const restartService = async () => {
-    if (confirm('Are you sure you want to restart the service?')) {
+    if (window.confirm('Are you sure you want to restart the service?')) {
       try {
         await fetch(`${API_BASE}/admin/restart`, { method: 'POST' });
         alert('Service restart initiated');
