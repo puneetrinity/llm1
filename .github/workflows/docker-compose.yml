@@ -3,23 +3,26 @@ version: '3.8'
 services:
   llm-proxy:
     build: .
-    container_name: llm-proxy-basic
+    container_name: llm-proxy-dev
     restart: unless-stopped
     ports:
       - "8001:8001"
       - "11434:11434"
     environment:
-      - ENABLE_SEMANTIC_CLASSIFICATION=false
-      - ENABLE_MODEL_WARMUP=false
-      - ENABLE_REDIS_CACHE=false
-      - MAX_MEMORY_MB=4096
-      - CACHE_MEMORY_LIMIT_MB=512
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-        limits:
-          memory: 6G
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - ENABLE_AUTH=false
+      - ENABLE_SEMANTIC_CLASSIFICATION=true
+      - MAX_MEMORY_MB=8192
+    volumes:
+      # Mount source code for development
+      - .:/app
+      - /app/node_modules
+      - /app/frontend/node_modules
+    depends_on:
+      - redis
+    
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
