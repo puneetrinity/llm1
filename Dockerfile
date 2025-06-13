@@ -23,8 +23,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 WORKDIR /app
 
-# Install system dependencies (optimized single layer)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
     curl \
     python3 \
     python3-pip \
@@ -33,125 +33,76 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     dos2unix \
     wget \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+    && rm -rf /var/lib/apt/lists/*
 
-# Install Node.js 20 LTS (reliable method)
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/* \
-    && node --version \
-    && npm --version
+# Install Node.js 18.x FIRST
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
+    apt-get install -y nodejs && \
+    rm -rf /var/lib/apt/lists/*
 
 # Install Ollama
 RUN curl -fsSL https://ollama.com/install.sh | sh
 
 # Copy and install Python requirements with CURRENT versions
 COPY requirements.txt .
-RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel \
-    && pip3 install --no-cache-dir -r requirements.txt \
-    && pip3 install --no-cache-dir \
-        "sentence-transformers>=3.1.0,<4.0.0" \
-        "faiss-cpu>=1.11.0" \
-        "sse-starlette>=2.1.0" \
-        "redis>=5.0.0" \
-        "aioredis>=2.0.0" \
-        "prometheus-client>=0.20.0" \
-        "numpy>=1.24.0,<2.0.0" \
-        "scikit-learn>=1.4.0"
+RUN pip3 install --no-cache-dir --upgrade pip && \
+    pip3 install --no-cache-dir -r requirements.txt && \
+    pip3 install --no-cache-dir \
+        sentence-transformers>=3.0.0 \
+        faiss-cpu>=1.8.0 \
+        sse-starlette>=1.6.5 \
+        redis \
+        aioredis \
+        prometheus-client
 
-# Copy package.json first (better caching)
-COPY frontend/package*.json ./frontend/
-
-# Create vite.config.js (no heredoc issues)
-RUN mkdir -p frontend
-COPY <<EOF frontend/vite.config.js
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-
-export default defineConfig({
-  plugins: [react()],
-  base: '/app/',
-  build: {
-    outDir: 'build',
-    sourcemap: false,
-    minify: 'esbuild',
-    target: 'es2020'
-  },
-  server: {
-    proxy: {
-      '/api': 'http://localhost:8001',
-      '/health': 'http://localhost:8001',
-      '/docs': 'http://localhost:8001'
-    }
-  }
-})
-EOF
-
-# Install frontend dependencies
-RUN cd frontend \
-    && if [ -f "package.json" ]; then \
-        npm ci --omit=dev --silent; \
-    fi \
-    && cd ..
-
-# Copy all application code
+# Copy all app code
 COPY . .
 
-# Build React frontend with VITE
-RUN cd frontend \
-    && if [ -f "package.json" ] && [ -d "src" ]; then \
-        echo "Building with Vite..." \
-        && npm run build \
-        && echo "Vite build completed!" \
-        && if [ -d "dist" ] && [ ! -d "build" ]; then \
-            mv dist build; \
-        fi; \
-    else \
-        echo "No frontend source found" \
-        && mkdir -p build; \
-    fi \
-    && cd ..
-
-# Create fallback HTML (no heredoc issues)
+# Create frontend directory
 RUN mkdir -p frontend/build
-COPY <<EOF frontend/build/index.html
-<!DOCTYPE html>
-<html>
-<head>
-    <title>LLM Proxy API</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1">
-    <style>
-        body{font-family:Arial,sans-serif;text-align:center;padding:50px;background:#f0f0f0;margin:0;}
-        h1{color:#333;margin-bottom:20px;}
-        .container{max-width:600px;margin:0 auto;}
-        .link{display:inline-block;margin:10px;padding:15px 25px;background:#007bff;color:white;text-decoration:none;border-radius:5px;transition:background 0.3s;}
-        .link:hover{background:#0056b3;}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🚀 LLM Proxy API</h1>
-        <p>Enhanced FastAPI with GPU Support & Ollama Integration</p>
-        <div style="margin:30px 0;">
-            <a href="/health" class="link">Health Check</a>
-            <a href="/docs" class="link">API Docs</a>
-            <a href="/api/status" class="link">Status</a>
-            <a href="/metrics" class="link">Metrics</a>
-        </div>
-        <p style="margin-top:40px;color:#666;">
-            <strong>Ollama Endpoint:</strong> localhost:11434
-        </p>
-    </div>
-</body>
-</html>
-EOF
 
-# Fix permissions and line endings
-RUN find . -name "*.py" -exec dos2unix {} \; 2>/dev/null || true
-RUN find . -name "*.sh" -exec dos2unix {} \; -exec chmod +x {} \; 2>/dev/null || true
+# Build React frontend (simple approach)
+RUN set +e && \
+    if [ -f "frontend/package.json" ] && [ -d "frontend/src" ]; then \
+        echo "Building React frontend..." && \
+        cd frontend && \
+        npm config set fund false && \
+        npm config set audit-level none && \
+        npm install --legacy-peer-deps --silent && \
+        GENERATE_SOURCEMAP=false CI=true npm run build && \
+        echo "React build completed successfully!" || echo "React build failed"; \
+        cd ..; \
+    else \
+        echo "No React frontend found"; \
+    fi && \
+    set -e
+
+# Create fallback HTML if build failed
+RUN if [ ! -f "frontend/build/index.html" ]; then \
+        echo "Creating fallback HTML page..." && \
+        echo '<!DOCTYPE html>' > frontend/build/index.html && \
+        echo '<html><head><title>LLM Proxy API</title>' >> frontend/build/index.html && \
+        echo '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' >> frontend/build/index.html && \
+        echo '<style>body{font-family:Arial,sans-serif;text-align:center;padding:50px;background:#f0f0f0;margin:0;}' >> frontend/build/index.html && \
+        echo 'h1{color:#333;margin-bottom:20px;}.container{max-width:600px;margin:0 auto;}' >> frontend/build/index.html && \
+        echo '.link{display:inline-block;margin:10px;padding:15px 25px;background:#007bff;' >> frontend/build/index.html && \
+        echo 'color:white;text-decoration:none;border-radius:5px;transition:background 0.3s;}' >> frontend/build/index.html && \
+        echo '.link:hover{background:#0056b3;}</style></head>' >> frontend/build/index.html && \
+        echo '<body><div class="container"><h1>🚀 LLM Proxy API</h1>' >> frontend/build/index.html && \
+        echo '<p>Enhanced FastAPI with GPU Support & Ollama Integration</p>' >> frontend/build/index.html && \
+        echo '<div style="margin:30px 0;"><a href="/health" class="link">Health Check</a>' >> frontend/build/index.html && \
+        echo '<a href="/docs" class="link">API Docs</a><a href="/api/status" class="link">Status</a>' >> frontend/build/index.html && \
+        echo '<a href="/metrics" class="link">Metrics</a></div>' >> frontend/build/index.html && \
+        echo '<p style="margin-top:40px;color:#666;"><strong>Ollama Endpoint:</strong> localhost:11434</p>' >> frontend/build/index.html && \
+        echo '</div></body></html>' >> frontend/build/index.html && \
+        echo "Fallback page created"; \
+    else \
+        echo "Frontend build exists"; \
+    fi
+
+# Fix permissions and convert line endings
+RUN find . -name "*.py" -exec dos2unix {} \; 2>/dev/null || true && \
+    find . -name "*.sh" -exec dos2unix {} \; -exec chmod +x {} \; 2>/dev/null || true
 
 # Create necessary directories
 RUN mkdir -p logs cache models data
