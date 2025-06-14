@@ -1,161 +1,19 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+// frontend/src/App.js - Improved App with modular structure and all your features
+
+import React, { useState, useEffect, useRef } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   BarChart, Bar, PieChart, Pie, Cell, ResponsiveContainer
 } from 'recharts';
-import './App.css'; // Make sure to import your CSS
 
-// Environment configuration
-const API_BASE = import.meta.env.VITE_BACKEND_URL || window.location.origin;
-const WS_BASE = API_BASE.replace('http://', 'ws://').replace('https://', 'wss://');
+// Import our modular components and utilities
+import { CONFIG, API_BASE } from './utils/config.js';
+import { useAuth } from './hooks/useAuth.js';
+import { useWebSocket } from './hooks/useWebSocket.js';
+import { ErrorBoundary } from './components/ErrorBoundary.js';
+import './App.css';
 
-// Safe localStorage wrapper
-const safeLocalStorage = {
-  getItem: (key) => {
-    try {
-      return localStorage.getItem(key);
-    } catch (error) {
-      console.warn('localStorage access failed:', error);
-      return null;
-    }
-  },
-  setItem: (key, value) => {
-    try {
-      localStorage.setItem(key, value);
-    } catch (error) {
-      console.warn('localStorage access failed:', error);
-    }
-  },
-  removeItem: (key) => {
-    try {
-      localStorage.removeItem(key);
-    } catch (error) {
-      console.warn('localStorage access failed:', error);
-    }
-  }
-};
-
-// Authentication hook - FIXED
-function useAuth() {
-  const [apiKey, setApiKey] = useState(() => 
-    safeLocalStorage.getItem('llm_proxy_api_key') || 'sk-default');
-  const [sessionToken, setSessionToken] = useState(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [authError, setAuthError] = useState(null);
-  const [isAuthenticating, setIsAuthenticating] = useState(false);
-
-  const authenticate = async (key) => {
-    if (!key?.trim()) {
-      setAuthError('API key is required');
-      return false;
-    }
-
-    setIsAuthenticating(true);
-    setAuthError(null);
-
-    try {
-      const response = await fetch(`${API_BASE}/auth/websocket-session`, {
-        method: 'POST',
-        headers: {
-          'X-API-Key': key,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setSessionToken(data.session_token);
-        setApiKey(key);
-        setIsAuthenticated(true);
-        safeLocalStorage.setItem('llm_proxy_api_key', key);
-        console.log('✅ Authentication successful');
-        return true;
-      } else {
-        const error = await response.json().catch(() => ({}));
-        setAuthError(error.detail?.message || `Authentication failed (${response.status})`);
-        return false;
-      }
-    } catch (error) {
-      console.error('Auth error:', error);
-      setAuthError('Connection failed. Check your network and backend.');
-      return false;
-    } finally {
-      setIsAuthenticating(false);
-    }
-  };
-
-  const logout = () => {
-    setApiKey('');
-    setSessionToken(null);
-    setIsAuthenticated(false);
-    setAuthError(null);
-    safeLocalStorage.removeItem('llm_proxy_api_key');
-  };
-
-  // Auto-authenticate on mount if API key exists
-  useEffect(() => {
-    if (apiKey && !sessionToken && !isAuthenticated) {
-      authenticate(apiKey);
-    }
-  }, []);
-
-  return {
-    apiKey,
-    sessionToken,
-    isAuthenticated,
-    authError,
-    isAuthenticating,
-    authenticate,
-    logout
-  };
-}
-
-// Error Boundary - IMPROVED
-class ErrorBoundary extends React.Component {
-  state = { hasError: false, error: null, errorInfo: null };
-
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error, errorInfo) {
-    console.error('Error caught by boundary:', error, errorInfo);
-    this.setState({ errorInfo });
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="error-boundary">
-          <div className="error-content">
-            <h2>🚨 Something went wrong</h2>
-            <p>{this.state.error?.message || 'An unexpected error occurred'}</p>
-            <div style={{ marginTop: '1rem' }}>
-              <button onClick={() => window.location.reload()}>
-                🔄 Reload Page
-              </button>
-              <button 
-                onClick={() => this.setState({ hasError: false, error: null })}
-                style={{ marginLeft: '0.5rem' }}
-              >
-                🔄 Try Again
-              </button>
-            </div>
-            {process.env.NODE_ENV === 'development' && (
-              <details style={{ marginTop: '1rem', fontSize: '0.8rem' }}>
-                <summary>Error Details (Dev Mode)</summary>
-                <pre>{this.state.error?.stack}</pre>
-              </details>
-            )}
-          </div>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
-
-// Metric Card Component
+// Component: Metric Card
 function MetricCard({ title, value, icon, color }) {
   return (
     <div className={`metric-card ${color}`}>
@@ -168,7 +26,7 @@ function MetricCard({ title, value, icon, color }) {
   );
 }
 
-// Header Component - IMPROVED
+// Component: Header
 function Header({ isConnected, health, auth }) {
   const healthStatus = health?.healthy ? 'healthy' : 'unhealthy';
   const connectionStatus = isConnected ? 'connected' : 'disconnected';
@@ -205,7 +63,7 @@ function Header({ isConnected, health, auth }) {
   );
 }
 
-// Authentication Component - NEW
+// Component: Authentication Section
 function AuthSection({ auth }) {
   const [inputKey, setInputKey] = useState(auth.apiKey || '');
 
@@ -249,6 +107,11 @@ function AuthSection({ auth }) {
           
           <div className="auth-help">
             💡 Default dev key: <code>sk-default</code>
+            {CONFIG.debug && (
+              <div style={{ marginTop: '0.5rem', fontSize: '0.8em', color: '#666' }}>
+                Debug: Connecting to {CONFIG.apiBase}
+              </div>
+            )}
           </div>
         </form>
       </div>
@@ -256,7 +119,7 @@ function AuthSection({ auth }) {
   );
 }
 
-// Chat Interface - IMPROVED
+// Component: Chat Interface
 function ChatInterface({ auth }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -369,7 +232,7 @@ function ChatInterface({ auth }) {
   );
 }
 
-// Dashboard Component - IMPROVED
+// Component: Dashboard
 function Dashboard({ metrics, health }) {
   if (!metrics) {
     return (
@@ -428,72 +291,50 @@ function Dashboard({ metrics, health }) {
             ))}
           </div>
         </div>
+        
+        {/* WebSocket Status */}
+        <div className="chart-container">
+          <h3>Connection Status</h3>
+          <div className="connection-overview">
+            <div className="connection-item">
+              <span>WebSocket Connection</span>
+              <span className={`connection-status ${metrics.websocket_connected ? 'connected' : 'disconnected'}`}>
+                {metrics.websocket_connected ? '🟢 Connected' : '🔴 Disconnected'}
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-// Main App Component - IMPROVED
+// Main App Component
 function App() {
   const [activeTab, setActiveTab] = useState('chat');
   const [metrics, setMetrics] = useState(null);
   const [health, setHealth] = useState(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const wsRef = useRef(null);
+  
+  // Use our custom hooks
   const auth = useAuth();
-
-  // WebSocket connection with better error handling
-  useEffect(() => {
-    if (auth.isAuthenticated && auth.sessionToken) {
-      console.log('🔌 Setting up WebSocket connection...');
-      
-      const ws = new WebSocket(`${WS_BASE}/ws/dashboard?session=${auth.sessionToken}`);
-      
-      ws.onopen = () => {
-        console.log('🔌 WebSocket connected');
-        setIsConnected(true);
-      };
-      
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          console.log('📨 WebSocket message:', data);
-          
-          if (data.type === 'dashboard_update') {
-            if (data.data.system_overview) {
-              setMetrics(data.data.system_overview);
-            }
-            if (data.data.healthy !== undefined) {
-              setHealth(data.data);
-            }
-          }
-        } catch (error) {
-          console.error('WebSocket message parsing error:', error);
-        }
-      };
-      
-      ws.onclose = (event) => {
-        console.log('🔌 WebSocket disconnected:', event.code, event.reason);
-        setIsConnected(false);
-      };
-      
-      ws.onerror = (error) => {
-        console.error('🔌 WebSocket error:', error);
-        setIsConnected(false);
-      };
-      
-      wsRef.current = ws;
-      
-      return () => {
-        console.log('🔌 Cleaning up WebSocket');
-        ws.close();
-      };
-    } else {
-      setIsConnected(false);
+  
+  // WebSocket with message handler
+  const ws = useWebSocket(auth, (message) => {
+    if (CONFIG.debug) {
+      console.log('📨 WebSocket message:', message);
     }
-  }, [auth.isAuthenticated, auth.sessionToken]);
+    
+    if (message.type === 'dashboard_update') {
+      if (message.data.system_overview) {
+        setMetrics(prev => ({ ...prev, ...message.data.system_overview, websocket_connected: true }));
+      }
+      if (message.data.healthy !== undefined) {
+        setHealth(message.data);
+      }
+    }
+  });
 
-  // Load initial data
+  // Load initial data when authenticated
   useEffect(() => {
     if (auth.isAuthenticated) {
       const loadInitialData = async () => {
@@ -508,7 +349,7 @@ function App() {
             const metricsRes = await fetch(`${API_BASE}/metrics`, { headers });
             if (metricsRes.ok) {
               const metricsData = await metricsRes.json();
-              setMetrics(metricsData);
+              setMetrics(prev => ({ ...prev, ...metricsData, websocket_connected: ws.isConnected }));
             }
           } catch (e) {
             console.warn('Failed to load metrics:', e);
@@ -533,10 +374,27 @@ function App() {
     }
   }, [auth.isAuthenticated, auth.apiKey]);
 
+  // Update WebSocket connection status in metrics
+  useEffect(() => {
+    setMetrics(prev => prev ? { ...prev, websocket_connected: ws.isConnected } : null);
+  }, [ws.isConnected]);
+
   return (
     <ErrorBoundary>
       <div className="app">
-        <Header isConnected={isConnected} health={health} auth={auth} />
+        <Header isConnected={ws.isConnected} health={health} auth={auth} />
+        
+        {/* WebSocket Status */}
+        {ws.connectionError && (
+          <div className="connection-error-banner">
+            ⚠️ {ws.connectionError}
+            {ws.reconnectAttempts < CONFIG.wsMaxReconnectAttempts && (
+              <button onClick={ws.forceReconnect} style={{ marginLeft: '1rem' }}>
+                🔄 Retry Now
+              </button>
+            )}
+          </div>
+        )}
         
         <nav className="tab-nav">
           <button 
