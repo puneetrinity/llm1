@@ -113,185 +113,231 @@ RUN echo "=== Frontend Structure Analysis ===" && \
     echo "Contents of /app/frontend/:" && \
     ls -la /app/frontend/ && \
     echo "" && \
+    echo "🔍 Checking for Vite project indicators..." && \
+    VITE_CONFIG_FOUND=false && \
+    PACKAGE_JSON_FOUND=false && \
+    SRC_DIR_FOUND=false && \
+    echo "" && \
+    if [ -f "/app/frontend/vite.config.js" ] || [ -f "/app/frontend/vite.config.ts" ] || [ -f "/app/frontend/vite.config.mjs" ]; then \
+        VITE_CONFIG_FOUND=true && \
+        echo "✅ Vite config found:" && \
+        ls -la /app/frontend/vite.config.* && \
+        echo "Config contents:" && \
+        cat /app/frontend/vite.config.* | head -15; \
+    else \
+        echo "❌ No vite.config found - this may not be a Vite project"; \
+        echo "Looking for other config files:" && \
+        ls -la /app/frontend/*config* 2>/dev/null || echo "No config files found"; \
+    fi && \
+    echo "" && \
     if [ -f "/app/frontend/package.json" ]; then \
+        PACKAGE_JSON_FOUND=true && \
         echo "✅ package.json found" && \
-        echo "Package.json contents:" && \
-        cat /app/frontend/package.json | head -20; \
+        echo "Checking for Vite in dependencies..." && \
+        if grep -q "vite" /app/frontend/package.json; then \
+            echo "✅ Vite found in package.json" && \
+            grep -A 2 -B 2 "vite" /app/frontend/package.json; \
+        else \
+            echo "❌ Vite not found in package.json - may not be a Vite project"; \
+        fi && \
+        echo "" && \
+        echo "Build script check:" && \
+        if grep -q '"build"' /app/frontend/package.json; then \
+            echo "✅ Build script found:" && \
+            grep -A 1 -B 1 '"build"' /app/frontend/package.json; \
+        else \
+            echo "❌ No build script found in package.json"; \
+        fi; \
     else \
         echo "❌ package.json not found"; \
-        echo "Available files:" && \
-        find /app/frontend -name "*.json" 2>/dev/null || echo "No JSON files found"; \
     fi && \
     echo "" && \
     if [ -d "/app/frontend/src" ]; then \
+        SRC_DIR_FOUND=true && \
         echo "✅ src directory found" && \
         echo "Source files:" && \
-        ls -la /app/frontend/src/ | head -10; \
+        find /app/frontend/src -type f -name "*.js" -o -name "*.ts" -o -name "*.jsx" -o -name "*.tsx" -o -name "*.vue" | head -10; \
     else \
         echo "❌ src directory not found"; \
     fi && \
     echo "" && \
-    echo "Looking for config files:" && \
-    ls -la /app/frontend/vite* /app/frontend/*config* 2>/dev/null || echo "No config files found"
-
-# Install Node.js dependencies with better error handling
-WORKDIR /app/frontend
-RUN if [ -f "package.json" ]; then \
-        echo "🔧 Configuring npm for Docker build..." && \
-        npm config set fund false && \
-        npm config set audit-level none && \
-        npm config set prefer-offline true && \
-        npm config set cache /tmp/npm-cache && \
-        echo "" && \
-        echo "📦 Installing dependencies..." && \
-        npm install --verbose 2>&1 | tee /tmp/npm-install.log && \
-        echo "" && \
-        echo "✅ Dependencies installed. Checking node_modules..." && \
-        ls -la node_modules/ | head -10 && \
-        echo "Total packages: $(ls node_modules/ | wc -l)"; \
+    echo "🎯 Project validation:" && \
+    if [ "$VITE_CONFIG_FOUND" = "true" ] && [ "$PACKAGE_JSON_FOUND" = "true" ] && [ "$SRC_DIR_FOUND" = "true" ]; then \
+        echo "✅ Valid Vite project detected - proceeding with build"; \
+    elif [ "$PACKAGE_JSON_FOUND" = "true" ] && [ "$SRC_DIR_FOUND" = "true" ]; then \
+        echo "⚠️ Node.js project found but no Vite config - will attempt build anyway"; \
     else \
+        echo "❌ Invalid project structure - missing required components"; \
+        echo "Required: package.json + src/ directory"; \
+        echo "Recommended: vite.config.js for Vite projects"; \
+    fi
+
+# Install Node.js dependencies with Vite-specific validation
+WORKDIR /app/frontend
+RUN echo "🔧 Validating Vite project before dependency installation..." && \
+    if [ ! -f "package.json" ]; then \
         echo "❌ FATAL: No package.json found in frontend directory" && \
         echo "Cannot proceed with frontend build" && \
         exit 1; \
-    fi
-
-# Build frontend with enhanced error handling and fallback
-RUN echo "🏗️ Starting frontend build process..." && \
-    if [ -f "package.json" ] && [ -d "src" ]; then \
-        echo "Pre-build check:" && \
-        npm run --silent 2>/dev/null | grep -E "(build|dev)" || echo "Available scripts:" && \
-        cat package.json | grep -A 10 '"scripts"' && \
-        echo "" && \
-        echo "Setting Node.js memory limit and starting build..." && \
-        NODE_OPTIONS="--max-old-space-size=4096 --max-heap-size=4096" \
-        GENERATE_SOURCEMAP=false \
-        CI=true \
-        npm run build 2>&1 | tee /tmp/build.log && \
-        echo "" && \
-        echo "✅ Build completed! Checking output..." && \
-        (ls -la dist/ 2>/dev/null && echo "Vite dist/ directory found") || \
-        (ls -la build/ 2>/dev/null && echo "Build/ directory found") || \
-        echo "❌ No build output directory found"; \
+    fi && \
+    if [ ! -f "vite.config.js" ] && [ ! -f "vite.config.ts" ] && [ ! -f "vite.config.mjs" ]; then \
+        echo "⚠️ WARNING: No vite.config found - this may not be a Vite project" && \
+        echo "Checking package.json for Vite dependency..." && \
+        if ! grep -q "vite" package.json; then \
+            echo "❌ FATAL: No Vite found in package.json and no vite.config" && \
+            echo "This doesn't appear to be a Vite project" && \
+            echo "Package.json scripts:" && \
+            cat package.json | grep -A 10 '"scripts"' || echo "No scripts found" && \
+            exit 1; \
+        else \
+            echo "✅ Vite found in package.json, proceeding..."; \
+        fi; \
     else \
-        echo "❌ Cannot build - missing requirements" && \
-        echo "Package.json exists: $([ -f package.json ] && echo YES || echo NO)" && \
-        echo "Src directory exists: $([ -d src ] && echo YES || echo NO)" && \
+        echo "✅ Vite config found - confirmed Vite project"; \
+    fi && \
+    echo "" && \
+    echo "📦 Installing dependencies for Vite project..." && \
+    npm config set fund false && \
+    npm config set audit-level none && \
+    npm config set prefer-offline true && \
+    npm config set cache /tmp/npm-cache && \
+    echo "" && \
+    npm install --verbose 2>&1 | tee /tmp/npm-install.log && \
+    echo "" && \
+    echo "✅ Dependencies installed. Checking for Vite installation..." && \
+    if [ -d "node_modules/vite" ]; then \
+        echo "✅ Vite installed successfully:" && \
+        ls -la node_modules/vite/package.json && \
+        echo "Vite version: $(cat node_modules/vite/package.json | grep '"version"' | head -1)"; \
+    else \
+        echo "❌ Vite not found in node_modules" && \
+        echo "Installed packages:" && \
+        ls node_modules/ | head -10; \
+    fi && \
+    echo "Total packages installed: $(ls node_modules/ | wc -l)"
+
+# Build Vite frontend with enhanced validation and error handling
+RUN echo "🏗️ Starting Vite build process..." && \
+    echo "Pre-build validation:" && \
+    if [ ! -f "package.json" ] || [ ! -d "src" ]; then \
+        echo "❌ FATAL: Missing package.json or src directory" && \
+        exit 1; \
+    fi && \
+    echo "✅ Required files present" && \
+    echo "" && \
+    echo "Checking build script..." && \
+    BUILD_SCRIPT=$(cat package.json | grep -A 1 '"build"' | grep -o '"[^"]*"' | tail -1 | tr -d '"') && \
+    echo "Build script command: $BUILD_SCRIPT" && \
+    if echo "$BUILD_SCRIPT" | grep -q "vite"; then \
+        echo "✅ Confirmed Vite build script"; \
+    else \
+        echo "⚠️ Build script doesn't mention Vite: $BUILD_SCRIPT"; \
+        echo "Will attempt build anyway..."; \
+    fi && \
+    echo "" && \
+    echo "Checking Vite installation..." && \
+    if [ -d "node_modules/vite" ]; then \
+        VITE_VERSION=$(cat node_modules/vite/package.json | grep '"version"' | cut -d'"' -f4) && \
+        echo "✅ Vite $VITE_VERSION installed"; \
+    else \
+        echo "❌ Vite not found in node_modules" && \
+        echo "Available build tools:" && \
+        ls node_modules/ | grep -E "(vite|webpack|rollup|parcel)" || echo "No common build tools found" && \
+        echo "Will attempt build anyway..."; \
+    fi && \
+    echo "" && \
+    echo "🔨 Starting Vite build..." && \
+    NODE_OPTIONS="--max-old-space-size=4096" \
+    GENERATE_SOURCEMAP=false \
+    CI=true \
+    npm run build 2>&1 | tee /tmp/vite-build.log && \
+    echo "" && \
+    echo "🔍 Checking Vite build output..." && \
+    if [ -d "dist" ] && [ -f "dist/index.html" ]; then \
+        echo "✅ Vite build successful! Output in dist/ directory:" && \
+        ls -la dist/ && \
+        echo "" && \
+        echo "Index.html preview:" && \
+        head -10 dist/index.html; \
+    elif [ -d "build" ] && [ -f "build/index.html" ]; then \
+        echo "✅ Build successful! Output in build/ directory:" && \
+        ls -la build/; \
+    else \
+        echo "❌ Vite build failed or produced no output" && \
+        echo "" && \
+        echo "Build log (last 30 lines):" && \
+        tail -30 /tmp/vite-build.log 2>/dev/null || echo "No build log available" && \
+        echo "" && \
+        echo "Checking for any output files:" && \
+        find . -name "*.html" -newer /tmp/vite-build.log 2>/dev/null || echo "No HTML files generated" && \
+        echo "" && \
+        echo "Available directories:" && \
+        ls -la | grep ^d && \
+        echo "This indicates a Vite build failure" && \
         exit 1; \
     fi
 
-# Handle build output and create fallback if needed
-RUN echo "📁 Processing build output..." && \
-    BUILD_SUCCESS=false && \
+# Handle Vite build output (dist/ directory is Vite standard)
+RUN echo "📁 Processing Vite build output..." && \
     if [ -d "dist" ] && [ -f "dist/index.html" ]; then \
-        echo "✅ Vite build successful - dist/ directory found" && \
-        BUILD_SUCCESS=true; \
+        echo "✅ Vite build successful - dist/ directory contains:" && \
+        ls -la dist/ && \
+        echo "" && \
+        echo "Vite assets structure:" && \
+        find dist -type f | head -20 && \
+        echo "" && \
+        echo "Index.html size: $(wc -c < dist/index.html) bytes" && \
+        if [ $(wc -c < dist/index.html) -lt 100 ]; then \
+            echo "⚠️ Index.html seems very small, checking contents:" && \
+            cat dist/index.html; \
+        fi; \
     elif [ -d "build" ] && [ -f "build/index.html" ]; then \
-        echo "✅ Build successful - build/ directory found" && \
-        BUILD_SUCCESS=true; \
+        echo "✅ Build successful - build/ directory found (non-standard for Vite)" && \
+        ls -la build/; \
     else \
-        echo "❌ Build failed or produced no output" && \
-        echo "Checking for any HTML files:" && \
-        find . -name "*.html" 2>/dev/null || echo "No HTML files found" && \
+        echo "❌ FATAL: Vite build produced no valid output" && \
         echo "" && \
-        echo "Build log:" && \
-        cat /tmp/build.log 2>/dev/null | tail -20 || echo "No build log available" && \
+        echo "Expected: dist/index.html (Vite standard)" && \
+        echo "Found directories:" && \
+        ls -la && \
         echo "" && \
-        echo "🔧 Creating fallback dashboard..." && \
-        mkdir -p dist && \
-        printf '%s\n' \
-            '<!DOCTYPE html>' \
-            '<html lang="en">' \
-            '<head>' \
-            '    <meta charset="UTF-8">' \
-            '    <meta name="viewport" content="width=device-width, initial-scale=1.0">' \
-            '    <title>🚀 LLM Proxy Dashboard</title>' \
-            '    <style>' \
-            '        body { font-family: Arial, sans-serif; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; margin: 0; }' \
-            '        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.1); }' \
-            '        h1 { color: #5a67d8; text-align: center; margin-bottom: 20px; }' \
-            '        .panel { background: #f7fafc; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #5a67d8; }' \
-            '        button { background: #5a67d8; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; margin: 5px; }' \
-            '        button:hover { background: #4c51bf; }' \
-            '        .result { background: #edf2f7; padding: 15px; margin: 15px 0; border-radius: 5px; }' \
-            '        pre { white-space: pre-wrap; word-wrap: break-word; font-size: 13px; }' \
-            '    </style>' \
-            '</head>' \
-            '<body>' \
-            '    <div class="container">' \
-            '        <h1>🚀 LLM Proxy Dashboard</h1>' \
-            '        <div class="panel">' \
-            '            <h3>⚠️ Frontend Build Notice</h3>' \
-            '            <p>The React build encountered issues, but the LLM Proxy is fully functional with this fallback dashboard.</p>' \
-            '        </div>' \
-            '        <div class="panel">' \
-            '            <h3>🏥 System Health</h3>' \
-            '            <button onclick="checkHealth()">Check Health</button>' \
-            '            <button onclick="listModels()">List Models</button>' \
-            '            <div id="healthResult" class="result" style="display:none;"></div>' \
-            '        </div>' \
-            '        <div class="panel">' \
-            '            <h3>💬 Test Chat</h3>' \
-            '            <input type="text" id="chatInput" placeholder="Ask something..." style="width: 70%; padding: 8px; margin: 5px;">' \
-            '            <button onclick="sendChat()">Send</button>' \
-            '            <div id="chatResult" class="result" style="display:none;"></div>' \
-            '        </div>' \
-            '    </div>' \
-            '    <script>' \
-            '        async function checkHealth() {' \
-            '            try {' \
-            '                const res = await fetch("/health");' \
-            '                const data = await res.json();' \
-            '                document.getElementById("healthResult").style.display = "block";' \
-            '                document.getElementById("healthResult").innerHTML = "<pre>" + JSON.stringify(data, null, 2) + "</pre>";' \
-            '            } catch (e) { alert("Health check failed: " + e.message); }' \
-            '        }' \
-            '        async function listModels() {' \
-            '            try {' \
-            '                const res = await fetch("/v1/models");' \
-            '                const data = await res.json();' \
-            '                document.getElementById("healthResult").style.display = "block";' \
-            '                document.getElementById("healthResult").innerHTML = "<h4>Models:</h4><pre>" + JSON.stringify(data, null, 2) + "</pre>";' \
-            '            } catch (e) { alert("Models fetch failed: " + e.message); }' \
-            '        }' \
-            '        async function sendChat() {' \
-            '            const input = document.getElementById("chatInput").value;' \
-            '            if (!input.trim()) return;' \
-            '            try {' \
-            '                const res = await fetch("/v1/chat/completions", {' \
-            '                    method: "POST", headers: {"Content-Type": "application/json"},' \
-            '                    body: JSON.stringify({messages: [{role: "user", content: input}], model: "mistral:7b-instruct-q4_0"})' \
-            '                });' \
-            '                const data = await res.json();' \
-            '                document.getElementById("chatResult").style.display = "block";' \
-            '                document.getElementById("chatResult").innerHTML = "<h4>Response:</h4><pre>" + JSON.stringify(data, null, 2) + "</pre>";' \
-            '            } catch (e) { alert("Chat failed: " + e.message); }' \
-            '        }' \
-            '    </script>' \
-            '</body>' \
-            '</html>' \
-        > dist/index.html && \
-        echo "✅ Fallback dashboard created"; \
+        echo "Vite build log analysis:" && \
+        if [ -f "/tmp/vite-build.log" ]; then \
+            echo "Errors in build log:" && \
+            grep -i "error\|failed\|cannot" /tmp/vite-build.log | tail -10 || echo "No obvious errors found" && \
+            echo "" && \
+            echo "Full build log (last 20 lines):" && \
+            tail -20 /tmp/vite-build.log; \
+        fi && \
+        echo "" && \
+        echo "Cannot proceed without valid Vite build output" && \
+        exit 1; \
     fi
 
 # Copy application code
 WORKDIR /app
 COPY . ./
 
-# Setup frontend for FastAPI serving
-RUN echo "🔗 Setting up frontend for FastAPI..." && \
+# Setup Vite build for FastAPI serving
+RUN echo "🔗 Setting up Vite build for FastAPI..." && \
     cd /app/frontend && \
     if [ -d "dist" ] && [ -f "dist/index.html" ]; then \
         echo "📁 Copying Vite dist/ to build/ for FastAPI compatibility..." && \
         cp -r dist build && \
-        echo "✅ Frontend ready at /app/frontend/build/"; \
+        echo "✅ Vite build ready at /app/frontend/build/" && \
+        echo "Build contents:" && \
+        ls -la /app/frontend/build/ && \
+        echo "" && \
+        echo "Static assets:" && \
+        find /app/frontend/build -name "*.js" -o -name "*.css" | head -10; \
     elif [ -d "build" ] && [ -f "build/index.html" ]; then \
-        echo "✅ Build directory already exists and ready"; \
+        echo "✅ Build directory already exists and ready (unusual for Vite)" && \
+        ls -la /app/frontend/build/; \
     else \
-        echo "❌ No valid frontend build found" && \
-        mkdir -p build && \
-        echo "<h1>Frontend Build Failed</h1>" > build/index.html; \
-    fi && \
-    ls -la /app/frontend/build/
+        echo "❌ FATAL: No valid Vite build output to serve" && \
+        echo "Expected: /app/frontend/dist/ directory from Vite build" && \
+        exit 1; \
+    fi
 
 # Final debugging and verification
 RUN echo "=== FINAL VERIFICATION ===" && \
