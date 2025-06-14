@@ -3,36 +3,35 @@
 # =====================================
 # Stage 1: Build React Frontend with Vite
 # =====================================
-FROM node:18 AS frontend-build
 
-WORKDIR /frontend
+COPY frontend/ ./frontend/
 
-# Copy package files for better Docker layer caching
-COPY frontend/package*.json ./
+# Move to frontend directory  
+WORKDIR /app/frontend
 
-# Install dependencies
-RUN npm ci --only=production --silent
+# Install ALL dependencies (devDependencies needed for Vite build)
+RUN echo "📦 Installing frontend dependencies..." && \
+    npm config set fund false && \
+    npm config set audit-level none && \
+    npm ci --silent
 
-# Copy frontend source code
-COPY frontend/ .
+# Build the frontend
+RUN echo "🏗️ Building frontend..." && \
+    npm run build && \
+    echo "✅ Frontend build completed" && \
+    ls -la build/
 
-# Build arguments for environment configuration
-ARG VITE_BACKEND_URL=http://localhost:8001
-ARG VITE_API_KEY=sk-default
-ARG VITE_AUTO_AUTHENTICATE=false
-ARG VITE_DEBUG=false
+# Verify build output
+RUN if [ ! -d "build" ] || [ ! -f "build/index.html" ]; then \
+        echo "❌ Frontend build failed - no build directory or index.html"; \
+        exit 1; \
+    else \
+        echo "✅ Frontend build verified"; \
+        echo "Build size: $(du -sh build/ | cut -f1)"; \
+    fi
 
-# Set environment variables for Vite build
-ENV VITE_BACKEND_URL=$VITE_BACKEND_URL
-ENV VITE_API_KEY=$VITE_API_KEY  
-ENV VITE_AUTO_AUTHENTICATE=$VITE_AUTO_AUTHENTICATE
-ENV VITE_DEBUG=$VITE_DEBUG
-
-# Build the React application with Vite
-RUN npm run build
-
-# Verify build completed successfully
-RUN ls -la dist/ && test -f dist/index.html || (echo "❌ Vite build failed" && exit 1)
+# Move back to app directory
+WORKDIR /app
 
 # =====================================
 # Stage 2: Python Dependencies
