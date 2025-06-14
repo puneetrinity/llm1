@@ -42,11 +42,13 @@ ENV ENABLE_REDIS_CACHE=true \
     ENABLE_SEMANTIC_CACHE=true \
     SEMANTIC_SIMILARITY_THRESHOLD=0.85
 
-# Security settings (change in production) - Fixed JSON syntax
+# Security settings - Configure at runtime for production security
 ENV ENABLE_AUTH=false \
-    DEFAULT_API_KEY=sk-change-me-in-production \
-    API_KEY_HEADER=X-API-Key \
     CORS_ORIGINS='["*"]'
+
+# Security-sensitive environment variables
+# Set these at runtime: docker run -e DEFAULT_API_KEY=your-key -e API_KEY_HEADER=your-header
+# Defaults are empty for security - will be set by application if not provided
 
 # Advanced features
 ENV ENABLE_CIRCUIT_BREAKER=true \
