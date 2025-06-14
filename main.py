@@ -1,4 +1,4 @@
-# main.py - Complete LLM Proxy with 3-Model Routing and Full Authentication
+# main.py - Enhanced LLM Proxy with 4 Key Features
 from fastapi import FastAPI, HTTPException, Request, Depends, WebSocket, Query, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -11,6 +11,8 @@ import json
 import secrets
 import aiohttp
 import asyncio
+import psutil
+import os
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, Dict, Any, List
@@ -92,6 +94,47 @@ class StatusResponse(BaseModel):
     features: Dict[str, bool]
     timestamp: str
 
+# Simple metrics storage
+class SimpleMetrics:
+    def __init__(self):
+        self.start_time = datetime.now()
+        self.request_count = 0
+        self.error_count = 0
+        self.response_times = []
+        self.model_requests = {}
+    
+    def track_request(self, endpoint: str = "/"):
+        self.request_count += 1
+    
+    def track_error(self):
+        self.error_count += 1
+    
+    def track_response_time(self, time_ms: float):
+        self.response_times.append(time_ms)
+        if len(self.response_times) > 100:  # Keep only last 100
+            self.response_times.pop(0)
+    
+    def track_model_request(self, model: str):
+        self.model_requests[model] = self.model_requests.get(model, 0) + 1
+    
+    def get_stats(self) -> Dict[str, Any]:
+        uptime = datetime.now() - self.start_time
+        avg_response_time = sum(self.response_times) / len(self.response_times) if self.response_times else 0
+        
+        return {
+            "uptime_seconds": int(uptime.total_seconds()),
+            "total_requests": self.request_count,
+            "total_errors": self.error_count,
+            "error_rate": self.error_count / max(1, self.request_count),
+            "avg_response_time_ms": round(avg_response_time, 2),
+            "model_usage": self.model_requests,
+            "system": {
+                "cpu_percent": psutil.cpu_percent(),
+                "memory_percent": psutil.virtual_memory().percent,
+                "disk_percent": psutil.disk_usage('/').percent
+            }
+        }
+
 # Global service state
 services_state = {
     "ollama_connected": False,
@@ -99,6 +142,9 @@ services_state = {
     "initialization_complete": False,
     "available_models": []
 }
+
+# Initialize simple metrics
+simple_metrics = SimpleMetrics()
 
 # WebSocket session storage
 websocket_sessions = {}
@@ -187,6 +233,10 @@ class OllamaClient:
             self.stats['total_requests'] += 1
             self.stats['successful_requests'] += 1
             
+            # Track metrics
+            simple_metrics.track_model_request(model)
+            simple_metrics.track_response_time(processing_time * 1000)  # Convert to ms
+            
             # Return OpenAI-compatible response
             return {
                 "id": f"chatcmpl-{int(start_time)}",
@@ -213,6 +263,7 @@ class OllamaClient:
         except Exception as e:
             self.stats['total_requests'] += 1
             self.stats['failed_requests'] += 1
+            simple_metrics.track_error()
             logger.error(f"Generation failed: {e}")
             raise
     
@@ -412,13 +463,14 @@ async def initialize_services():
 async def lifespan(app: FastAPI):
     """Application lifespan management"""
     # Startup
-    logger.info("🌟 Starting Complete LLM Proxy...")
+    logger.info("🌟 Starting Enhanced LLM Proxy...")
     await initialize_services()
     
     # Log startup summary
     logger.info("=" * 60)
     logger.info(f"🎯 Server: {settings.HOST}:{settings.PORT}")
     logger.info(f"🔗 Ollama: {settings.OLLAMA_BASE_URL}")
+    logger.info(f"🐛 Debug Mode: {settings.DEBUG}")
     logger.info(f"📊 Services: {services_state}")
     logger.info(f"🤖 Models: {services_state.get('available_models', [])}")
     logger.info("=" * 60)
@@ -430,14 +482,18 @@ async def lifespan(app: FastAPI):
     if ollama_client:
         await ollama_client.cleanup()
 
+# ENHANCEMENT 3: Debug-mode docs/redoc handling (for security)
+docs_url = "/docs" if settings.DEBUG else None
+redoc_url = "/redoc" if settings.DEBUG else None
+
 # Create FastAPI app
 app = FastAPI(
-    title="Complete LLM Proxy",
-    description="OpenAI-compatible API with 3-model routing and authentication",
-    version="3.0.0-complete",
+    title="Enhanced LLM Proxy",
+    description="OpenAI-compatible API with 3-model routing, authentication, and enhanced features",
+    version="3.1.0-enhanced",
     lifespan=lifespan,
-    docs_url="/docs",
-    redoc_url="/redoc"
+    docs_url=docs_url,
+    redoc_url=redoc_url
 )
 
 # CORS middleware
@@ -450,31 +506,36 @@ app.add_middleware(
     expose_headers=["*"]
 )
 
-# Dashboard static files
+# Dashboard static files setup
+dashboard_dir = None
 if settings.ENABLE_DASHBOARD:
     # Try React dashboard first
     react_build_dir = Path(__file__).parent / "frontend" / "build"
     static_dir = Path(__file__).parent / "static" / "dashboard"
     
-    dashboard_dir = react_build_dir if react_build_dir.exists() else static_dir
+    if react_build_dir.exists() and (react_build_dir / "index.html").exists():
+        dashboard_dir = react_build_dir
+        logger.info(f"📊 Using React dashboard from {dashboard_dir}")
+    elif static_dir.exists() and (static_dir / "index.html").exists():
+        dashboard_dir = static_dir
+        logger.info(f"📊 Using static dashboard from {dashboard_dir}")
     
-    if dashboard_dir.exists():
+    if dashboard_dir:
+        # Mount static files
         app.mount("/static", StaticFiles(directory=dashboard_dir), name="static")
-        
-        @app.get("/app/{path:path}")
-        async def serve_dashboard(path: str = ""):
-            if path and "." in path:
-                file_path = dashboard_dir / path
-                if file_path.exists():
-                    return FileResponse(file_path)
-            
-            index_path = dashboard_dir / "index.html"
-            if index_path.exists():
-                return FileResponse(index_path)
-            else:
-                return JSONResponse({"error": "Dashboard not found"})
-        
-        logger.info("✅ Dashboard mounted at /app")
+
+# Middleware for request tracking
+@app.middleware("http")
+async def track_requests(request: Request, call_next):
+    start_time = asyncio.get_event_loop().time()
+    simple_metrics.track_request(request.url.path)
+    
+    response = await call_next(request)
+    
+    process_time = (asyncio.get_event_loop().time() - start_time) * 1000
+    simple_metrics.track_response_time(process_time)
+    
+    return response
 
 # Authentication
 async def get_current_user(request: Request) -> Optional[Dict[str, Any]]:
@@ -559,7 +620,8 @@ async def websocket_dashboard(websocket: WebSocket, session: str = Query(None)):
                     "timestamp": datetime.now().isoformat(),
                     "services": services_state,
                     "models": services_state.get("available_models", []),
-                    "stats": ollama_client.get_stats() if ollama_client else {}
+                    "stats": ollama_client.get_stats() if ollama_client else {},
+                    "metrics": simple_metrics.get_stats()
                 }
                 await websocket.send_text(json.dumps({
                     "type": "dashboard_update",
@@ -596,33 +658,158 @@ async def websocket_dashboard(websocket: WebSocket, session: str = Query(None)):
 
 # API Endpoints
 
+# ENHANCEMENT 4: Explicit root endpoint (self-documenting API)
 @app.get("/")
 async def root():
-    """Root endpoint"""
+    """Enhanced root endpoint with comprehensive API documentation"""
     return {
-        "message": "Complete LLM Proxy",
-        "version": "3.0.0-complete",
+        "service": "Enhanced LLM Proxy",
+        "version": "3.1.0-enhanced",
         "timestamp": datetime.now().isoformat(),
+        "status": "online" if services_state["initialization_complete"] else "initializing",
+        "description": "OpenAI-compatible API with 3-model routing, authentication, and enhanced features",
+        
+        # Core API endpoints
         "endpoints": {
-            "health": "/health",
-            "models": "/v1/models",
-            "chat_completions": "/v1/chat/completions",
-            "dashboard": "/app",
-            "docs": "/docs"
+            "chat_completions": {
+                "url": "/v1/chat/completions",
+                "method": "POST",
+                "description": "OpenAI-compatible chat completions",
+                "auth_required": settings.ENABLE_AUTH
+            },
+            "models": {
+                "url": "/v1/models",
+                "method": "GET",
+                "description": "List available models",
+                "auth_required": False
+            },
+            "health": {
+                "url": "/health",
+                "method": "GET",
+                "description": "Service health check",
+                "auth_required": False
+            },
+            "metrics": {
+                "url": "/metrics",
+                "method": "GET",
+                "description": "Simple system metrics",
+                "auth_required": False
+            },
+            "dashboard": {
+                "url": "/app",
+                "method": "GET",
+                "description": "Web dashboard interface",
+                "auth_required": False
+            }
         },
-        "services": services_state
+        
+        # Authentication info
+        "authentication": {
+            "enabled": settings.ENABLE_AUTH,
+            "header": settings.API_KEY_HEADER if settings.ENABLE_AUTH else None,
+            "websocket_auth": "/auth/websocket-session" if settings.ENABLE_WEBSOCKET else None
+        },
+        
+        # Feature capabilities
+        "features": {
+            "model_routing": True,
+            "streaming": True,
+            "websocket": settings.ENABLE_WEBSOCKET,
+            "dashboard": settings.ENABLE_DASHBOARD,
+            "metrics": True,
+            "debug_mode": settings.DEBUG
+        },
+        
+        # Available models
+        "models": services_state.get("available_models", []),
+        
+        # Service status
+        "services": {
+            "ollama": services_state.get("ollama_connected", False),
+            "dashboard": services_state.get("dashboard_available", False),
+            "initialization": services_state.get("initialization_complete", False)
+        },
+        
+        # Documentation links
+        "documentation": {
+            "api_docs": "/docs" if settings.DEBUG else "Not available in production",
+            "redoc": "/redoc" if settings.DEBUG else "Not available in production",
+            "openapi_spec": "/openapi.json"
+        }
     }
 
 @app.get("/health", response_model=HealthResponse)
 async def health():
-    """Health check"""
+    """Health check endpoint"""
     return HealthResponse(
         status="healthy" if services_state["initialization_complete"] else "initializing",
         healthy=services_state["initialization_complete"],
         timestamp=datetime.now().isoformat(),
-        version="3.0.0-complete",
+        version="3.1.0-enhanced",
         services=services_state
     )
+
+# ENHANCEMENT 2: Simple /metrics endpoint (system stats)
+@app.get("/metrics")
+async def metrics():
+    """Simple metrics endpoint for monitoring and dashboard"""
+    try:
+        # Get basic system metrics
+        stats = simple_metrics.get_stats()
+        
+        # Add service-specific metrics
+        ollama_stats = ollama_client.get_stats() if ollama_client else {}
+        
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "service": "enhanced-llm-proxy",
+            "version": "3.1.0-enhanced",
+            
+            # Performance metrics
+            "performance": {
+                "uptime_seconds": stats["uptime_seconds"],
+                "total_requests": stats["total_requests"],
+                "requests_per_minute": stats["total_requests"] / max(1, stats["uptime_seconds"] / 60),
+                "error_rate": stats["error_rate"],
+                "avg_response_time_ms": stats["avg_response_time_ms"]
+            },
+            
+            # System resources
+            "system": stats["system"],
+            
+            # Model usage
+            "models": {
+                "available": services_state.get("available_models", []),
+                "usage_counts": stats["model_usage"]
+            },
+            
+            # Service health
+            "services": {
+                "ollama_connected": services_state.get("ollama_connected", False),
+                "ollama_requests": ollama_stats.get("total_requests", 0),
+                "ollama_success_rate": (
+                    ollama_stats.get("successful_requests", 0) / 
+                    max(1, ollama_stats.get("total_requests", 1))
+                ),
+                "dashboard_available": services_state.get("dashboard_available", False),
+                "websocket_sessions": len(websocket_sessions)
+            },
+            
+            # Feature flags
+            "features": {
+                "authentication": settings.ENABLE_AUTH,
+                "debug_mode": settings.DEBUG,
+                "dashboard": settings.ENABLE_DASHBOARD,
+                "websocket": settings.ENABLE_WEBSOCKET
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error generating metrics: {e}")
+        return {
+            "error": "Failed to generate metrics",
+            "timestamp": datetime.now().isoformat(),
+            "message": str(e)
+        }
 
 @app.get("/v1/models")
 async def list_models():
@@ -672,10 +859,71 @@ async def api_status():
         features={
             "authentication": settings.ENABLE_AUTH,
             "dashboard": settings.ENABLE_DASHBOARD,
-            "websocket": settings.ENABLE_WEBSOCKET
+            "websocket": settings.ENABLE_WEBSOCKET,
+            "debug_mode": settings.DEBUG
         },
         timestamp=datetime.now().isoformat()
     )
+
+# ENHANCEMENT 1: Catch-all SPA route (client-side routing)
+if dashboard_dir and settings.ENABLE_DASHBOARD:
+    @app.get("/app/{path:path}")
+    async def serve_dashboard_spa(path: str = ""):
+        """Serve dashboard with SPA routing support"""
+        try:
+            # Handle static files first
+            if path and "." in path:
+                file_path = dashboard_dir / path
+                if file_path.exists() and file_path.is_file():
+                    return FileResponse(file_path)
+            
+            # For all other routes, serve index.html (SPA routing)
+            index_path = dashboard_dir / "index.html"
+            if index_path.exists():
+                return FileResponse(index_path)
+            else:
+                return JSONResponse({
+                    "error": "Dashboard not found",
+                    "message": "React app not built yet",
+                    "instructions": [
+                        "cd frontend",
+                        "npm install",
+                        "npm run build"
+                    ]
+                })
+                
+        except Exception as e:
+            logger.error(f"Dashboard serving error: {e}")
+            return JSONResponse({
+                "error": "Dashboard error",
+                "message": str(e)
+            })
+    
+    # Catch-all route for SPA (must be last)
+    @app.get("/{path:path}")
+    async def catch_all_spa(path: str):
+        """Catch-all route for SPA client-side routing"""
+        
+        # Skip API routes and system paths
+        api_prefixes = [
+            "v1/", "api/", "health", "metrics", "models", 
+            "docs", "redoc", "openapi.json", "ws/", 
+            "auth/", "favicon.ico", "static/", "admin/"
+        ]
+        
+        # Don't interfere with API routes
+        if any(path.startswith(prefix) for prefix in api_prefixes):
+            raise HTTPException(status_code=404, detail=f"Endpoint not found: {path}")
+        
+        # Serve SPA for all other routes
+        index_path = dashboard_dir / "index.html"
+        if index_path.exists():
+            return FileResponse(index_path)
+        else:
+            return JSONResponse({
+                "error": "Dashboard not available",
+                "message": "Please build the React dashboard first"
+            })
 
 # Error handlers
 @app.exception_handler(HTTPException)
@@ -694,6 +942,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
+    simple_metrics.track_error()
     logger.error(f"Unhandled exception: {str(exc)}")
     return JSONResponse(
         status_code=500,
@@ -708,10 +957,18 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 if __name__ == "__main__":
-    logger.info(f"🚀 Starting Complete LLM Proxy")
+    logger.info(f"🚀 Starting Enhanced LLM Proxy")
     logger.info(f"📍 Server: http://{settings.HOST}:{settings.PORT}")
     logger.info(f"📊 Dashboard: http://{settings.HOST}:{settings.PORT}/app")
     logger.info(f"🔌 WebSocket: ws://{settings.HOST}:{settings.PORT}/ws/dashboard")
+    logger.info(f"📈 Metrics: http://{settings.HOST}:{settings.PORT}/metrics")
+    logger.info(f"🐛 Debug Mode: {settings.DEBUG}")
+    
+    if settings.DEBUG:
+        logger.info(f"📚 API Docs: http://{settings.HOST}:{settings.PORT}/docs")
+        logger.info(f"📖 ReDoc: http://{settings.HOST}:{settings.PORT}/redoc")
+    else:
+        logger.info("🔒 API documentation disabled in production mode")
     
     uvicorn.run(
         "main:app",
