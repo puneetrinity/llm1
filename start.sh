@@ -1,133 +1,118 @@
 #!/bin/bash
-# start.sh - Enhanced LLM Proxy Startup Script
-# Maintainable startup process with proper error handling
 
-set -e
+# start.sh - LLM Proxy Server Startup Script
 
-# Colors for output
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+set -e  # Exit on any error
 
-log_info() { echo -e "${BLUE}ℹ️  $1${NC}"; }
-log_success() { echo -e "${GREEN}✅ $1${NC}"; }
-log_warning() { echo -e "${YELLOW}⚠️  $1${NC}"; }
-log_error() { echo -e "${RED}❌ $1${NC}"; }
-
-echo "🚀 Starting Comprehensive Enhanced LLM Proxy..."
+echo "🚀 Starting Complete LLM Proxy Server..."
 echo "=============================================="
 
-# Export GPU environment variables
-export CUDA_VISIBLE_DEVICES=0
-export NVIDIA_VISIBLE_DEVICES=all
-export OLLAMA_HOST=0.0.0.0:11434
-
-# Verify GPU detection
-log_info "Checking GPU availability..."
-if nvidia-smi; then
-    log_success "GPU detected and accessible"
-else
-    log_warning "GPU detection may have issues - continuing with CPU mode"
-fi
-
-# Start Ollama service
-log_info "Starting Ollama service..."
-CUDA_VISIBLE_DEVICES=0 ollama serve &
-OLLAMA_PID=$!
-
-# Wait for Ollama with comprehensive timeout
-log_info "Waiting for Ollama to start (up to 5 minutes)..."
-OLLAMA_READY=false
-for i in {1..60}; do
-    if curl -f http://localhost:11434/api/tags >/dev/null 2>&1; then
-        log_success "Ollama is ready!"
-        OLLAMA_READY=true
-        break
-    fi
-    echo "   Attempt $i/60 - waiting 5 seconds..."
-    sleep 5
-done
-
-# Verify Ollama started successfully
-if [ "$OLLAMA_READY" = false ]; then
-    log_error "Failed to start Ollama service after 5 minutes"
-    log_info "Attempting fallback startup..."
-    pkill ollama || true
-    sleep 5
-    ollama serve &
-    sleep 30
-    
-    # Final check
-    if ! curl -f http://localhost:11434/api/tags >/dev/null 2>&1; then
-        log_error "Ollama fallback startup also failed"
-        log_warning "Continuing without Ollama - some features will be limited"
-    else
-        log_success "Ollama fallback startup successful"
-    fi
-else
-    log_success "Ollama service started successfully"
-fi
-
-# Pull essential models in background
-log_info "Pulling essential models in background..."
-{
-    CUDA_VISIBLE_DEVICES=0 ollama pull mistral:7b-instruct-q4_0 >/dev/null 2>&1 &
-} || {
-    log_warning "Model pull failed - models will be downloaded on first use"
+# Function to check if a command exists
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
 }
 
-# Create default .env if not exists
-if [ ! -f .env ]; then
-    log_info "Creating default environment configuration..."
-    echo 'PORT=8001' > .env
-    log_success "Default .env created"
+# Function to check if a port is in use
+port_in_use() {
+    netstat -tulpn 2>/dev/null | grep ":$1 " >/dev/null
+}
+
+# Environment setup
+export PYTHONPATH="/app:$PYTHONPATH"
+export PYTHONUNBUFFERED=1
+
+# Default environment variables (can be overridden)
+export ENABLE_AUTH=${ENABLE_AUTH:-false}
+export ENABLE_WEBSOCKET_DASHBOARD=${ENABLE_WEBSOCKET_DASHBOARD:-false}
+export HOST=${HOST:-0.0.0.0}
+export PORT=${PORT:-8001}
+export LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+echo "📋 Configuration:"
+echo "   Host: $HOST"
+echo "   Port: $PORT"
+echo "   Auth Enabled: $ENABLE_AUTH"
+echo "   WebSocket Dashboard: $ENABLE_WEBSOCKET_DASHBOARD"
+echo "   Log Level: $LOG_LEVEL"
+
+# Check if Python is available
+if ! command_exists python3; then
+    echo "❌ Python3 is not installed!"
+    exit 1
 fi
 
-# Verify application files
-log_info "Verifying application structure..."
-if [ ! -f "main_master.py" ] && [ ! -f "main.py" ]; then
-    log_error "Main application file not found!"
-    log_info "Looking for alternative entry points..."
+# Check if required files exist
+if [ ! -f "/app/main_master.py" ] && [ ! -f "/app/main.py" ]; then
+    echo "❌ No main application file found (main_master.py or main.py)!"
+    exit 1
+fi
+
+# Determine which main file to use
+MAIN_FILE=""
+if [ -f "/app/main_master.py" ]; then
+    MAIN_FILE="main_master"
+    echo "✅ Using main_master.py"
+elif [ -f "/app/main.py" ]; then
+    MAIN_FILE="main"
+    echo "✅ Using main.py"
+fi
+
+# Check if port is already in use
+if port_in_use $PORT; then
+    echo "⚠️  Port $PORT is already in use. Trying to kill existing processes..."
+    pkill -f "uvicorn.*$PORT" || true
+    sleep 2
     
-    # Try to find any Python main file
-    MAIN_FILE=$(find . -name "*main*.py" -o -name "app.py" -o -name "server.py" | head -1)
-    if [ -n "$MAIN_FILE" ]; then
-        log_warning "Using alternative entry point: $MAIN_FILE"
-        PYTHON_MAIN="$MAIN_FILE"
-    else
-        log_error "No suitable Python entry point found"
+    if port_in_use $PORT; then
+        echo "❌ Port $PORT is still in use after cleanup. Exiting..."
         exit 1
     fi
-else
-    # Use the standard main file
-    if [ -f "main_master.py" ]; then
-        PYTHON_MAIN="main_master.py"
-    else
-        PYTHON_MAIN="main.py"
-    fi
 fi
 
-# Final system status
-log_info "System Status Summary:"
-echo "   • GPU Available: $(nvidia-smi >/dev/null 2>&1 && echo "Yes" || echo "No")"
-echo "   • Ollama Ready: $(curl -s http://localhost:11434/api/tags >/dev/null 2>&1 && echo "Yes" || echo "No")"
-echo "   • Python Entry: $PYTHON_MAIN"
-echo "   • Memory Limit: ${MAX_MEMORY_MB:-12288}MB"
-echo "   • Enhanced Features: $([ "$ENABLE_SEMANTIC_CLASSIFICATION" = "true" ] && echo "Enabled" || echo "Disabled")"
+# Create required directories
+mkdir -p /app/logs /app/cache /app/models /app/data /app/static
 
-# Start the comprehensive FastAPI application
-log_success "Starting Enhanced FastAPI application..."
-log_info "✅ System Ready: http://localhost:8001"
-log_info "📚 API Documentation: http://localhost:8001/docs"
-log_info "🏥 Health Check: http://localhost:8001/health"
-log_info "📊 Metrics: http://localhost:8001/metrics"
+# Start Ollama in background if not running
+if ! pgrep -x "ollama" > /dev/null; then
+    echo "🤖 Starting Ollama..."
+    ollama serve > /app/logs/ollama.log 2>&1 &
+    sleep 5
+fi
 
-echo ""
+# Test Python import
+echo "🔍 Testing Python imports..."
+cd /app
+if ! python3 -c "import $MAIN_FILE" 2>/dev/null; then
+    echo "❌ Failed to import $MAIN_FILE. Checking for errors..."
+    python3 -c "import $MAIN_FILE" || {
+        echo "❌ Import failed. Check the logs above for errors."
+        exit 1
+    }
+fi
+echo "✅ Python imports successful"
+
+# Check if dashboard files exist
+if [ -f "/app/frontend/build/index.html" ]; then
+    echo "✅ Dashboard files found"
+else
+    echo "⚠️  Dashboard files not found, will use fallback"
+fi
+
+echo "🚀 Starting uvicorn server..."
+echo "📍 Server will be available at: http://$HOST:$PORT"
+echo "📊 Dashboard will be available at: http://$HOST:$PORT/app"
+echo "📚 API docs will be available at: http://$HOST:$PORT/docs"
 echo "=============================================="
-echo "🌐 Enhanced LLM Proxy is now running!"
-echo "=============================================="
 
-# Execute the main application
-exec python3 "$PYTHON_MAIN"
+# Start the server with proper error handling
+exec python3 -m uvicorn ${MAIN_FILE}:app \
+    --host $HOST \
+    --port $PORT \
+    --log-level $(echo $LOG_LEVEL | tr '[:upper:]' '[:lower:]') \
+    --access-log \
+    --reload \
+    --reload-dir /app \
+    --reload-exclude "logs/*" \
+    --reload-exclude "cache/*" \
+    --reload-exclude "models/*" \
+    --timeout-keep-alive 30
