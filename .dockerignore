@@ -97,9 +97,6 @@ backup_*/
 *_EXISTING_*
 
 # Old/conflicting files
-main.py
-main_fixed.py
-main_with_react.py
 config_*.py
 build_*.sh
 react_*.sh
