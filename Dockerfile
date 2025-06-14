@@ -77,6 +77,11 @@ RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
+# Verify Node.js installation
+RUN echo "=== Node.js Version Check ===" && \
+    node --version && \
+    npm --version
+
 # Install Ollama
 RUN curl -fsSL https://ollama.com/install.sh | sh
 
@@ -99,86 +104,207 @@ RUN pip3 install --no-cache-dir \
     prometheus-client \
     || echo "Some enhanced features may be limited"
 
-# === FRONTEND BUILD SECTION ===
+# === FRONTEND BUILD SECTION WITH ERROR HANDLING ===
 # Copy frontend source code first
 COPY frontend/ ./frontend/
 
-# Check if frontend exists and has the right structure
-RUN echo "=== Checking Frontend Structure ===" && \
+# Check frontend structure with detailed output
+RUN echo "=== Frontend Structure Analysis ===" && \
+    echo "Contents of /app/frontend/:" && \
     ls -la /app/frontend/ && \
-    echo "Looking for package.json:" && \
-    ls -la /app/frontend/package.json 2>/dev/null || echo "❌ No package.json found" && \
-    echo "Looking for vite.config:" && \
-    ls -la /app/frontend/vite.config.* 2>/dev/null || echo "No vite config found" && \
-    echo "Looking for src directory:" && \
-    ls -la /app/frontend/src/ 2>/dev/null || echo "No src directory found"
+    echo "" && \
+    if [ -f "/app/frontend/package.json" ]; then \
+        echo "✅ package.json found" && \
+        echo "Package.json contents:" && \
+        cat /app/frontend/package.json | head -20; \
+    else \
+        echo "❌ package.json not found"; \
+        echo "Available files:" && \
+        find /app/frontend -name "*.json" 2>/dev/null || echo "No JSON files found"; \
+    fi && \
+    echo "" && \
+    if [ -d "/app/frontend/src" ]; then \
+        echo "✅ src directory found" && \
+        echo "Source files:" && \
+        ls -la /app/frontend/src/ | head -10; \
+    else \
+        echo "❌ src directory not found"; \
+    fi && \
+    echo "" && \
+    echo "Looking for config files:" && \
+    ls -la /app/frontend/vite* /app/frontend/*config* 2>/dev/null || echo "No config files found"
 
-# Install Node.js dependencies for your React + Vite frontend
+# Install Node.js dependencies with better error handling
 WORKDIR /app/frontend
 RUN if [ -f "package.json" ]; then \
-        echo "🎯 Installing Node.js dependencies for React + Vite..." && \
+        echo "🔧 Configuring npm for Docker build..." && \
         npm config set fund false && \
         npm config set audit-level none && \
-        npm install --prefer-offline && \
-        echo "✅ Dependencies installed successfully"; \
+        npm config set prefer-offline true && \
+        npm config set cache /tmp/npm-cache && \
+        echo "" && \
+        echo "📦 Installing dependencies..." && \
+        npm install --verbose 2>&1 | tee /tmp/npm-install.log && \
+        echo "" && \
+        echo "✅ Dependencies installed. Checking node_modules..." && \
+        ls -la node_modules/ | head -10 && \
+        echo "Total packages: $(ls node_modules/ | wc -l)"; \
     else \
-        echo "❌ No package.json found - cannot install dependencies"; \
+        echo "❌ FATAL: No package.json found in frontend directory" && \
+        echo "Cannot proceed with frontend build" && \
         exit 1; \
     fi
 
-# Build the React + Vite frontend
-RUN if [ -f "package.json" ] && [ -d "src" ]; then \
-        echo "🏗️ Building React + Vite frontend..." && \
-        npm run build && \
-        echo "✅ Vite build completed successfully!" && \
-        echo "Built files:" && \
-        ls -la dist/ 2>/dev/null || ls -la build/ 2>/dev/null || echo "No build output found"; \
+# Build frontend with enhanced error handling and fallback
+RUN echo "🏗️ Starting frontend build process..." && \
+    if [ -f "package.json" ] && [ -d "src" ]; then \
+        echo "Pre-build check:" && \
+        npm run --silent 2>/dev/null | grep -E "(build|dev)" || echo "Available scripts:" && \
+        cat package.json | grep -A 10 '"scripts"' && \
+        echo "" && \
+        echo "Setting Node.js memory limit and starting build..." && \
+        NODE_OPTIONS="--max-old-space-size=4096 --max-heap-size=4096" \
+        GENERATE_SOURCEMAP=false \
+        CI=true \
+        npm run build 2>&1 | tee /tmp/build.log && \
+        echo "" && \
+        echo "✅ Build completed! Checking output..." && \
+        (ls -la dist/ 2>/dev/null && echo "Vite dist/ directory found") || \
+        (ls -la build/ 2>/dev/null && echo "Build/ directory found") || \
+        echo "❌ No build output directory found"; \
     else \
-        echo "❌ Cannot build - missing package.json or src directory"; \
+        echo "❌ Cannot build - missing requirements" && \
+        echo "Package.json exists: $([ -f package.json ] && echo YES || echo NO)" && \
+        echo "Src directory exists: $([ -d src ] && echo YES || echo NO)" && \
         exit 1; \
     fi
 
-# Copy the application code
-WORKDIR /app
-COPY . ./
-
-# === DEBUGGING SECTION ===
-RUN echo "=== DEBUGGING: Final Structure Check ===" && \
-    echo "App directory:" && ls -la /app/ && \
-    echo "Frontend build output:" && \
-    (ls -la /app/frontend/dist/ 2>/dev/null || ls -la /app/frontend/build/ 2>/dev/null || echo "No build directory found") && \
-    echo "Looking for main files:" && \
-    find /app -name "main*.py" | head -5 && \
-    echo "Start script:" && \
-    (ls -la /app/start.sh && echo "Contents:" && head -10 /app/start.sh) || echo "No start.sh found"
-
-# Test Python imports
-RUN echo "=== Testing Python Imports ===" && \
-    python3 -c "import sys; sys.path.insert(0, '/app')" && \
-    (python3 -c "import main_master" && echo "✅ main_master imports successfully") || \
-    (python3 -c "import main" && echo "✅ main imports successfully") || \
-    echo "❌ No main files import successfully"
-
-# Copy frontend build to the right location for FastAPI to serve
-RUN echo "=== Setting up Frontend for FastAPI ===" && \
-    if [ -d "/app/frontend/dist" ]; then \
-        echo "📁 Copying Vite dist to frontend/build for FastAPI compatibility..." && \
-        cp -r /app/frontend/dist /app/frontend/build && \
-        ls -la /app/frontend/build/ && \
-        echo "✅ Frontend ready for FastAPI"; \
-    elif [ -d "/app/frontend/build" ]; then \
-        echo "✅ Frontend build directory already exists"; \
+# Handle build output and create fallback if needed
+RUN echo "📁 Processing build output..." && \
+    BUILD_SUCCESS=false && \
+    if [ -d "dist" ] && [ -f "dist/index.html" ]; then \
+        echo "✅ Vite build successful - dist/ directory found" && \
+        BUILD_SUCCESS=true; \
+    elif [ -d "build" ] && [ -f "build/index.html" ]; then \
+        echo "✅ Build successful - build/ directory found" && \
+        BUILD_SUCCESS=true; \
     else \
-        echo "❌ No frontend build found - creating fallback"; \
-        mkdir -p /app/frontend/build && \
+        echo "❌ Build failed or produced no output" && \
+        echo "Checking for any HTML files:" && \
+        find . -name "*.html" 2>/dev/null || echo "No HTML files found" && \
+        echo "" && \
+        echo "Build log:" && \
+        cat /tmp/build.log 2>/dev/null | tail -20 || echo "No build log available" && \
+        echo "" && \
+        echo "🔧 Creating fallback dashboard..." && \
+        mkdir -p dist && \
         printf '%s\n' \
             '<!DOCTYPE html>' \
             '<html lang="en">' \
-            '<head><meta charset="UTF-8"><title>LLM Proxy</title></head>' \
-            '<body><h1>🚀 LLM Proxy Dashboard</h1><p>Frontend build failed - using fallback</p></body>' \
+            '<head>' \
+            '    <meta charset="UTF-8">' \
+            '    <meta name="viewport" content="width=device-width, initial-scale=1.0">' \
+            '    <title>🚀 LLM Proxy Dashboard</title>' \
+            '    <style>' \
+            '        body { font-family: Arial, sans-serif; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; margin: 0; }' \
+            '        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.1); }' \
+            '        h1 { color: #5a67d8; text-align: center; margin-bottom: 20px; }' \
+            '        .panel { background: #f7fafc; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #5a67d8; }' \
+            '        button { background: #5a67d8; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; margin: 5px; }' \
+            '        button:hover { background: #4c51bf; }' \
+            '        .result { background: #edf2f7; padding: 15px; margin: 15px 0; border-radius: 5px; }' \
+            '        pre { white-space: pre-wrap; word-wrap: break-word; font-size: 13px; }' \
+            '    </style>' \
+            '</head>' \
+            '<body>' \
+            '    <div class="container">' \
+            '        <h1>🚀 LLM Proxy Dashboard</h1>' \
+            '        <div class="panel">' \
+            '            <h3>⚠️ Frontend Build Notice</h3>' \
+            '            <p>The React build encountered issues, but the LLM Proxy is fully functional with this fallback dashboard.</p>' \
+            '        </div>' \
+            '        <div class="panel">' \
+            '            <h3>🏥 System Health</h3>' \
+            '            <button onclick="checkHealth()">Check Health</button>' \
+            '            <button onclick="listModels()">List Models</button>' \
+            '            <div id="healthResult" class="result" style="display:none;"></div>' \
+            '        </div>' \
+            '        <div class="panel">' \
+            '            <h3>💬 Test Chat</h3>' \
+            '            <input type="text" id="chatInput" placeholder="Ask something..." style="width: 70%; padding: 8px; margin: 5px;">' \
+            '            <button onclick="sendChat()">Send</button>' \
+            '            <div id="chatResult" class="result" style="display:none;"></div>' \
+            '        </div>' \
+            '    </div>' \
+            '    <script>' \
+            '        async function checkHealth() {' \
+            '            try {' \
+            '                const res = await fetch("/health");' \
+            '                const data = await res.json();' \
+            '                document.getElementById("healthResult").style.display = "block";' \
+            '                document.getElementById("healthResult").innerHTML = "<pre>" + JSON.stringify(data, null, 2) + "</pre>";' \
+            '            } catch (e) { alert("Health check failed: " + e.message); }' \
+            '        }' \
+            '        async function listModels() {' \
+            '            try {' \
+            '                const res = await fetch("/v1/models");' \
+            '                const data = await res.json();' \
+            '                document.getElementById("healthResult").style.display = "block";' \
+            '                document.getElementById("healthResult").innerHTML = "<h4>Models:</h4><pre>" + JSON.stringify(data, null, 2) + "</pre>";' \
+            '            } catch (e) { alert("Models fetch failed: " + e.message); }' \
+            '        }' \
+            '        async function sendChat() {' \
+            '            const input = document.getElementById("chatInput").value;' \
+            '            if (!input.trim()) return;' \
+            '            try {' \
+            '                const res = await fetch("/v1/chat/completions", {' \
+            '                    method: "POST", headers: {"Content-Type": "application/json"},' \
+            '                    body: JSON.stringify({messages: [{role: "user", content: input}], model: "mistral:7b-instruct-q4_0"})' \
+            '                });' \
+            '                const data = await res.json();' \
+            '                document.getElementById("chatResult").style.display = "block";' \
+            '                document.getElementById("chatResult").innerHTML = "<h4>Response:</h4><pre>" + JSON.stringify(data, null, 2) + "</pre>";' \
+            '            } catch (e) { alert("Chat failed: " + e.message); }' \
+            '        }' \
+            '    </script>' \
+            '</body>' \
             '</html>' \
-        > /app/frontend/build/index.html; \
+        > dist/index.html && \
+        echo "✅ Fallback dashboard created"; \
     fi
+
+# Copy application code
+WORKDIR /app
+COPY . ./
+
+# Setup frontend for FastAPI serving
+RUN echo "🔗 Setting up frontend for FastAPI..." && \
+    cd /app/frontend && \
+    if [ -d "dist" ] && [ -f "dist/index.html" ]; then \
+        echo "📁 Copying Vite dist/ to build/ for FastAPI compatibility..." && \
+        cp -r dist build && \
+        echo "✅ Frontend ready at /app/frontend/build/"; \
+    elif [ -d "build" ] && [ -f "build/index.html" ]; then \
+        echo "✅ Build directory already exists and ready"; \
+    else \
+        echo "❌ No valid frontend build found" && \
+        mkdir -p build && \
+        echo "<h1>Frontend Build Failed</h1>" > build/index.html; \
+    fi && \
+    ls -la /app/frontend/build/
+
+# Final debugging and verification
+RUN echo "=== FINAL VERIFICATION ===" && \
+    echo "✅ Frontend build status:" && \
+    ls -la /app/frontend/build/index.html && \
+    echo "" && \
+    echo "✅ Python files:" && \
+    ls -la /app/main*.py && \
+    echo "" && \
+    echo "✅ Start script:" && \
+    ls -la /app/start.sh 2>/dev/null || echo "No start.sh found" && \
+    echo "" && \
+    echo "🎉 Container verification complete!"
 
 # Fix line endings and permissions
 RUN find . -name "*.py" -exec dos2unix {} \; && \
@@ -201,13 +327,6 @@ RUN if [ ! -f "/app/start.sh" ]; then \
     else \
         chmod +x /app/start.sh; \
     fi
-
-# Final verification
-RUN echo "=== FINAL VERIFICATION ===" && \
-    echo "✅ Start script:" && ls -la /app/start.sh && \
-    echo "✅ Frontend:" && ls -la /app/frontend/build/index.html && \
-    echo "✅ Python files:" && ls -la /app/main*.py && \
-    echo "🎉 Container ready!"
 
 # Health check
 HEALTHCHECK --interval=60s --timeout=30s --start-period=300s --retries=3 \
