@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # Main LLM Proxy Application
+  # Main LLM Proxy Application (React + FastAPI)
   llm-proxy:
     build:
       context: .
@@ -26,7 +26,7 @@ services:
       - OLLAMA_TIMEOUT=300
       - DEFAULT_MODEL=mistral:7b-instruct-q4_0
       
-      # Security
+      # Security (Development)
       - ENABLE_AUTH=false
       - DEFAULT_API_KEY=sk-dev-key
       
@@ -34,11 +34,15 @@ services:
       - ENABLE_STREAMING=true
       - ENABLE_WEBSOCKET=true
       
+      # Redis Configuration
+      - REDIS_URL=redis://redis:6379
+      
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
     depends_on:
       - ollama
+      - redis
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
@@ -67,7 +71,7 @@ services:
     #           count: all
     #           capabilities: [gpu]
 
-  # Redis (Optional - for enhanced features)
+  # Redis for Caching
   redis:
     image: redis:7-alpine
     container_name: llm-proxy-redis
@@ -76,7 +80,7 @@ services:
     volumes:
       - redis_data:/data
     restart: unless-stopped
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 30s
