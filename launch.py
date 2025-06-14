@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-"""
-launch.py - Enhanced 4-Model LLM Proxy Launcher
-Start your advanced AI routing system with all features enabled
-"""
-
 import os
 import sys
 import signal
