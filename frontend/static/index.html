@@ -1,94 +1,87 @@
-// frontend/public/index.html
-/*
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <link rel="icon" href="/favicon.ico" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#000000" />
-    <meta name="description" content="LLM Proxy Dashboard - Real-time metrics and chat interface" />
-    <title>LLM Proxy Dashboard</title>
-    <style>
-      /* Loading styles */
-      #loading {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 9999;
-        color: white;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      }
-      
-      .loading-content {
-        text-align: center;
-      }
-      
-      .loading-spinner {
-        width: 50px;
-        height: 50px;
-        border: 3px solid rgba(255,255,255,0.3);
-        border-top: 3px solid white;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-        margin: 0 auto 1rem;
-      }
-      
-      @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-      }
-    </style>
-  </head>
-  <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#667eea" />
+  <meta name="description" content="LLM Proxy Dashboard - Real-time metrics and chat interface" />
+  <title>LLM Proxy Dashboard</title>
+  <link rel="icon" href="/favicon.ico" />
+  <style>
+    /* Loading styles */
+    #loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      color: white;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
     
-    <!-- Loading screen -->
-    <div id="loading">
-      <div class="loading-content">
-        <div class="loading-spinner"></div>
-        <h2>🚀 Loading LLM Proxy Dashboard</h2>
-        <p>Initializing real-time metrics and chat interface...</p>
-      </div>
+    .loading-content {
+      text-align: center;
+    }
+    
+    .loading-spinner {
+      width: 50px;
+      height: 50px;
+      border: 3px solid rgba(255,255,255,0.3);
+      border-top: 3px solid white;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 1rem;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <noscript>You need to enable JavaScript to run this app.</noscript>
+  
+  <!-- Loading screen -->
+  <div id="loading">
+    <div class="loading-content">
+      <div class="loading-spinner"></div>
+      <h2>🚀 Loading LLM Proxy Dashboard</h2>
+      <p>Initializing real-time metrics and chat interface...</p>
     </div>
+  </div>
+  
+  <!-- React app container -->
+  <div id="root"></div>
+  
+  <script type="module" src="/src/index.js"></script>
+  
+  <script>
+    // Hide loading screen when React app loads
+    window.addEventListener('load', function() {
+      setTimeout(function() {
+        const loading = document.getElementById('loading');
+        if (loading) {
+          loading.style.opacity = '0';
+          loading.style.transition = 'opacity 0.5s ease';
+          setTimeout(() => loading.remove(), 500);
+        }
+      }, 1000);
+    });
     
-    <!-- React app container -->
-    <div id="root"></div>
-    
-    <script>
-      // Hide loading screen when React app loads
-      window.addEventListener('load', function() {
-        setTimeout(function() {
-          const loading = document.getElementById('loading');
-          if (loading) {
-            loading.style.opacity = '0';
-            loading.style.transition = 'opacity 0.5s ease';
-            setTimeout(() => loading.remove(), 500);
-          }
-        }, 1000);
-      });
-    </script>
-  </body>
+    // Error handling
+    window.addEventListener('error', function(e) {
+      console.error('App error:', e);
+    });
+
+    window.addEventListener('unhandledrejection', function(e) {
+      console.error('Unhandled promise rejection:', e);
+    });
+  </script>
+</body>
 </html>
-*/
-
-// frontend/src/favicon.ico (base64 encoded)
-const faviconData = "data:image/x-icon;base64,AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAA...";
-
-// You can replace this with a proper favicon file
-console.log("React app entry point loaded");
-
-// Error boundary for production
-window.addEventListener('error', function(e) {
-  console.error('App error:', e);
-});
-
-window.addEventListener('unhandledrejection', function(e) {
-  console.error('Unhandled promise rejection:', e);
-});
