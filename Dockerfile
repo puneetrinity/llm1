@@ -1,11 +1,22 @@
-# Multi-arch Dockerfile - Uses CUDA on AMD64, Ubuntu on ARM64
-# Frontend build stage
-FROM node:18-slim AS frontend-build
+# Fixed Multi-arch Dockerfile with proper frontend build
+# Frontend build stage - Fixed
+FROM node:18 AS frontend-build
 
 WORKDIR /app/frontend
+
+# Install build dependencies that might be needed
+RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
+
+# Copy package files
 COPY frontend/package*.json ./
-RUN npm ci --silent
+
+# Install dependencies with better error handling
+RUN npm ci --verbose
+
+# Copy frontend source
 COPY frontend/ ./
+
+# Build with error handling
 RUN npm run build && test -f build/index.html
 
 # Conditional base image based on architecture
@@ -46,7 +57,26 @@ ENV ENABLE_SEMANTIC_CLASSIFICATION=false \
     ENABLE_DASHBOARD=true \
     ENABLE_WEBSOCKET_DASHBOARD=false
 
-# Core settings
+# Dashboard configuration
+ENV DASHBOARD_PATH=/app/static \
+    ENABLE_REACT_DASHBOARD=true
+
+# Performance and caching
+ENV ENABLE_REDIS_CACHE=true \
+    REDIS_URL=redis://localhost:6379 \
+    ENABLE_SEMANTIC_CACHE=true \
+    SEMANTIC_SIMILARITY_THRESHOLD=0.85
+
+# Security settings
+ENV ENABLE_AUTH=false \
+    CORS_ORIGINS='["*"]'
+
+# Advanced features
+ENV ENABLE_CIRCUIT_BREAKER=true \
+    ENABLE_CONNECTION_POOLING=true \
+    ENABLE_PERFORMANCE_MONITORING=true
+
+# Core application settings
 ENV HOST=0.0.0.0 \
     PORT=8001 \
     LOG_LEVEL=INFO \
@@ -75,12 +105,14 @@ RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
 # Install Ollama
 RUN curl -fsSL https://ollama.com/install.sh | sh
 
-# Copy requirements and install Python dependencies
+# Copy Python requirements first
 COPY requirements.txt ./
+
+# Install Python dependencies
 RUN pip3 install --no-cache-dir --upgrade pip && \
     pip3 install --no-cache-dir -r requirements.txt
 
-# Install enhanced dependencies with error handling
+# Install enhanced Python dependencies with error handling
 RUN pip3 install --no-cache-dir \
     sentence-transformers>=2.2.0 \
     faiss-cpu==1.7.4 \
@@ -92,19 +124,92 @@ RUN pip3 install --no-cache-dir \
     prometheus-client \
     || echo "Some enhanced features may be limited"
 
-# Copy built frontend
+# Copy built frontend from previous stage
 COPY --from=frontend-build /app/frontend/build ./frontend/build
 
-# Copy application code
+# Copy frontend source code
+COPY frontend/ ./frontend/
+
+# Verify the fixed package.json
+RUN echo "=== Verifying Fixed package.json ===" && \
+    echo "Checking for dependency resolutions..." && \
+    if grep -q "resolutions\|overrides" /app/frontend/package.json; then \
+        echo "✅ Dependency resolutions found in package.json" && \
+        echo "Resolutions:" && \
+        grep -A 10 '"resolutions"' /app/frontend/package.json 2>/dev/null || echo "No resolutions section" && \
+        echo "Overrides:" && \
+        grep -A 10 '"overrides"' /app/frontend/package.json 2>/dev/null || echo "No overrides section"; \
+    else \
+        echo "⚠️ No dependency resolutions found - may still have ajv conflicts"; \
+    fi
+
+# Install dependencies with the fixed package.json
+WORKDIR /app/frontend
+RUN echo "📦 Installing frontend dependencies..." && \
+    npm config set fund false && \
+    npm config set audit-level none && \
+    echo "" && \
+    echo "Using npm install with resolved dependencies..." && \
+    npm install 2>&1 | tee /tmp/npm-install.log && \
+    echo "" && \
+    echo "✅ Dependencies installed. Checking ajv resolution..." && \
+    if [ -d "node_modules/ajv" ]; then \
+        echo "AJV version installed:" && \
+        cat node_modules/ajv/package.json | grep '"version"' | head -1 && \
+        echo "Checking ajv structure..." && \
+        if [ -f "node_modules/ajv/dist/compile/codegen/index.js" ] || [ -f "node_modules/ajv/dist/compile/codegen.js" ]; then \
+            echo "✅ AJV codegen found - dependency conflict resolved"; \
+        else \
+            echo "⚠️ AJV codegen structure:" && \
+            find node_modules/ajv -name "*codegen*" 2>/dev/null | head -5 || echo "No codegen files found"; \
+        fi; \
+    else \
+        echo "❌ AJV not installed"; \
+    fi && \
+    if [ -d "node_modules/ajv-keywords" ]; then \
+        echo "AJV-Keywords version:" && \
+        cat node_modules/ajv-keywords/package.json | grep '"version"' | head -1; \
+    fi
+
+# Build the frontend
+RUN echo "🏗️ Building frontend..." && \
+    echo "Setting up build environment..." && \
+    export NODE_OPTIONS="--max-old-space-size=4096" && \
+    export GENERATE_SOURCEMAP=false && \
+    export CI=true && \
+    echo "" && \
+    echo "🚀 Running vite build..." && \
+    npm run build 2>&1 | tee /tmp/build.log && \
+    echo "" && \
+    echo "🔍 Checking build output..." && \
+    if [ -d "build" ] && [ -f "build/index.html" ]; then \
+        echo "✅ Frontend build successful!" && \
+        echo "Build contents:" && \
+        ls -la build/ && \
+        echo "Build size:" && \
+        du -sh build/ && \
+        echo "Static assets:" && \
+        find build -name "*.js" -o -name "*.css" | wc -l && echo " files generated"; \
+    else \
+        echo "❌ Build failed!" && \
+        exit 1; \
+    fi
+
+# Move back to app directory
+WORKDIR /app
+
+# Copy Python application code
 COPY *.py ./
 
-# Create directories
+# Create necessary directories
 RUN mkdir -p data logs
 
-# Rest of your existing Dockerfile content...
+# Expose ports
 EXPOSE 8001 11434
 
+# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8001/health || exit 1
 
+# Run the application
 CMD ["python3", "main.py"]
