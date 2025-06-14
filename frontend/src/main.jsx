@@ -1,7 +1,7 @@
 // frontend/src/main.jsx - Clean entry point
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import App from './App.js'
+import App from './App.jsx'
 
 // Environment validation
 const validateEnvironment = () => {
