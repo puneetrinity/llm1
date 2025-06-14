@@ -1,5 +1,6 @@
-# requirements.txt - Comprehensive Production Requirements
-# Core FastAPI dependencies - REQUIRED
+# requirements.txt - Updated for Single Container Deployment
+
+# Core FastAPI dependencies
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 pydantic==2.5.0
@@ -8,19 +9,22 @@ python-multipart==0.0.6
 websockets>=11.0.0
 aiofiles>=23.0.0
 
-# HTTP client and async support - REQUIRED
-aiohttp==3.8.6
+# HTTP client and async support
+aiohttp==3.9.1
 httpx>=0.24.0
 
-# System monitoring - REQUIRED
+# System monitoring and utilities
 psutil==5.9.6
 
-# Enhanced Features - OPTIONAL (graceful degradation if missing)
-# Caching and Redis support
+# Static file serving (already included in FastAPI)
+# Jinja2>=3.1.0  # For template rendering if needed
+
+# Enhanced Features (Optional)
+# Redis support
 redis>=4.5.0
 aioredis>=2.0.0
 
-# Machine Learning and Semantic Features
+# Machine Learning features (for advanced routing)
 sentence-transformers>=2.2.0
 transformers>=4.21.0
 huggingface-hub>=0.20.0,<0.25.0
@@ -41,55 +45,33 @@ cryptography>=3.4.8
 # Performance monitoring
 prometheus-client>=0.19.0
 
+# Logging and utilities
+python-json-logger>=2.0.7
+click>=8.0.0
+
 # Development and testing (optional)
 pytest>=7.1.0
 pytest-asyncio>=0.21.0
 pytest-cov>=4.0.0
 
-# GPU monitoring (optional, for systems with NVIDIA GPUs)
-# GPUtil>=1.4.0  # Uncomment if you have NVIDIA GPUs and want GPU monitoring
+# CORS and security middleware (already in FastAPI)
+# python-jose[cryptography]>=3.3.0  # For JWT handling
 
-# Additional utilities
-python-json-logger>=2.0.7
-click>=8.0.0
+# Background tasks (already in FastAPI)
+# celery>=5.2.0  # If you need distributed task queue
 
-# ============================================
-# DEPLOYMENT NOTES:
-# ============================================
-# 
-# REQUIRED DEPENDENCIES (app will not start without these):
-# - fastapi, uvicorn, pydantic, aiohttp, psutil
-#
-# OPTIONAL DEPENDENCIES (graceful degradation):
-# - redis: Enables smart caching (falls back to memory cache)
-# - sentence-transformers: Enables semantic classification (falls back to rule-based)
-# - faiss-cpu: Enables vector similarity search (falls back to exact matching)
-# - sse-starlette: Enables streaming responses (falls back to regular responses)
-#
-# INSTALLATION COMMANDS:
-# 
-# Minimal installation (core features only):
-# pip install fastapi uvicorn pydantic pydantic-settings aiohttp psutil
-#
-# Full installation (all features):
-# pip install -r requirements.txt
-#
-# Docker installation with error handling:
-# pip install -r requirements.txt || echo "Some features may be limited"
-#
-# ============================================
-# FEATURE MATRIX:
-# ============================================
-#
-# ✅ Core API functionality: Always available
-# ✅ Health monitoring: Always available  
-# ✅ Basic metrics: Always available
-# ✅ React dashboard: Available if built
-# ✅ WebSocket dashboard: Always available
-# 🔄 Smart caching: Requires redis
-# 🔄 Semantic classification: Requires sentence-transformers + faiss-cpu
-# 🔄 Streaming responses: Requires sse-starlette
-# 🔄 Circuit breakers: No external dependencies (always available)
-# 🔄 Enhanced connection pooling: No external dependencies (always available)
-#
-# ============================================
+# Database support (if needed)
+# sqlalchemy>=1.4.0
+# alembic>=1.8.0
+
+# File upload and processing
+# python-magic>=0.4.27  # For file type detection
+
+# Email support (if needed)
+# fastapi-mail>=1.2.0
+
+# Rate limiting (if needed)
+# slowapi>=0.1.5
+
+# Configuration and secrets management
+# python-dotenv>=0.19.0  # For .env file support (already in pydantic-settings)
