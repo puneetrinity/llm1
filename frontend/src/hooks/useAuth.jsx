@@ -1,8 +1,8 @@
 // frontend/src/hooks/useAuth.js - Enhanced authentication hook with better error handling
 
 import { useState, useEffect, useCallback } from 'react';
-import { CONFIG } from '../utils/config.js';
-import { secureStorage } from '../utils/secureStorage.js';
+import { CONFIG } from '../utils/config.jsx';
+import { secureStorage } from '../utils/secureStorage.jsx';
 
 /**
  * Enhanced authentication hook with proper state management and error handling
