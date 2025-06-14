@@ -1,4 +1,267 @@
 /* frontend/src/App.css - Complete Dashboard Styles */
+/* Add to your existing frontend/src/App.css */
+
+/* Authentication Styles */
+.auth-required {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 60vh;
+  padding: 2rem;
+}
+
+.auth-required-content {
+  background: white;
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  text-align: center;
+  max-width: 400px;
+  width: 100%;
+}
+
+.auth-required-content h2 {
+  margin-bottom: 1rem;
+  color: #333;
+}
+
+.auth-required-content p {
+  margin-bottom: 2rem;
+  color: #666;
+  line-height: 1.6;
+}
+
+/* Header Authentication */
+.header-auth {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.auth-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.auth-status.authenticated {
+  background: rgba(255,255,255,0.1);
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.875rem;
+}
+
+.auth-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.api-key-preview {
+  font-family: 'Courier New', monospace;
+  font-size: 0.8rem;
+}
+
+.change-key-btn, .logout-btn {
+  background: rgba(255,255,255,0.2);
+  color: white;
+  border: none;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  transition: background 0.2s ease;
+}
+
+.change-key-btn:hover, .logout-btn:hover {
+  background: rgba(255,255,255,0.3);
+}
+
+/* Authentication Form */
+.auth-form {
+  width: 100%;
+}
+
+.api-key-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.form-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.api-key-input {
+  flex: 1;
+  padding: 0.75rem;
+  border: 2px solid #e1e8ed;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-family: 'Courier New', monospace;
+  transition: border-color 0.2s ease;
+}
+
+.api-key-input:focus {
+  outline: none;
+  border-color: #1da1f2;
+}
+
+.api-key-input:disabled {
+  background-color: #f8f9fa;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.auth-submit-btn {
+  background: #1da1f2;
+  color: white;
+  border: none;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  white-space: nowrap;
+  transition: background 0.2s ease;
+}
+
+.auth-submit-btn:hover:not(:disabled) {
+  background: #0d95e8;
+}
+
+.auth-submit-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+.auth-error {
+  background: #fee;
+  color: #c33;
+  padding: 0.75rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  text-align: left;
+}
+
+.auth-help {
+  font-size: 0.8rem;
+  color: #666;
+  text-align: left;
+}
+
+.auth-help code {
+  background: #f8f9fa;
+  padding: 0.2rem 0.4rem;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+}
+
+/* Header Authentication Responsive */
+@media (max-width: 768px) {
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+  
+  .header-right {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .header-auth {
+    order: -1;
+  }
+  
+  .auth-status.authenticated {
+    justify-content: space-between;
+  }
+  
+  .form-row {
+    flex-direction: column;
+  }
+  
+  .api-key-input {
+    width: 100%;
+  }
+}
+
+/* Chat Interface Authentication States */
+.chat-input input:disabled {
+  background-color: #f8f9fa;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.chat-input button:disabled {
+  background-color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.chat-interface.unauthenticated {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Loading states for authentication */
+.auth-submit-btn:disabled::after {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border: 2px solid #fff;
+  border-top: 2px solid transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-left: 0.5rem;
+  display: inline-block;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Enhanced status indicators */
+.status-indicator.authenticated .dot {
+  background: #2ed573;
+  box-shadow: 0 0 8px rgba(46, 213, 115, 0.5);
+}
+
+.status-indicator.unauthenticated .dot {
+  background: #ff4757;
+  box-shadow: 0 0 8px rgba(255, 71, 87, 0.5);
+}
+
+/* Notification styles for auth errors */
+.auth-notification {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  background: #ff4757;
+  color: white;
+  padding: 1rem;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  z-index: 1000;
+  animation: slideIn 0.3s ease;
+}
+
+.auth-notification.success {
+  background: #2ed573;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
 
 * {
   margin: 0;
