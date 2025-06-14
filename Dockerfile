@@ -59,7 +59,7 @@ ENV HOST=0.0.0.0 \
 
 WORKDIR /app
 
-# Install system dependencies including Node.js for React + Vite
+# Install system dependencies including Node.js for React
 RUN apt-get update && apt-get install -y \
     curl \
     python3 \
@@ -72,7 +72,7 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Node.js 18.x for Vite
+# Install Node.js 18.x for Create React App
 RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
@@ -104,213 +104,123 @@ RUN pip3 install --no-cache-dir \
     prometheus-client \
     || echo "Some enhanced features may be limited"
 
-# === FRONTEND BUILD SECTION WITH ERROR HANDLING ===
+# === FRONTEND BUILD SECTION FOR CREATE REACT APP ===
 # Copy frontend source code first
 COPY frontend/ ./frontend/
 
-# Check frontend structure with detailed output
-RUN echo "=== Frontend Structure Analysis ===" && \
+# Detect project type and validate structure
+RUN echo "=== Frontend Project Detection ===" && \
     echo "Contents of /app/frontend/:" && \
     ls -la /app/frontend/ && \
     echo "" && \
-    echo "🔍 Checking for Vite project indicators..." && \
-    VITE_CONFIG_FOUND=false && \
-    PACKAGE_JSON_FOUND=false && \
-    SRC_DIR_FOUND=false && \
-    echo "" && \
-    if [ -f "/app/frontend/vite.config.js" ] || [ -f "/app/frontend/vite.config.ts" ] || [ -f "/app/frontend/vite.config.mjs" ]; then \
-        VITE_CONFIG_FOUND=true && \
-        echo "✅ Vite config found:" && \
-        ls -la /app/frontend/vite.config.* && \
-        echo "Config contents:" && \
-        cat /app/frontend/vite.config.* | head -15; \
-    else \
-        echo "❌ No vite.config found - this may not be a Vite project"; \
-        echo "Looking for other config files:" && \
-        ls -la /app/frontend/*config* 2>/dev/null || echo "No config files found"; \
-    fi && \
-    echo "" && \
+    PROJECT_TYPE="unknown" && \
     if [ -f "/app/frontend/package.json" ]; then \
-        PACKAGE_JSON_FOUND=true && \
         echo "✅ package.json found" && \
-        echo "Checking for Vite in dependencies..." && \
-        if grep -q "vite" /app/frontend/package.json; then \
-            echo "✅ Vite found in package.json" && \
-            grep -A 2 -B 2 "vite" /app/frontend/package.json; \
-        else \
-            echo "❌ Vite not found in package.json - may not be a Vite project"; \
-        fi && \
         echo "" && \
-        echo "Build script check:" && \
-        if grep -q '"build"' /app/frontend/package.json; then \
-            echo "✅ Build script found:" && \
-            grep -A 1 -B 1 '"build"' /app/frontend/package.json; \
+        echo "🔍 Detecting project type..." && \
+        if grep -q "react-scripts" /app/frontend/package.json; then \
+            PROJECT_TYPE="create-react-app" && \
+            echo "✅ Create React App detected (react-scripts)" && \
+            echo "CRA version:" && \
+            grep -A 1 -B 1 "react-scripts" /app/frontend/package.json; \
+        elif grep -q "vite" /app/frontend/package.json; then \
+            PROJECT_TYPE="vite" && \
+            echo "✅ Vite project detected" && \
+            ls -la /app/frontend/vite.config.* 2>/dev/null || echo "No vite.config found"; \
+        elif grep -q "next" /app/frontend/package.json; then \
+            PROJECT_TYPE="nextjs" && \
+            echo "✅ Next.js project detected"; \
         else \
-            echo "❌ No build script found in package.json"; \
-        fi; \
+            echo "⚠️ Unknown React project type" && \
+            echo "Available scripts:" && \
+            cat /app/frontend/package.json | grep -A 10 '"scripts"'; \
+        fi && \
+        echo "PROJECT_TYPE=$PROJECT_TYPE" > /tmp/project_type; \
     else \
-        echo "❌ package.json not found"; \
+        echo "❌ No package.json found"; \
+        exit 1; \
     fi && \
     echo "" && \
     if [ -d "/app/frontend/src" ]; then \
-        SRC_DIR_FOUND=true && \
         echo "✅ src directory found" && \
         echo "Source files:" && \
-        find /app/frontend/src -type f -name "*.js" -o -name "*.ts" -o -name "*.jsx" -o -name "*.tsx" -o -name "*.vue" | head -10; \
+        find /app/frontend/src -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" | head -10; \
     else \
         echo "❌ src directory not found"; \
-    fi && \
-    echo "" && \
-    echo "🎯 Project validation:" && \
-    if [ "$VITE_CONFIG_FOUND" = "true" ] && [ "$PACKAGE_JSON_FOUND" = "true" ] && [ "$SRC_DIR_FOUND" = "true" ]; then \
-        echo "✅ Valid Vite project detected - proceeding with build"; \
-    elif [ "$PACKAGE_JSON_FOUND" = "true" ] && [ "$SRC_DIR_FOUND" = "true" ]; then \
-        echo "⚠️ Node.js project found but no Vite config - will attempt build anyway"; \
-    else \
-        echo "❌ Invalid project structure - missing required components"; \
-        echo "Required: package.json + src/ directory"; \
-        echo "Recommended: vite.config.js for Vite projects"; \
+        exit 1; \
     fi
 
-# Install Node.js dependencies with Vite-specific validation
+# Install Node.js dependencies with Create React App specific handling
 WORKDIR /app/frontend
-RUN echo "🔧 Validating Vite project before dependency installation..." && \
-    if [ ! -f "package.json" ]; then \
-        echo "❌ FATAL: No package.json found in frontend directory" && \
-        echo "Cannot proceed with frontend build" && \
-        exit 1; \
-    fi && \
-    if [ ! -f "vite.config.js" ] && [ ! -f "vite.config.ts" ] && [ ! -f "vite.config.mjs" ]; then \
-        echo "⚠️ WARNING: No vite.config found - this may not be a Vite project" && \
-        echo "Checking package.json for Vite dependency..." && \
-        if ! grep -q "vite" package.json; then \
-            echo "❌ FATAL: No Vite found in package.json and no vite.config" && \
-            echo "This doesn't appear to be a Vite project" && \
-            echo "Package.json scripts:" && \
-            cat package.json | grep -A 10 '"scripts"' || echo "No scripts found" && \
-            exit 1; \
-        else \
-            echo "✅ Vite found in package.json, proceeding..."; \
-        fi; \
-    else \
-        echo "✅ Vite config found - confirmed Vite project"; \
-    fi && \
-    echo "" && \
-    echo "📦 Installing dependencies for Vite project..." && \
+RUN echo "📦 Installing dependencies for Create React App..." && \
     npm config set fund false && \
     npm config set audit-level none && \
-    npm config set prefer-offline true && \
-    npm config set cache /tmp/npm-cache && \
+    npm config set legacy-peer-deps true && \
     echo "" && \
-    npm install --verbose 2>&1 | tee /tmp/npm-install.log && \
+    echo "🔧 Fixing ajv dependency conflict..." && \
+    npm install --legacy-peer-deps 2>&1 | tee /tmp/npm-install.log && \
     echo "" && \
-    echo "✅ Dependencies installed. Checking for Vite installation..." && \
-    if [ -d "node_modules/vite" ]; then \
-        echo "✅ Vite installed successfully:" && \
-        ls -la node_modules/vite/package.json && \
-        echo "Vite version: $(cat node_modules/vite/package.json | grep '"version"' | head -1)"; \
+    echo "🔧 Installing/fixing ajv dependencies..." && \
+    npm install ajv@^8.0.0 ajv-keywords@^5.0.0 --legacy-peer-deps --save-dev 2>/dev/null || \
+    npm install ajv@^7.0.0 ajv-keywords@^4.0.0 --legacy-peer-deps --save-dev 2>/dev/null || \
+    echo "Could not fix ajv automatically" && \
+    echo "" && \
+    echo "✅ Dependencies installed. Checking critical packages..." && \
+    if [ -d "node_modules/react-scripts" ]; then \
+        echo "✅ react-scripts installed:" && \
+        cat node_modules/react-scripts/package.json | grep '"version"' | head -1; \
     else \
-        echo "❌ Vite not found in node_modules" && \
-        echo "Installed packages:" && \
-        ls node_modules/ | head -10; \
+        echo "❌ react-scripts not found"; \
+        exit 1; \
+    fi && \
+    if [ -d "node_modules/ajv" ]; then \
+        echo "✅ ajv version:" && \
+        cat node_modules/ajv/package.json | grep '"version"' | head -1; \
+    else \
+        echo "⚠️ ajv not found"; \
     fi && \
     echo "Total packages installed: $(ls node_modules/ | wc -l)"
 
-# Build Vite frontend with enhanced validation and error handling
-RUN echo "🏗️ Starting Vite build process..." && \
-    echo "Pre-build validation:" && \
-    if [ ! -f "package.json" ] || [ ! -d "src" ]; then \
-        echo "❌ FATAL: Missing package.json or src directory" && \
-        exit 1; \
-    fi && \
-    echo "✅ Required files present" && \
+# Build Create React App with dependency fixes
+RUN echo "🏗️ Building Create React App..." && \
+    echo "Pre-build environment setup..." && \
+    export NODE_OPTIONS="--max-old-space-size=4096 --openssl-legacy-provider" && \
+    export GENERATE_SOURCEMAP=false && \
+    export CI=true && \
+    export BUILD_PATH=build && \
     echo "" && \
-    echo "Checking build script..." && \
-    BUILD_SCRIPT=$(cat package.json | grep -A 1 '"build"' | grep -o '"[^"]*"' | tail -1 | tr -d '"') && \
-    echo "Build script command: $BUILD_SCRIPT" && \
-    if echo "$BUILD_SCRIPT" | grep -q "vite"; then \
-        echo "✅ Confirmed Vite build script"; \
-    else \
-        echo "⚠️ Build script doesn't mention Vite: $BUILD_SCRIPT"; \
-        echo "Will attempt build anyway..."; \
-    fi && \
+    echo "🔧 Attempting to fix any remaining dependency issues..." && \
+    (npm audit fix --force 2>/dev/null || echo "Audit fix skipped") && \
     echo "" && \
-    echo "Checking Vite installation..." && \
-    if [ -d "node_modules/vite" ]; then \
-        VITE_VERSION=$(cat node_modules/vite/package.json | grep '"version"' | cut -d'"' -f4) && \
-        echo "✅ Vite $VITE_VERSION installed"; \
-    else \
-        echo "❌ Vite not found in node_modules" && \
-        echo "Available build tools:" && \
-        ls node_modules/ | grep -E "(vite|webpack|rollup|parcel)" || echo "No common build tools found" && \
-        echo "Will attempt build anyway..."; \
-    fi && \
+    echo "🚀 Starting Create React App build..." && \
+    npm run build 2>&1 | tee /tmp/cra-build.log && \
     echo "" && \
-    echo "🔨 Starting Vite build..." && \
-    NODE_OPTIONS="--max-old-space-size=4096" \
-    GENERATE_SOURCEMAP=false \
-    CI=true \
-    npm run build 2>&1 | tee /tmp/vite-build.log && \
-    echo "" && \
-    echo "🔍 Checking Vite build output..." && \
-    if [ -d "dist" ] && [ -f "dist/index.html" ]; then \
-        echo "✅ Vite build successful! Output in dist/ directory:" && \
-        ls -la dist/ && \
+    echo "🔍 Checking Create React App build output..." && \
+    if [ -d "build" ] && [ -f "build/index.html" ]; then \
+        echo "✅ Create React App build successful!" && \
+        echo "Build directory contents:" && \
+        ls -la build/ && \
         echo "" && \
-        echo "Index.html preview:" && \
-        head -10 dist/index.html; \
-    elif [ -d "build" ] && [ -f "build/index.html" ]; then \
-        echo "✅ Build successful! Output in build/ directory:" && \
-        ls -la build/; \
+        echo "Static assets:" && \
+        find build -name "*.js" -o -name "*.css" | head -10 && \
+        echo "" && \
+        echo "Index.html size: $(wc -c < build/index.html) bytes" && \
+        if [ $(wc -c < build/index.html) -lt 200 ]; then \
+            echo "⚠️ Index.html seems small, checking contents:" && \
+            cat build/index.html; \
+        fi; \
     else \
-        echo "❌ Vite build failed or produced no output" && \
+        echo "❌ Create React App build failed" && \
         echo "" && \
-        echo "Build log (last 30 lines):" && \
-        tail -30 /tmp/vite-build.log 2>/dev/null || echo "No build log available" && \
+        echo "Build log analysis:" && \
+        echo "Errors found:" && \
+        grep -i "error\|failed\|cannot find module" /tmp/cra-build.log | tail -10 && \
         echo "" && \
-        echo "Checking for any output files:" && \
-        find . -name "*.html" -newer /tmp/vite-build.log 2>/dev/null || echo "No HTML files generated" && \
+        echo "Full build log (last 30 lines):" && \
+        tail -30 /tmp/cra-build.log && \
         echo "" && \
         echo "Available directories:" && \
-        ls -la | grep ^d && \
-        echo "This indicates a Vite build failure" && \
-        exit 1; \
-    fi
-
-# Handle Vite build output (dist/ directory is Vite standard)
-RUN echo "📁 Processing Vite build output..." && \
-    if [ -d "dist" ] && [ -f "dist/index.html" ]; then \
-        echo "✅ Vite build successful - dist/ directory contains:" && \
-        ls -la dist/ && \
-        echo "" && \
-        echo "Vite assets structure:" && \
-        find dist -type f | head -20 && \
-        echo "" && \
-        echo "Index.html size: $(wc -c < dist/index.html) bytes" && \
-        if [ $(wc -c < dist/index.html) -lt 100 ]; then \
-            echo "⚠️ Index.html seems very small, checking contents:" && \
-            cat dist/index.html; \
-        fi; \
-    elif [ -d "build" ] && [ -f "build/index.html" ]; then \
-        echo "✅ Build successful - build/ directory found (non-standard for Vite)" && \
-        ls -la build/; \
-    else \
-        echo "❌ FATAL: Vite build produced no valid output" && \
-        echo "" && \
-        echo "Expected: dist/index.html (Vite standard)" && \
-        echo "Found directories:" && \
         ls -la && \
-        echo "" && \
-        echo "Vite build log analysis:" && \
-        if [ -f "/tmp/vite-build.log" ]; then \
-            echo "Errors in build log:" && \
-            grep -i "error\|failed\|cannot" /tmp/vite-build.log | tail -10 || echo "No obvious errors found" && \
-            echo "" && \
-            echo "Full build log (last 20 lines):" && \
-            tail -20 /tmp/vite-build.log; \
-        fi && \
-        echo "" && \
-        echo "Cannot proceed without valid Vite build output" && \
         exit 1; \
     fi
 
@@ -318,31 +228,13 @@ RUN echo "📁 Processing Vite build output..." && \
 WORKDIR /app
 COPY . ./
 
-# Setup Vite build for FastAPI serving
-RUN echo "🔗 Setting up Vite build for FastAPI..." && \
-    cd /app/frontend && \
-    if [ -d "dist" ] && [ -f "dist/index.html" ]; then \
-        echo "📁 Copying Vite dist/ to build/ for FastAPI compatibility..." && \
-        cp -r dist build && \
-        echo "✅ Vite build ready at /app/frontend/build/" && \
-        echo "Build contents:" && \
-        ls -la /app/frontend/build/ && \
-        echo "" && \
-        echo "Static assets:" && \
-        find /app/frontend/build -name "*.js" -o -name "*.css" | head -10; \
-    elif [ -d "build" ] && [ -f "build/index.html" ]; then \
-        echo "✅ Build directory already exists and ready (unusual for Vite)" && \
-        ls -la /app/frontend/build/; \
-    else \
-        echo "❌ FATAL: No valid Vite build output to serve" && \
-        echo "Expected: /app/frontend/dist/ directory from Vite build" && \
-        exit 1; \
-    fi
-
-# Final debugging and verification
+# Final verification for Create React App
 RUN echo "=== FINAL VERIFICATION ===" && \
-    echo "✅ Frontend build status:" && \
+    echo "✅ Create React App build:" && \
     ls -la /app/frontend/build/index.html && \
+    echo "" && \
+    echo "✅ Build contents:" && \
+    ls -la /app/frontend/build/ && \
     echo "" && \
     echo "✅ Python files:" && \
     ls -la /app/main*.py && \
