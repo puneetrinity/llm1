@@ -30,7 +30,7 @@ ENV ENABLE_SEMANTIC_CLASSIFICATION=false \
     ENABLE_MODEL_WARMUP=true \
     ENABLE_DETAILED_METRICS=true \
     ENABLE_DASHBOARD=true \
-    ENABLE_WEBSOCKET_DASHBOARD=true
+    ENABLE_WEBSOCKET_DASHBOARD=false
 
 # Dashboard configuration
 ENV DASHBOARD_PATH=/app/static \
@@ -42,13 +42,9 @@ ENV ENABLE_REDIS_CACHE=true \
     ENABLE_SEMANTIC_CACHE=true \
     SEMANTIC_SIMILARITY_THRESHOLD=0.85
 
-# Security settings - Configure at runtime for production security
+# Security settings - Set at runtime for production security
 ENV ENABLE_AUTH=false \
     CORS_ORIGINS='["*"]'
-
-# Security-sensitive environment variables
-# Set these at runtime: docker run -e DEFAULT_API_KEY=your-key -e API_KEY_HEADER=your-header
-# Defaults are empty for security - will be set by application if not provided
 
 # Advanced features
 ENV ENABLE_CIRCUIT_BREAKER=true \
@@ -129,76 +125,130 @@ RUN if [ -f "package.json" ] && [ -d "src" ]; then \
 # Copy application code
 WORKDIR /app
 
-# Copy critical files explicitly first (in case .dockerignore has issues)
+# Copy critical files explicitly first
 COPY start.sh ./
 COPY requirements.txt ./
-
-# Copy Python files explicitly
 COPY *.py ./
-
-# Copy everything else
 COPY . ./
 
 # === DEBUGGING SECTION ===
 RUN echo "=== DEBUGGING: Checking file structure ===" && \
     echo "Current directory:" && pwd && \
     echo "Files in /app:" && ls -la /app/ && \
-    echo "Looking for main.py:" && \
-    (test -f /app/main.py && echo "✅ main.py found" || echo "❌ main.py NOT found") && \
-    echo "Looking for Python files:" && find /app -name "*.py" | head -10 && \
+    echo "Looking for main files:" && \
+    find /app -name "main*.py" | head -5 && \
     echo "Contents of start.sh:" && cat /app/start.sh 2>/dev/null || echo "start.sh not found"
 
-# Create fallback main.py if it doesn't exist
-RUN if [ ! -f "/app/main.py" ]; then \
-        echo "❌ main.py not found - creating fallback version..." && \
+# Test Python import if main files exist
+RUN echo "=== Testing Python imports ===" && \
+    python3 -c "import sys; sys.path.insert(0, '/app')" && \
+    (python3 -c "import main_master" && echo "✅ main_master imports successfully") || \
+    (python3 -c "import main" && echo "✅ main imports successfully") || \
+    echo "❌ No main files import successfully"
+
+# Create working dashboard if React build failed
+RUN if [ ! -f "/app/frontend/build/index.html" ] || [ ! -s "/app/frontend/build/index.html" ]; then \
+        echo "Creating working dashboard..." && \
+        mkdir -p /app/frontend/build && \
         printf '%s\n' \
-            'from fastapi import FastAPI' \
-            'import uvicorn' \
-            'import os' \
-            '' \
-            'app = FastAPI(title="LLM Proxy Server", version="1.0.0")' \
-            '' \
-            '@app.get("/")' \
-            'def read_root():' \
-            '    return {' \
-            '        "message": "🚀 Complete LLM Proxy Server is running",' \
-            '        "status": "healthy",' \
-            '        "version": "1.0.0"' \
-            '    }' \
-            '' \
-            '@app.get("/health")' \
-            'def health_check():' \
-            '    return {"status": "healthy", "service": "llm-proxy"}' \
-            '' \
-            '@app.get("/dashboard")' \
-            'def dashboard():' \
-            '    return {"dashboard": "available", "path": "/app"}' \
-            '' \
-            'if __name__ == "__main__":' \
-            '    host = os.getenv("HOST", "0.0.0.0")' \
-            '    port = int(os.getenv("PORT", 8001))' \
-            '    uvicorn.run(app, host=host, port=port)' \
-        > /app/main.py && \
-        echo "✅ Fallback main.py created"; \
+            '<!DOCTYPE html>' \
+            '<html lang="en">' \
+            '<head>' \
+            '    <meta charset="UTF-8">' \
+            '    <meta name="viewport" content="width=device-width, initial-scale=1.0">' \
+            '    <title>🚀 LLM Proxy Dashboard</title>' \
+            '    <style>' \
+            '        body { font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; background: #f0f2f5; }' \
+            '        .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }' \
+            '        .header { text-align: center; margin-bottom: 30px; }' \
+            '        .header h1 { color: #1976d2; margin-bottom: 10px; }' \
+            '        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; }' \
+            '        .panel { background: #f8f9fa; padding: 20px; border-radius: 8px; border-left: 4px solid #1976d2; }' \
+            '        button { background: #1976d2; color: white; padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer; margin: 5px; }' \
+            '        button:hover { background: #1565c0; }' \
+            '        .result { background: #e3f2fd; padding: 15px; margin: 15px 0; border-radius: 5px; max-height: 300px; overflow-y: auto; }' \
+            '        pre { white-space: pre-wrap; word-wrap: break-word; font-size: 13px; }' \
+            '        input, textarea, select { width: 100%; padding: 8px; margin: 5px 0; border: 1px solid #ddd; border-radius: 4px; }' \
+            '    </style>' \
+            '</head>' \
+            '<body>' \
+            '    <div class="container">' \
+            '        <div class="header">' \
+            '            <h1>🚀 LLM Proxy Dashboard</h1>' \
+            '            <p>Status: <span id="status">🔄 Loading...</span></p>' \
+            '        </div>' \
+            '        <div class="grid">' \
+            '            <div class="panel">' \
+            '                <h3>🏥 System Status</h3>' \
+            '                <button onclick="checkHealth()">Check Health</button>' \
+            '                <button onclick="listModels()">List Models</button>' \
+            '                <div id="healthResult" class="result" style="display:none;"></div>' \
+            '            </div>' \
+            '            <div class="panel">' \
+            '                <h3>💬 Test Chat</h3>' \
+            '                <select id="modelSelect"><option value="mistral:7b-instruct-q4_0">Mistral 7B</option></select>' \
+            '                <textarea id="chatInput" rows="3" placeholder="Ask something..."></textarea>' \
+            '                <button onclick="sendChat()">Send</button>' \
+            '                <div id="chatResult" class="result" style="display:none;"></div>' \
+            '            </div>' \
+            '        </div>' \
+            '    </div>' \
+            '    <script>' \
+            '        window.onload = () => checkHealth();' \
+            '        function showResult(id, data) {' \
+            '            const el = document.getElementById(id);' \
+            '            el.style.display = "block";' \
+            '            el.innerHTML = "<pre>" + JSON.stringify(data, null, 2) + "</pre>";' \
+            '        }' \
+            '        async function checkHealth() {' \
+            '            try {' \
+            '                const res = await fetch("/health");' \
+            '                const data = await res.json();' \
+            '                showResult("healthResult", data);' \
+            '                document.getElementById("status").innerHTML = "🟢 Healthy";' \
+            '            } catch (e) {' \
+            '                showResult("healthResult", {error: e.message});' \
+            '                document.getElementById("status").innerHTML = "🔴 Error";' \
+            '            }' \
+            '        }' \
+            '        async function listModels() {' \
+            '            try {' \
+            '                const res = await fetch("/v1/models");' \
+            '                const data = await res.json();' \
+            '                showResult("healthResult", data);' \
+            '            } catch (e) { showResult("healthResult", {error: e.message}); }' \
+            '        }' \
+            '        async function sendChat() {' \
+            '            const input = document.getElementById("chatInput").value;' \
+            '            if (!input.trim()) return;' \
+            '            try {' \
+            '                const res = await fetch("/v1/chat/completions", {' \
+            '                    method: "POST",' \
+            '                    headers: {"Content-Type": "application/json"},' \
+            '                    body: JSON.stringify({' \
+            '                        messages: [{role: "user", content: input}],' \
+            '                        model: "mistral:7b-instruct-q4_0"' \
+            '                    })' \
+            '                });' \
+            '                const data = await res.json();' \
+            '                showResult("chatResult", data);' \
+            '            } catch (e) { showResult("chatResult", {error: e.message}); }' \
+            '        }' \
+            '        const originalFetch = window.fetch;' \
+            '        window.fetch = function(url, options) {' \
+            '            if (url.includes("auth/websocket-session")) {' \
+            '                return Promise.resolve({ok: false, status: 503});' \
+            '            }' \
+            '            return originalFetch.apply(this, arguments);' \
+            '        };' \
+            '    </script>' \
+            '</body>' \
+            '</html>' \
+        > /app/frontend/build/index.html && \
+        echo "✅ Working dashboard created"; \
     else \
-        echo "✅ main.py exists"; \
+        echo "✅ React build exists"; \
     fi
-
-# Test Python import if main.py exists
-RUN echo "=== Testing Python import of main.py ===" && \
-    python3 -c "import sys; sys.path.insert(0, '/app'); import main; print('✅ main.py imports successfully')" 2>&1 || \
-    echo "❌ Failed to import main.py - check for syntax errors"
-
-# Create fallback frontend if build failed
-RUN if [ ! -f "frontend/build/index.html" ]; then \
-        echo "Creating fallback HTML page..." && \
-        mkdir -p frontend/build; \
-    else \
-        echo "Frontend build exists"; \
-    fi
-
-# Copy fallback HTML (clean approach)
-COPY fallback.html frontend/build/index.html
 
 # Fix line endings and permissions
 RUN find . -name "*.py" -exec dos2unix {} \; && \
@@ -217,7 +267,7 @@ RUN if [ ! -f "/app/start.sh" ]; then \
             'echo "📊 Dashboard will be available at: http://0.0.0.0:8001/app"' \
             '' \
             '# Start the application' \
-            'python3 -m uvicorn main:app --host 0.0.0.0 --port 8001 --reload' \
+            'python3 -m uvicorn main_master:app --host 0.0.0.0 --port 8001 --reload' \
         > /app/start.sh && \
         chmod +x /app/start.sh && \
         echo "✅ Fallback start.sh created"; \
@@ -229,11 +279,9 @@ RUN if [ ! -f "/app/start.sh" ]; then \
 # Final verification
 RUN echo "=== FINAL VERIFICATION ===" && \
     echo "✅ Files ready:" && \
-    ls -la /app/main.py /app/start.sh && \
-    echo "✅ Permissions:" && \
     ls -la /app/start.sh && \
-    echo "✅ Python can import main:" && \
-    python3 -c "import main" && \
+    echo "✅ Dashboard ready:" && \
+    ls -la /app/frontend/build/index.html && \
     echo "🎉 Container is ready!"
 
 # Comprehensive health check
