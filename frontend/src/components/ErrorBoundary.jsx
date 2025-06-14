@@ -1,7 +1,7 @@
 // frontend/src/components/ErrorBoundary.js - Enhanced error boundary with user reporting
 
 import React from 'react';
-import { CONFIG } from '../utils/config.js';
+import { CONFIG } from '../utils/config.jsx';
 
 /**
  * Enhanced Error Boundary component with better error reporting and recovery
