@@ -7,10 +7,10 @@ import {
 } from 'recharts';
 
 // Import our modular components and utilities
-import { CONFIG, API_BASE } from './utils/config.js';
-import { useAuth } from './hooks/useAuth.js';
-import { useWebSocket } from './hooks/useWebSocket.js';
-import { ErrorBoundary } from './components/ErrorBoundary.js';
+import { CONFIG, API_BASE } from './utils/config.jsx';
+import { useAuth } from './hooks/useAuth.jsx';
+import { useWebSocket } from './hooks/useWebSocket.jsx';
+import { ErrorBoundary } from './components/ErrorBoundary.jsx';
 import './App.css';
 
 // Component: Metric Card
