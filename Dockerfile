@@ -149,34 +149,34 @@ RUN echo "=== DEBUGGING: Checking file structure ===" && \
 # Create fallback main.py if it doesn't exist
 RUN if [ ! -f "/app/main.py" ]; then \
         echo "❌ main.py not found - creating fallback version..." && \
-        cat > /app/main.py << 'EOF'
-from fastapi import FastAPI
-import uvicorn
-import os
-
-app = FastAPI(title="LLM Proxy Server", version="1.0.0")
-
-@app.get("/")
-def read_root():
-    return {
-        "message": "🚀 Complete LLM Proxy Server is running", 
-        "status": "healthy",
-        "version": "1.0.0"
-    }
-
-@app.get("/health")
-def health_check():
-    return {"status": "healthy", "service": "llm-proxy"}
-
-@app.get("/dashboard")
-def dashboard():
-    return {"dashboard": "available", "path": "/app"}
-
-if __name__ == "__main__":
-    host = os.getenv("HOST", "0.0.0.0")
-    port = int(os.getenv("PORT", 8001))
-    uvicorn.run(app, host=host, port=port)
-EOF
+        printf '%s\n' \
+            'from fastapi import FastAPI' \
+            'import uvicorn' \
+            'import os' \
+            '' \
+            'app = FastAPI(title="LLM Proxy Server", version="1.0.0")' \
+            '' \
+            '@app.get("/")' \
+            'def read_root():' \
+            '    return {' \
+            '        "message": "🚀 Complete LLM Proxy Server is running",' \
+            '        "status": "healthy",' \
+            '        "version": "1.0.0"' \
+            '    }' \
+            '' \
+            '@app.get("/health")' \
+            'def health_check():' \
+            '    return {"status": "healthy", "service": "llm-proxy"}' \
+            '' \
+            '@app.get("/dashboard")' \
+            'def dashboard():' \
+            '    return {"dashboard": "available", "path": "/app"}' \
+            '' \
+            'if __name__ == "__main__":' \
+            '    host = os.getenv("HOST", "0.0.0.0")' \
+            '    port = int(os.getenv("PORT", 8001))' \
+            '    uvicorn.run(app, host=host, port=port)' \
+        > /app/main.py && \
         echo "✅ Fallback main.py created"; \
     else \
         echo "✅ main.py exists"; \
@@ -208,18 +208,20 @@ RUN mkdir -p logs cache models data static frontend/build
 # Ensure start.sh is executable and exists
 RUN if [ ! -f "/app/start.sh" ]; then \
         echo "❌ start.sh not found - creating fallback..." && \
-        cat > /app/start.sh << 'EOF'
-#!/bin/bash
-echo "🚀 Starting LLM Proxy Server..."
-echo "📍 Server will be available at: http://0.0.0.0:8001"
-echo "📊 Dashboard will be available at: http://0.0.0.0:8001/app"
-
-# Start the application
-python3 -m uvicorn main:app --host 0.0.0.0 --port 8001 --reload
-EOF
-        chmod +x /app/start.sh; \
+        printf '%s\n' \
+            '#!/bin/bash' \
+            'echo "🚀 Starting LLM Proxy Server..."' \
+            'echo "📍 Server will be available at: http://0.0.0.0:8001"' \
+            'echo "📊 Dashboard will be available at: http://0.0.0.0:8001/app"' \
+            '' \
+            '# Start the application' \
+            'python3 -m uvicorn main:app --host 0.0.0.0 --port 8001 --reload' \
+        > /app/start.sh && \
+        chmod +x /app/start.sh && \
+        echo "✅ Fallback start.sh created"; \
     else \
-        echo "✅ start.sh exists"; \
+        echo "✅ start.sh exists" && \
+        chmod +x /app/start.sh; \
     fi
 
 # Final verification
