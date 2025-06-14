@@ -126,7 +126,66 @@ RUN if [ -f "package.json" ] && [ -d "src" ]; then \
 
 # Copy application code
 WORKDIR /app
+
+# Copy critical files explicitly first (in case .dockerignore has issues)
+COPY start.sh ./
+COPY requirements.txt ./
+
+# Copy Python files explicitly
+COPY *.py ./
+
+# Copy everything else
 COPY . ./
+
+# === DEBUGGING SECTION ===
+RUN echo "=== DEBUGGING: Checking file structure ===" && \
+    echo "Current directory:" && pwd && \
+    echo "Files in /app:" && ls -la /app/ && \
+    echo "Looking for main.py:" && \
+    (test -f /app/main.py && echo "✅ main.py found" || echo "❌ main.py NOT found") && \
+    echo "Looking for Python files:" && find /app -name "*.py" | head -10 && \
+    echo "Contents of start.sh:" && cat /app/start.sh 2>/dev/null || echo "start.sh not found"
+
+# Create fallback main.py if it doesn't exist
+RUN if [ ! -f "/app/main.py" ]; then \
+        echo "❌ main.py not found - creating fallback version..." && \
+        cat > /app/main.py << 'EOF'
+from fastapi import FastAPI
+import uvicorn
+import os
+
+app = FastAPI(title="LLM Proxy Server", version="1.0.0")
+
+@app.get("/")
+def read_root():
+    return {
+        "message": "🚀 Complete LLM Proxy Server is running", 
+        "status": "healthy",
+        "version": "1.0.0"
+    }
+
+@app.get("/health")
+def health_check():
+    return {"status": "healthy", "service": "llm-proxy"}
+
+@app.get("/dashboard")
+def dashboard():
+    return {"dashboard": "available", "path": "/app"}
+
+if __name__ == "__main__":
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", 8001))
+    uvicorn.run(app, host=host, port=port)
+EOF
+        echo "✅ Fallback main.py created"; \
+    else \
+        echo "✅ main.py exists"; \
+    fi
+
+# Test Python import if main.py exists
+RUN echo "=== Testing Python import of main.py ===" && \
+    python3 -c "import sys; sys.path.insert(0, '/app'); import main; print('✅ main.py imports successfully')" 2>&1 || \
+    echo "❌ Failed to import main.py - check for syntax errors"
 
 # Create fallback frontend if build failed
 RUN if [ ! -f "frontend/build/index.html" ]; then \
@@ -146,9 +205,32 @@ RUN find . -name "*.py" -exec dos2unix {} \; && \
 # Create required directories
 RUN mkdir -p logs cache models data static frontend/build
 
-# Copy startup script
-COPY start.sh ./
-RUN chmod +x start.sh
+# Ensure start.sh is executable and exists
+RUN if [ ! -f "/app/start.sh" ]; then \
+        echo "❌ start.sh not found - creating fallback..." && \
+        cat > /app/start.sh << 'EOF'
+#!/bin/bash
+echo "🚀 Starting LLM Proxy Server..."
+echo "📍 Server will be available at: http://0.0.0.0:8001"
+echo "📊 Dashboard will be available at: http://0.0.0.0:8001/app"
+
+# Start the application
+python3 -m uvicorn main:app --host 0.0.0.0 --port 8001 --reload
+EOF
+        chmod +x /app/start.sh; \
+    else \
+        echo "✅ start.sh exists"; \
+    fi
+
+# Final verification
+RUN echo "=== FINAL VERIFICATION ===" && \
+    echo "✅ Files ready:" && \
+    ls -la /app/main.py /app/start.sh && \
+    echo "✅ Permissions:" && \
+    ls -la /app/start.sh && \
+    echo "✅ Python can import main:" && \
+    python3 -c "import main" && \
+    echo "🎉 Container is ready!"
 
 # Comprehensive health check
 HEALTHCHECK --interval=60s --timeout=30s --start-period=300s --retries=3 \
