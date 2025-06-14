@@ -113,12 +113,12 @@ class CircuitBreaker:
     async def _should_allow_request(self) -> bool:
         if self.state == CircuitState.CLOSED:
             return True
-        if self.state == CircuitState.OPEN:
+        elif self.state == CircuitState.OPEN:
             if self._should_attempt_reset():
                 await self._transition_to_half_open()
                 return True
             return False
-        if self.state == CircuitState.HALF_OPEN:
+        elif self.state == CircuitState.HALF_OPEN:
             return self._half_open_requests < self.config.max_requests_half_open
         return False
 
