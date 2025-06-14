@@ -1,4 +1,5 @@
 # services/enhanced_imports.py - Fixed Version
+
 import logging
 from typing import Dict, Any, Optional, Type
 from dataclasses import dataclass
@@ -46,12 +47,10 @@ class EnhancedImportManager:
             error_msg = f"Missing dependency for {feature_name}: {str(e)}"
             
             if critical:
-                # Critical features MUST work
                 logging.error(f"❌ CRITICAL: {error_msg}")
                 self.failed_critical.append(error_msg)
                 result = ImportResult(status=FeatureStatus.DISABLED, error=error_msg)
             elif fallback_class:
-                # Use fallback
                 result = ImportResult(
                     status=FeatureStatus.FALLBACK,
                     module=fallback_class,
@@ -59,7 +58,6 @@ class EnhancedImportManager:
                 )
                 logging.warning(f"⚠️ {feature_name} using fallback: {error_msg}")
             else:
-                # Disable gracefully
                 result = ImportResult(status=FeatureStatus.DISABLED, error=error_msg)
                 logging.info(f"ℹ️ {feature_name} disabled (optional): {error_msg}")
                 
@@ -117,55 +115,55 @@ class EnhancedImportManager:
 # Initialize with new manager
 import_manager = EnhancedImportManager()
 
-# UPDATED setup function - same interface, better implementation
+# Setup enhanced imports
 def setup_enhanced_imports():
     """Setup imports with proper error handling"""
     
-    # Import your existing fallback classes
+    # Import fallback classes (base versions)
     from services.ollama_client import OllamaClient
-    from services.router import LLMRouter
+    from services.enhanced_router import EnhancedLLMRouter  # FIXED: correct fallback path
     
-    # Enhanced Ollama Client
+    # Try enhanced client
     enhanced_ollama = import_manager.safe_import(
         'enhanced_ollama_client',
         'services.enhanced_ollama_client.EnhancedOllamaClient',
         fallback_class=OllamaClient,
-        critical=False  # Not critical, can fall back
+        critical=False
     )
-    
-    # Enhanced Router - FIXED: Use correct import path
+
+    # Try enhanced router
     enhanced_router = import_manager.safe_import(
         'enhanced_router',
-        'services.enhanced_router.EnhancedLLMRouter', 
-        fallback_class=LLMRouter,
-        critical=False  # Not critical, can fall back
+        'services.enhanced_router.EnhancedLLMRouter',
+        fallback_class=EnhancedLLMRouter,
+        critical=False
     )
-    
+
     # Streaming Service
     streaming_service = import_manager.safe_import(
         'streaming_service',
         'services.streaming.StreamingService',
-        critical=False  # Optional feature
+        critical=False
     )
-    
+
     # Model Warmup Service  
     warmup_service = import_manager.safe_import(
         'model_warmup_service',
         'services.model_warmup.ModelWarmupService',
-        critical=False  # Optional feature
+        critical=False
     )
-    
+
     # Semantic Classifier
     semantic_classifier = import_manager.safe_import(
         'semantic_classifier',
         'services.semantic_classifier.SemanticIntentClassifier',
-        critical=False  # Optional feature
+        critical=False
     )
     
-    # Validate critical features loaded
+    # Final validation
     if not import_manager.validate_startup():
         raise RuntimeError("Critical features failed to load - cannot start")
-    
+
     return {
         'EnhancedOllamaClient': enhanced_ollama.module,
         'LLMRouter': enhanced_router.module,
@@ -181,5 +179,5 @@ def setup_enhanced_imports():
         }
     }
 
-# Keep your existing interface
+# Optional flag to denote the module is present
 ENHANCED_IMPORTS_AVAILABLE = True
