@@ -1,7 +1,7 @@
 // frontend/src/hooks/useWebSocket.js - Enhanced WebSocket connection with reconnection logic
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { WS_BASE, CONFIG } from '../utils/config.js';
+import { WS_BASE, CONFIG } from '../utils/config.jsx';
 
 /**
  * Enhanced WebSocket hook with automatic reconnection and error handling
