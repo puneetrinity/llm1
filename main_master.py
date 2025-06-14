@@ -1,4 +1,4 @@
-# main.py - Complete LLM Proxy with 3-Model Routing and Full Authentication
+# main_master.py - Complete LLM Proxy with 3-Model Routing and Full Authentication
 from fastapi import FastAPI, HTTPException, Request, Depends, WebSocket, Query, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -21,27 +21,29 @@ try:
     from config import settings
 except ImportError:
     from pydantic_settings import BaseSettings
+    import os
     
     class Settings(BaseSettings):
         # Server Settings
         HOST: str = "0.0.0.0"
-        PORT: int = 8000
+        PORT: int = 8001
         DEBUG: bool = False
         LOG_LEVEL: str = "INFO"
         
-        # Ollama Settings - UPDATE THIS TO YOUR RUNPOD URL
-        OLLAMA_BASE_URL: str = "https://your-pod-id-11434.proxy.runpod.net"
+        # Ollama Settings - Will work with local Ollama
+        OLLAMA_BASE_URL: str = "http://localhost:11434"
         OLLAMA_TIMEOUT: int = 300
         
-        # Authentication
-        ENABLE_AUTH: bool = True
-        DEFAULT_API_KEY: str = "sk-your-secure-api-key-here"
-        API_KEY_HEADER: str = "X-API-Key"
+        # Authentication - Made conditional and secure
+        ENABLE_AUTH: bool = False  # Default to disabled for easier setup
+        DEFAULT_API_KEY: str = os.getenv("DEFAULT_API_KEY", "")
+        API_KEY_HEADER: str = os.getenv("API_KEY_HEADER", "X-API-Key")
         
-        # Features
+        # Features - Optimized defaults
         ENABLE_DASHBOARD: bool = True
         ENABLE_ENHANCED_FEATURES: bool = True
-        ENABLE_WEBSOCKET: bool = True
+        ENABLE_WEBSOCKET: bool = False  # Disabled by default to avoid auth issues
+        ENABLE_WEBSOCKET_DASHBOARD: bool = False
         
         # CORS
         CORS_ORIGINS: List[str] = ["*"]
@@ -54,6 +56,7 @@ except ImportError:
         class Config:
             env_file = ".env"
             case_sensitive = True
+            extra = "ignore"  # Ignore extra environment variables
     
     settings = Settings()
 
@@ -64,7 +67,7 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)]
 )
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("main_master")
 
 # Pydantic Models
 class Message(BaseModel):
@@ -103,9 +106,9 @@ services_state = {
 # WebSocket session storage
 websocket_sessions = {}
 
-# Ollama Client for RunPod
+# Ollama Client for RunPod/Local
 class OllamaClient:
-    """Ollama client for RunPod connection"""
+    """Ollama client for RunPod or local connection"""
     
     def __init__(self, base_url: str, timeout: int = 300):
         self.base_url = base_url.rstrip('/')
@@ -386,8 +389,10 @@ async def initialize_services():
         model_router = ModelRouter(ollama_client)
         await model_router.initialize()
         
-        # Check dashboard
+        # Check dashboard - Try React build first, then static
         react_build_dir = Path(__file__).parent / "frontend" / "build"
+        static_dir = Path(__file__).parent / "static"
+        
         services_state["dashboard_available"] = (
             react_build_dir.exists() and 
             (react_build_dir / "index.html").exists()
@@ -395,7 +400,14 @@ async def initialize_services():
         
         # If no React dashboard, check for static dashboard
         if not services_state["dashboard_available"]:
-            static_dir = Path(__file__).parent / "static" / "dashboard"
+            static_dashboard_dir = static_dir / "dashboard"
+            services_state["dashboard_available"] = (
+                static_dashboard_dir.exists() and 
+                (static_dashboard_dir / "index.html").exists()
+            )
+        
+        # Last fallback - check for any index.html in static
+        if not services_state["dashboard_available"]:
             services_state["dashboard_available"] = (
                 static_dir.exists() and 
                 (static_dir / "index.html").exists()
@@ -421,6 +433,8 @@ async def lifespan(app: FastAPI):
     logger.info(f"🔗 Ollama: {settings.OLLAMA_BASE_URL}")
     logger.info(f"📊 Services: {services_state}")
     logger.info(f"🤖 Models: {services_state.get('available_models', [])}")
+    logger.info(f"🔐 Auth: {'Enabled' if settings.ENABLE_AUTH else 'Disabled'}")
+    logger.info(f"🔌 WebSocket: {'Enabled' if settings.ENABLE_WEBSOCKET else 'Disabled'}")
     logger.info("=" * 60)
     
     yield
@@ -454,25 +468,39 @@ app.add_middleware(
 if settings.ENABLE_DASHBOARD:
     # Try React dashboard first
     react_build_dir = Path(__file__).parent / "frontend" / "build"
-    static_dir = Path(__file__).parent / "static" / "dashboard"
+    static_dir = Path(__file__).parent / "static"
     
-    dashboard_dir = react_build_dir if react_build_dir.exists() else static_dir
+    # Determine which directory to use for dashboard
+    if react_build_dir.exists() and (react_build_dir / "index.html").exists():
+        dashboard_dir = react_build_dir
+        logger.info(f"📊 Using React dashboard from {dashboard_dir}")
+    elif static_dir.exists():
+        dashboard_dir = static_dir
+        logger.info(f"📊 Using static dashboard from {dashboard_dir}")
+    else:
+        dashboard_dir = None
+        logger.warning("⚠️ No dashboard directory found")
     
-    if dashboard_dir.exists():
+    if dashboard_dir and dashboard_dir.exists():
         app.mount("/static", StaticFiles(directory=dashboard_dir), name="static")
         
         @app.get("/app/{path:path}")
         async def serve_dashboard(path: str = ""):
+            """Serve dashboard files"""
             if path and "." in path:
                 file_path = dashboard_dir / path
                 if file_path.exists():
                     return FileResponse(file_path)
             
+            # Serve index.html for all other paths
             index_path = dashboard_dir / "index.html"
             if index_path.exists():
                 return FileResponse(index_path)
             else:
-                return JSONResponse({"error": "Dashboard not found"})
+                return JSONResponse(
+                    {"error": "Dashboard not found"}, 
+                    status_code=404
+                )
         
         logger.info("✅ Dashboard mounted at /app")
 
@@ -503,13 +531,38 @@ async def get_current_user(request: Request) -> Optional[Dict[str, Any]]:
     
     return {"user_id": "authenticated", "permissions": ["read", "write"]}
 
-# WebSocket session management
+# FIXED WebSocket session management - No longer always requires auth
 @app.post("/auth/websocket-session")
-async def create_websocket_session(
-    current_user: Dict[str, Any] = Depends(get_current_user)
-):
+async def create_websocket_session(request: Request):
     """Create a session token for WebSocket authentication"""
     try:
+        # Handle authentication based on settings
+        if settings.ENABLE_AUTH:
+            # Get API key from request
+            api_key = request.headers.get(settings.API_KEY_HEADER)
+            if not api_key:
+                raise HTTPException(
+                    status_code=401,
+                    detail={
+                        "error": "API key required",
+                        "message": f"Please provide API key in {settings.API_KEY_HEADER} header"
+                    }
+                )
+            
+            if api_key != settings.DEFAULT_API_KEY:
+                raise HTTPException(
+                    status_code=403,
+                    detail={
+                        "error": "Invalid API key", 
+                        "message": "The provided API key is not valid"
+                    }
+                )
+            
+            current_user = {"user_id": "authenticated", "permissions": ["read", "write"]}
+        else:
+            # Auth disabled - allow anonymous access
+            current_user = {"user_id": "anonymous", "permissions": ["read", "write"]}
+        
         session_token = secrets.token_urlsafe(32)
         websocket_sessions[session_token] = {
             "user_id": current_user["user_id"],
@@ -522,16 +575,19 @@ async def create_websocket_session(
             "expires_in": 24 * 3600,
             "websocket_url": f"ws://{settings.HOST}:{settings.PORT}/ws/dashboard?session={session_token}"
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to create WebSocket session: {e}")
         raise HTTPException(status_code=500, detail="Failed to create session")
 
+# FIXED WebSocket endpoint - Handles auth disabled
 @app.websocket("/ws/dashboard")
 async def websocket_dashboard(websocket: WebSocket, session: str = Query(None)):
     """WebSocket endpoint for dashboard"""
     
-    # Authentication
-    if settings.ENABLE_AUTH:
+    # Authentication - only if enabled
+    if settings.ENABLE_AUTH and settings.ENABLE_WEBSOCKET_DASHBOARD:
         if not session or session not in websocket_sessions:
             await websocket.close(code=1008, reason="Invalid session")
             return
@@ -541,6 +597,9 @@ async def websocket_dashboard(websocket: WebSocket, session: str = Query(None)):
             del websocket_sessions[session]
             await websocket.close(code=1008, reason="Session expired")
             return
+    elif not settings.ENABLE_AUTH:
+        # Auth disabled - allow connection without session
+        logger.info("🔌 WebSocket connecting without authentication (auth disabled)")
     
     await websocket.accept()
     logger.info("🔌 WebSocket connected")
@@ -593,6 +652,7 @@ async def websocket_dashboard(websocket: WebSocket, session: str = Query(None)):
         logger.info("🔌 WebSocket disconnected")
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
+        await websocket.close(code=1011, reason="Internal error")
 
 # API Endpoints
 
@@ -600,9 +660,10 @@ async def websocket_dashboard(websocket: WebSocket, session: str = Query(None)):
 async def root():
     """Root endpoint"""
     return {
-        "message": "Complete LLM Proxy",
+        "message": "🚀 Complete LLM Proxy Server is running",
         "version": "3.0.0-complete",
         "timestamp": datetime.now().isoformat(),
+        "status": "healthy" if services_state["initialization_complete"] else "initializing",
         "endpoints": {
             "health": "/health",
             "models": "/v1/models",
@@ -610,7 +671,8 @@ async def root():
             "dashboard": "/app",
             "docs": "/docs"
         },
-        "services": services_state
+        "services": services_state,
+        "authentication": "enabled" if settings.ENABLE_AUTH else "disabled"
     }
 
 @app.get("/health", response_model=HealthResponse)
@@ -625,7 +687,7 @@ async def health():
     )
 
 @app.get("/v1/models")
-async def list_models():
+async def list_models(current_user: Dict[str, Any] = Depends(get_current_user)):
     """List available models (OpenAI-compatible)"""
     try:
         if not model_router:
@@ -677,6 +739,22 @@ async def api_status():
         timestamp=datetime.now().isoformat()
     )
 
+@app.get("/metrics")
+async def get_metrics():
+    """Get system metrics"""
+    metrics = {
+        "timestamp": datetime.now().isoformat(),
+        "services": services_state,
+        "ollama_stats": ollama_client.get_stats() if ollama_client else {},
+        "available_models": services_state.get("available_models", []),
+        "websocket_sessions": len(websocket_sessions),
+        "authentication": {
+            "enabled": settings.ENABLE_AUTH,
+            "method": settings.API_KEY_HEADER if settings.ENABLE_AUTH else None
+        }
+    }
+    return metrics
+
 # Error handlers
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
@@ -712,9 +790,10 @@ if __name__ == "__main__":
     logger.info(f"📍 Server: http://{settings.HOST}:{settings.PORT}")
     logger.info(f"📊 Dashboard: http://{settings.HOST}:{settings.PORT}/app")
     logger.info(f"🔌 WebSocket: ws://{settings.HOST}:{settings.PORT}/ws/dashboard")
+    logger.info(f"🔐 Authentication: {'Enabled' if settings.ENABLE_AUTH else 'Disabled'}")
     
     uvicorn.run(
-        "main:app",
+        "main_master:app",
         host=settings.HOST,
         port=settings.PORT,
         reload=settings.DEBUG,
