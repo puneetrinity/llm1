@@ -1,14 +1,46 @@
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
+// frontend/vite.config.js - Vite configuration for React app
+
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
-  base: '/',
+  server: {
+    host: true,
+    port: 3000,
+    proxy: {
+      // Proxy API requests to backend during development
+      '/api': {
+        target: 'http://localhost:8001',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      '/v1': {
+        target: 'http://localhost:8001',
+        changeOrigin: true
+      },
+      '/health': {
+        target: 'http://localhost:8001',
+        changeOrigin: true
+      },
+      '/metrics': {
+        target: 'http://localhost:8001',
+        changeOrigin: true
+      },
+      '/auth': {
+        target: 'http://localhost:8001',
+        changeOrigin: true
+      },
+      '/ws': {
+        target: 'ws://localhost:8001',
+        ws: true,
+        changeOrigin: true
+      }
+    }
+  },
   build: {
     outDir: 'dist',
-    sourcemap: process.env.NODE_ENV === 'development',
-    minify: 'esbuild',
-    target: 'es2020',
+    sourcemap: true,
     rollupOptions: {
       output: {
         manualChunks: {
@@ -18,43 +50,8 @@ export default defineConfig({
       }
     }
   },
-  server: {
-    host: '0.0.0.0',
-    port: 3000,
-    proxy: {
-      '/api': {
-        target: process.env.VITE_BACKEND_URL || 'http://localhost:8001',
-        changeOrigin: true,
-        secure: false
-      },
-      '/health': {
-        target: process.env.VITE_BACKEND_URL || 'http://localhost:8001',
-        changeOrigin: true,
-        secure: false
-      },
-      '/docs': {
-        target: process.env.VITE_BACKEND_URL || 'http://localhost:8001',
-        changeOrigin: true,
-        secure: false
-      },
-      '/metrics': {
-        target: process.env.VITE_BACKEND_URL || 'http://localhost:8001',
-        changeOrigin: true,
-        secure: false
-      },
-      '/ws': {
-        target: process.env.VITE_BACKEND_URL?.replace('http', 'ws') || 'ws://localhost:8001',
-        ws: true,
-        changeOrigin: true
-      }
-    }
-  },
-  preview: {
-    host: '0.0.0.0',
-    port: 3000
-  },
   define: {
-    // Ensure environment variables are properly defined
-    'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development')
+    // Ensure process.env is available for compatibility
+    'process.env': {}
   }
-});
+})
