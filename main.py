@@ -1,69 +1,61 @@
-# main.py - COMPREHENSIVE Deployment-Ready Enhanced LLM Proxy
-# Includes: React Dashboard + All Enhanced Features + Error Fixes
-from fastapi import FastAPI, HTTPException, Request, Depends, WebSocket, WebSocketDisconnect
+# main.py - Complete LLM Proxy with 3-Model Routing and Full Authentication
+from fastapi import FastAPI, HTTPException, Request, Depends, WebSocket, Query, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse, FileResponse
+from contextlib import asynccontextmanager
 import uvicorn
-import asyncio
 import logging
 import sys
 import json
-import traceback
-from contextlib import asynccontextmanager
-from datetime import datetime
-from typing import Optional, Dict, Any, List
+import secrets
+import aiohttp
+import asyncio
+from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Optional, Dict, Any, List
+from pydantic import BaseModel
 
-# FIXED: Safe configuration loading with comprehensive fallback
+# Configuration - Create a simple config if config.py doesn't exist
 try:
-    from config_enhanced import get_settings
-    settings = get_settings()
-    logging.info("✅ Enhanced configuration loaded")
-except ImportError as e:
-    logging.warning(f"Enhanced config not available: {e}")
+    from config import settings
+except ImportError:
     from pydantic_settings import BaseSettings
     
-    class ComprehensiveSettings(BaseSettings):
-        model_config = {"extra": "ignore"}
-        
-        # Core settings
-        DEBUG: bool = False
+    class Settings(BaseSettings):
+        # Server Settings
         HOST: str = "0.0.0.0"
         PORT: int = 8000
+        DEBUG: bool = False
         LOG_LEVEL: str = "INFO"
         
-        # Ollama settings
-        OLLAMA_BASE_URL: str = "http://localhost:11434"
+        # Ollama Settings - UPDATE THIS TO YOUR RUNPOD URL
+        OLLAMA_BASE_URL: str = "https://your-pod-id-11434.proxy.runpod.net"
         OLLAMA_TIMEOUT: int = 300
-        DEFAULT_MODEL: str = "mistral:7b-instruct-q4_0"
         
-        # Security settings
-        ENABLE_AUTH: bool = False
-        DEFAULT_API_KEY: str = "sk-dev-key-change-in-production"
+        # Authentication
+        ENABLE_AUTH: bool = True
+        DEFAULT_API_KEY: str = "sk-your-secure-api-key-here"
         API_KEY_HEADER: str = "X-API-Key"
         
-        # CORS settings
-        CORS_ORIGINS: list = ["*"]
+        # Features
+        ENABLE_DASHBOARD: bool = True
+        ENABLE_ENHANCED_FEATURES: bool = True
+        ENABLE_WEBSOCKET: bool = True
+        
+        # CORS
+        CORS_ORIGINS: List[str] = ["*"]
         CORS_ALLOW_CREDENTIALS: bool = True
         
-        # Memory management
+        # Memory
         MAX_MEMORY_MB: int = 8192
         CACHE_MEMORY_LIMIT_MB: int = 1024
-        MODEL_MEMORY_LIMIT_MB: int = 4096
         
-        # Enhanced features
-        ENABLE_SEMANTIC_CLASSIFICATION: bool = False
-        ENABLE_STREAMING: bool = True
-        ENABLE_MODEL_WARMUP: bool = True
-        ENABLE_DETAILED_METRICS: bool = True
-        
-        # Dashboard settings
-        ENABLE_DASHBOARD: bool = True
-        DASHBOARD_PATH: str = "/app"
+        class Config:
+            env_file = ".env"
+            case_sensitive = True
     
-    settings = ComprehensiveSettings()
-    logging.info("✅ Comprehensive configuration loaded")
+    settings = Settings()
 
 # Configure logging
 logging.basicConfig(
@@ -72,105 +64,48 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)]
 )
 
-# FIXED: Import models with comprehensive fallback
-try:
-    from models.requests import ChatCompletionRequest, CompletionRequest
-    from models.responses import ChatCompletionResponse, HealthResponse
-    logging.info("✅ Custom models loaded")
-except ImportError:
-    logging.warning("Custom models not available - using basic models")
-    from pydantic import BaseModel
-    from typing import List
-    
-    class Message(BaseModel):
-        role: str
-        content: str
-    
-    class ChatCompletionRequest(BaseModel):
-        model: str
-        messages: List[Message]
-        temperature: float = 0.7
-        max_tokens: Optional[int] = None
-        stream: bool = False
-        top_p: float = 1.0
-        intent: Optional[str] = None
-        priority: str = "normal"
-    
-    class CompletionRequest(BaseModel):
-        model: str
-        prompt: str
-        temperature: float = 0.7
-        max_tokens: Optional[int] = None
-        stream: bool = False
-        top_p: float = 1.0
-    
-    class ChatCompletionResponse(BaseModel):
-        id: str
-        object: str = "chat.completion"
-        created: int
-        model: str
-        choices: List[Dict[str, Any]]
-        usage: Dict[str, Any]
-        cache_hit: bool = False
-        processing_time: Optional[float] = None
-        selected_model: Optional[str] = None
-    
-    class HealthResponse(BaseModel):
-        status: str
-        healthy: bool
-        timestamp: str
-        version: str = "2.2.0"
-        services: List[Dict[str, Any]] = []
+logger = logging.getLogger(__name__)
 
-# Global service instances
-memory_manager = None
-ollama_client = None
-llm_router = None
-metrics_collector = None
-health_checker = None
-auth_service = None
-streaming_service = None
-warmup_service = None
-enhanced_capabilities = {}
-websocket_dashboard = None
+# Pydantic Models
+class Message(BaseModel):
+    role: str
+    content: str
 
-# COMPREHENSIVE: Import services with all enhancements
-def safe_import_service(module_path, class_name, fallback=None):
-    """Safely import enhanced services with fallbacks"""
-    try:
-        module = __import__(module_path, fromlist=[class_name])
-        return getattr(module, class_name)
-    except (ImportError, AttributeError) as e:
-        logging.warning(f"Could not import {module_path}.{class_name}: {e}")
-        return fallback
+class ChatCompletionRequest(BaseModel):
+    model: str
+    messages: List[Message]
+    temperature: Optional[float] = 0.7
+    max_tokens: Optional[int] = None
+    stream: Optional[bool] = False
+    top_p: Optional[float] = 1.0
 
-# Import all available services
-MetricsCollector = safe_import_service('utils.metrics', 'MetricsCollector')
-HealthChecker = safe_import_service('utils.health', 'HealthChecker')
-WebSocketDashboard = safe_import_service('utils.websocket_dashboard', 'WebSocketDashboard')
+class HealthResponse(BaseModel):
+    status: str
+    healthy: bool
+    timestamp: str
+    version: str
+    services: Dict[str, Any]
 
-# Enhanced imports with comprehensive error handling
-try:
-    from services.enhanced_imports import setup_enhanced_imports
-    enhanced_imports = setup_enhanced_imports()
-    enhanced_capabilities = enhanced_imports['capabilities']
-    logging.info("✅ Enhanced imports available")
-except Exception as e:
-    logging.warning(f"Enhanced imports failed: {e}")
-    enhanced_capabilities = {
-        "streaming": settings.ENABLE_STREAMING,
-        "model_warmup": settings.ENABLE_MODEL_WARMUP,
-        "semantic_classification": False,
-        "enhanced_ollama": False,
-        "enhanced_router": False
-    }
+class StatusResponse(BaseModel):
+    status: str
+    services: Dict[str, bool]
+    features: Dict[str, bool]
+    timestamp: str
 
-# COMPREHENSIVE: Create enhanced Ollama client with all features
-import aiohttp
-import json
+# Global service state
+services_state = {
+    "ollama_connected": False,
+    "dashboard_available": False,
+    "initialization_complete": False,
+    "available_models": []
+}
 
-class ComprehensiveOllamaClient:
-    """Comprehensive Ollama client with all features and fallbacks"""
+# WebSocket session storage
+websocket_sessions = {}
+
+# Ollama Client for RunPod
+class OllamaClient:
+    """Ollama client for RunPod connection"""
     
     def __init__(self, base_url: str, timeout: int = 300):
         self.base_url = base_url.rstrip('/')
@@ -179,73 +114,50 @@ class ComprehensiveOllamaClient:
         self.stats = {
             'total_requests': 0,
             'successful_requests': 0,
-            'failed_requests': 0,
-            'avg_response_time': 0.0
+            'failed_requests': 0
         }
     
     async def initialize(self):
-        """Initialize with enhanced connection pooling if available"""
-        try:
-            # Try to use enhanced connection pool
-            from utils.connection_pool import get_connection_pool, ConnectionPoolConfig
-            config = ConnectionPoolConfig(
-                total_limit=50,
-                per_host_limit=15,
-                keepalive_timeout=120,
-                connect_timeout=10,
-                total_timeout=self.timeout
-            )
-            self.connection_pool = get_connection_pool(config)
-            await self.connection_pool.initialize()
-            logging.info("✅ Enhanced Ollama client with connection pooling")
-        except Exception as e:
-            logging.warning(f"Enhanced connection pool failed: {e}")
-            # Fallback to basic aiohttp session
-            self.session = aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=self.timeout)
-            )
-            logging.info("✅ Basic Ollama client initialized")
+        """Initialize HTTP session"""
+        timeout = aiohttp.ClientTimeout(total=self.timeout)
+        self.session = aiohttp.ClientSession(timeout=timeout)
+        logger.info(f"✅ Ollama client initialized for {self.base_url}")
     
     async def health_check(self) -> bool:
-        """Enhanced health check with circuit breaker support"""
+        """Check if Ollama is accessible"""
         try:
-            if hasattr(self, 'connection_pool'):
-                response_data = await self.connection_pool.post_json(
-                    f"{self.base_url}/api/tags", {}
-                )
-                return True
-            else:
-                if not self.session:
-                    await self.initialize()
-                async with self.session.get(f"{self.base_url}/api/tags") as response:
-                    return response.status == 200
+            if not self.session:
+                await self.initialize()
+            
+            async with self.session.get(f"{self.base_url}/api/tags") as response:
+                return response.status == 200
         except Exception as e:
-            logging.error(f"Ollama health check failed: {e}")
+            logger.error(f"Ollama health check failed: {e}")
             return False
     
-    async def list_models(self):
+    async def list_models(self) -> List[Dict]:
         """List available models"""
         try:
-            if hasattr(self, 'connection_pool'):
-                return await self.connection_pool.post_json(
-                    f"{self.base_url}/api/tags", {}
-                ).get('models', [])
-            else:
-                if not self.session:
-                    await self.initialize()
-                async with self.session.get(f"{self.base_url}/api/tags") as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        return data.get('models', [])
-                    return []
-        except Exception:
+            if not self.session:
+                await self.initialize()
+            
+            async with self.session.get(f"{self.base_url}/api/tags") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data.get('models', [])
+                return []
+        except Exception as e:
+            logger.error(f"Failed to list models: {e}")
             return []
     
     async def generate_completion(self, model: str, messages: List[Dict], **kwargs):
-        """Generate completion with enhanced features"""
+        """Generate completion using Ollama"""
         start_time = asyncio.get_event_loop().time()
         
         try:
+            if not self.session:
+                await self.initialize()
+            
             # Convert messages to prompt
             prompt = self._messages_to_prompt(messages)
             
@@ -260,34 +172,25 @@ class ComprehensiveOllamaClient:
                 }
             }
             
-            # Send request
-            if hasattr(self, 'connection_pool'):
-                result = await self.connection_pool.post_json(
-                    f"{self.base_url}/api/generate", payload
-                )
-            else:
-                if not self.session:
-                    await self.initialize()
-                async with self.session.post(
-                    f"{self.base_url}/api/generate", json=payload
-                ) as response:
-                    if response.status == 200:
-                        result = await response.json()
-                    else:
-                        raise Exception(f"API call failed with status {response.status}")
+            async with self.session.post(
+                f"{self.base_url}/api/generate", 
+                json=payload
+            ) as response:
+                if response.status == 200:
+                    result = await response.json()
+                else:
+                    error_text = await response.text()
+                    raise Exception(f"Ollama API error {response.status}: {error_text}")
             
             # Update stats
             processing_time = asyncio.get_event_loop().time() - start_time
             self.stats['total_requests'] += 1
             self.stats['successful_requests'] += 1
-            self.stats['avg_response_time'] = (
-                (self.stats['avg_response_time'] * (self.stats['total_requests'] - 1) + processing_time) 
-                / self.stats['total_requests']
-            )
             
+            # Return OpenAI-compatible response
             return {
-                "id": f"completion-{int(start_time)}",
-                "object": "chat.completion", 
+                "id": f"chatcmpl-{int(start_time)}",
+                "object": "chat.completion",
                 "created": int(start_time),
                 "model": model,
                 "choices": [{
@@ -310,7 +213,7 @@ class ComprehensiveOllamaClient:
         except Exception as e:
             self.stats['total_requests'] += 1
             self.stats['failed_requests'] += 1
-            logging.error(f"Generation failed: {e}")
+            logger.error(f"Generation failed: {e}")
             raise
     
     def _messages_to_prompt(self, messages: List[Dict]) -> str:
@@ -319,12 +222,12 @@ class ComprehensiveOllamaClient:
         for msg in messages:
             role = msg.get('role', 'user')
             content = msg.get('content', '')
-            if role == 'user':
-                prompt += f"User: {content}\n"
+            if role == 'system':
+                prompt += f"System: {content}\n"
+            elif role == 'user':
+                prompt += f"Human: {content}\n"
             elif role == 'assistant':
                 prompt += f"Assistant: {content}\n"
-            elif role == 'system':
-                prompt += f"System: {content}\n"
         prompt += "Assistant: "
         return prompt
     
@@ -334,186 +237,118 @@ class ComprehensiveOllamaClient:
     
     async def cleanup(self):
         """Cleanup resources"""
-        if hasattr(self, 'connection_pool'):
-            await self.connection_pool.cleanup()
-        elif self.session:
+        if self.session:
             await self.session.close()
 
-# COMPREHENSIVE: Enhanced router with all features
-class ComprehensiveLLMRouter:
-    """Comprehensive LLM router with all enhanced features"""
+# Model Router for 3 Models
+class ModelRouter:
+    """Routes requests to the best model based on content"""
     
     def __init__(self, ollama_client):
         self.ollama_client = ollama_client
-        self.default_model = settings.DEFAULT_MODEL
         
-        # Model configuration
+        # Configuration for your 3 models
         self.model_config = {
             'mistral:7b-instruct-q4_0': {
                 'priority': 1,
-                'cost_per_token': 0.0001,
-                'max_context': 8192,
-                'good_for': ['factual', 'math', 'general']
+                'good_for': ['factual', 'general', 'math', 'analysis'],
+                'description': 'General purpose model, good for factual questions'
             },
             'deepseek-v2:7b-q4_0': {
                 'priority': 2,
-                'cost_per_token': 0.00015,
-                'max_context': 4096,
-                'good_for': ['analysis', 'coding', 'resume']
+                'good_for': ['coding', 'technical', 'programming', 'debug'],
+                'description': 'Specialized for coding and technical tasks'
             },
             'llama3:8b-instruct-q4_0': {
-                'priority': 2,
-                'cost_per_token': 0.00012,
-                'max_context': 8192,
-                'good_for': ['creative', 'interview', 'storytelling']
+                'priority': 3,
+                'good_for': ['creative', 'storytelling', 'writing', 'chat'],
+                'description': 'Best for creative writing and conversational tasks'
             }
         }
         
         self.available_models = {}
-        self.semantic_classifier = None
+        self.default_model = 'mistral:7b-instruct-q4_0'
     
     async def initialize(self):
-        """Initialize router with semantic classification if available"""
-        # Get available models
+        """Initialize router and check available models"""
         try:
+            # Get models from Ollama
             models = await self.ollama_client.list_models()
             available_model_names = {model.get('name', '') for model in models}
+            
+            # Filter to only configured models that are available
             self.available_models = {
                 name: config for name, config in self.model_config.items()
                 if name in available_model_names
             }
             
             if not self.available_models:
-                # Fallback to any available model
+                # Fallback: use any available model
                 if models:
                     fallback_model = models[0].get('name', self.default_model)
                     self.available_models[fallback_model] = {
                         'priority': 1,
-                        'cost_per_token': 0.0001,
-                        'max_context': 4096,
-                        'good_for': ['general']
+                        'good_for': ['general'],
+                        'description': 'Fallback model'
                     }
+                else:
+                    # Emergency fallback
+                    self.available_models = {self.default_model: self.model_config[self.default_model]}
+            
+            logger.info(f"✅ Router initialized with models: {list(self.available_models.keys())}")
+            services_state["available_models"] = list(self.available_models.keys())
+            
         except Exception as e:
-            logging.warning(f"Could not get available models: {e}")
-            self.available_models = {self.default_model: {
-                'priority': 1, 'cost_per_token': 0.0001, 'max_context': 4096, 'good_for': ['general']
-            }}
-        
-        # Initialize semantic classifier if enabled
-        if settings.ENABLE_SEMANTIC_CLASSIFICATION and enhanced_capabilities.get('semantic_classification'):
-            try:
-                from services.semantic_classifier import SemanticIntentClassifier
-                self.semantic_classifier = SemanticIntentClassifier()
-                await self.semantic_classifier.initialize()
-                logging.info("✅ Semantic classifier initialized")
-            except Exception as e:
-                logging.warning(f"Semantic classifier failed: {e}")
-        
-        logging.info(f"✅ Comprehensive router initialized with models: {list(self.available_models.keys())}")
+            logger.error(f"Router initialization failed: {e}")
+            # Emergency fallback
+            self.available_models = {self.default_model: self.model_config[self.default_model]}
     
-    async def route_request(self, request) -> str:
-        """Route request with enhanced intelligence"""
-        # Use explicit model if valid
-        if hasattr(request, 'model') and request.model in self.available_models:
+    def select_model(self, request: ChatCompletionRequest) -> str:
+        """Select the best model for the request"""
+        # If specific model requested and available, use it
+        if request.model in self.available_models:
             return request.model
         
-        # Extract text for classification
-        text_content = self._extract_text_content(request)
+        # Analyze content to choose best model
+        text_content = " ".join([msg.content for msg in request.messages])
+        text_lower = text_content.lower()
         
-        # Classify intent
-        intent = await self._classify_intent(text_content, getattr(request, 'intent', None))
+        # Model selection logic
+        if any(word in text_lower for word in ['code', 'function', 'program', 'debug', 'script']):
+            # Prefer DeepSeek for coding
+            if 'deepseek-v2:7b-q4_0' in self.available_models:
+                return 'deepseek-v2:7b-q4_0'
         
-        # Select model based on intent
-        selected_model = self._select_model_for_intent(intent, text_content)
+        elif any(word in text_lower for word in ['story', 'creative', 'write', 'poem', 'chat']):
+            # Prefer Llama3 for creative tasks
+            if 'llama3:8b-instruct-q4_0' in self.available_models:
+                return 'llama3:8b-instruct-q4_0'
         
-        logging.info(f"Enhanced routing: intent={intent}, selected_model={selected_model}")
-        return selected_model
+        # Default to Mistral for factual/general queries
+        if 'mistral:7b-instruct-q4_0' in self.available_models:
+            return 'mistral:7b-instruct-q4_0'
+        
+        # Fallback to first available model
+        return list(self.available_models.keys())[0]
     
-    def _extract_text_content(self, request) -> str:
-        """Extract text content from request"""
-        if hasattr(request, 'messages'):
-            messages = []
-            for msg in request.messages:
-                if hasattr(msg, 'content'):
-                    messages.append(msg.content)
-                elif isinstance(msg, dict):
-                    messages.append(msg.get('content', ''))
-            return ' '.join(messages)
-        elif hasattr(request, 'prompt'):
-            return request.prompt
-        return ''
-    
-    async def _classify_intent(self, text: str, explicit_intent: Optional[str] = None) -> str:
-        """Classify intent with semantic classification if available"""
-        if explicit_intent:
-            return explicit_intent
+    async def process_completion(self, request: ChatCompletionRequest):
+        """Process completion request"""
+        # Select model
+        selected_model = self.select_model(request)
         
-        # Try semantic classification first
-        if self.semantic_classifier:
-            try:
-                intent, confidence = await self.semantic_classifier.classify_intent(text)
-                if confidence > 0.7:
-                    return intent
-            except Exception as e:
-                logging.warning(f"Semantic classification failed: {e}")
+        # Convert messages
+        messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
         
-        # Fallback to rule-based classification
-        return self._rule_based_classification(text)
-    
-    def _rule_based_classification(self, text: str) -> str:
-        """Rule-based intent classification"""
-        text_lower = text.lower()
+        # Generate completion
+        result = await self.ollama_client.generate_completion(
+            model=selected_model,
+            messages=messages,
+            temperature=request.temperature,
+            max_tokens=request.max_tokens,
+            top_p=request.top_p
+        )
         
-        if any(word in text_lower for word in ['calculate', 'solve', 'math', 'equation']):
-            return 'math'
-        elif any(word in text_lower for word in ['code', 'function', 'algorithm', 'debug']):
-            return 'coding'
-        elif any(word in text_lower for word in ['resume', 'cv', 'experience', 'skills']):
-            return 'resume'
-        elif any(word in text_lower for word in ['interview', 'job', 'career']):
-            return 'interview'
-        elif any(word in text_lower for word in ['write', 'create', 'story', 'creative']):
-            return 'creative'
-        elif any(word in text_lower for word in ['analyze', 'review', 'evaluate']):
-            return 'analysis'
-        else:
-            return 'factual'
-    
-    def _select_model_for_intent(self, intent: str, text: str) -> str:
-        """Select best model for intent"""
-        suitable_models = {}
-        for model_name, config in self.available_models.items():
-            if intent in config['good_for'] or 'general' in config['good_for']:
-                suitable_models[model_name] = config
-        
-        if not suitable_models:
-            suitable_models = self.available_models
-        
-        # Select by priority (lower number = higher priority)
-        best_model = min(suitable_models.items(), key=lambda x: x[1]['priority'])
-        return best_model[0]
-    
-    async def process_chat_completion(self, request, model: str):
-        """Process chat completion with enhancements"""
-        try:
-            messages = []
-            if hasattr(request, 'messages'):
-                for msg in request.messages:
-                    if hasattr(msg, 'role') and hasattr(msg, 'content'):
-                        messages.append({"role": msg.role, "content": msg.content})
-                    elif isinstance(msg, dict):
-                        messages.append(msg)
-            
-            return await self.ollama_client.generate_completion(
-                model=model,
-                messages=messages,
-                temperature=getattr(request, 'temperature', 0.7),
-                max_tokens=getattr(request, 'max_tokens', 150),
-                top_p=getattr(request, 'top_p', 1.0)
-            )
-        except Exception as e:
-            logging.error(f"Error processing chat completion: {e}")
-            raise
+        return result
     
     async def get_available_models(self):
         """Get available models with metadata"""
@@ -524,220 +359,126 @@ class ComprehensiveLLMRouter:
                 "object": "model",
                 "created": int(datetime.now().timestamp()),
                 "owned_by": "ollama",
-                "cost_per_token": config.get('cost_per_token', 0.0001),
-                "max_context": config.get('max_context', 4096),
+                "description": config.get('description', ''),
                 "capabilities": config.get('good_for', [])
             })
         return models
 
-# COMPREHENSIVE: Metrics collector with all features
-class ComprehensiveMetrics:
-    """Comprehensive metrics collector"""
-    
-    def __init__(self):
-        self.start_time = datetime.now().isoformat()
-        self.request_counts = {}
-        self.response_times = []
-        self.model_usage = {}
-        self.errors = {}
-    
-    async def get_all_metrics(self):
-        """Get comprehensive metrics"""
-        uptime = datetime.now().isoformat() - self.start_time
-        total_requests = sum(self.request_counts.values())
-        avg_response_time = sum(self.response_times) / len(self.response_times) if self.response_times else 0
-        
-        return {
-            "timestamp": datetime.now().isoformat(),
-            "version": "2.2.0",
-            "uptime_seconds": uptime.total_seconds(),
-            "requests": {
-                "total": total_requests,
-                "by_endpoint": self.request_counts,
-                "avg_response_time": avg_response_time
-            },
-            "models": self.model_usage,
-            "errors": self.errors,
-            "enhanced_features": enhanced_capabilities,
-            "status": "comprehensive"
-        }
-    
-    def track_request(self, endpoint: str, response_time: float = 0):
-        """Track request"""
-        self.request_counts[endpoint] = self.request_counts.get(endpoint, 0) + 1
-        if response_time > 0:
-            self.response_times.append(response_time)
-            if len(self.response_times) > 1000:
-                self.response_times = self.response_times[-500:]
-    
-    def track_model_usage(self, model: str):
-        """Track model usage"""
-        self.model_usage[model] = self.model_usage.get(model, 0) + 1
-    
-    def track_error(self, error_type: str):
-        """Track error"""
-        self.errors[error_type] = self.errors.get(error_type, 0) + 1
+# Global instances
+ollama_client = None
+model_router = None
 
-# COMPREHENSIVE: Initialize all services
-async def initialize_comprehensive_services():
-    """Initialize all services with comprehensive error handling"""
-    global ollama_client, llm_router, metrics_collector, health_checker, websocket_dashboard
+async def initialize_services():
+    """Initialize all services"""
+    global services_state, ollama_client, model_router
     
     try:
-        logging.info("🚀 Initializing comprehensive services...")
-        
-        # Initialize metrics collector
-        if MetricsCollector:
-            metrics_collector = MetricsCollector()
-        else:
-            metrics_collector = ComprehensiveMetrics()
-        logging.info("✅ Metrics collector initialized")
-        
-        # Initialize health checker
-        if HealthChecker:
-            health_checker = HealthChecker()
-            await health_checker.start_monitoring()
-            logging.info("✅ Health checker initialized")
+        logger.info("🚀 Initializing services...")
         
         # Initialize Ollama client
-        ollama_client = ComprehensiveOllamaClient(
-            settings.OLLAMA_BASE_URL, 
-            settings.OLLAMA_TIMEOUT
-        )
+        ollama_client = OllamaClient(settings.OLLAMA_BASE_URL, settings.OLLAMA_TIMEOUT)
         await ollama_client.initialize()
-        logging.info("✅ Comprehensive Ollama client initialized")
         
-        # Initialize router
-        llm_router = ComprehensiveLLMRouter(ollama_client)
-        await llm_router.initialize()
-        logging.info("✅ Comprehensive LLM router initialized")
+        # Check Ollama connection
+        services_state["ollama_connected"] = await ollama_client.health_check()
         
-        # Initialize WebSocket dashboard
-        if WebSocketDashboard:
-            websocket_dashboard = WebSocketDashboard(
-                metrics_collector=metrics_collector,
-                performance_monitor=None,
-                enhanced_dashboard=None
+        # Initialize model router
+        model_router = ModelRouter(ollama_client)
+        await model_router.initialize()
+        
+        # Check dashboard
+        react_build_dir = Path(__file__).parent / "frontend" / "build"
+        services_state["dashboard_available"] = (
+            react_build_dir.exists() and 
+            (react_build_dir / "index.html").exists()
+        )
+        
+        # If no React dashboard, check for static dashboard
+        if not services_state["dashboard_available"]:
+            static_dir = Path(__file__).parent / "static" / "dashboard"
+            services_state["dashboard_available"] = (
+                static_dir.exists() and 
+                (static_dir / "index.html").exists()
             )
-            await websocket_dashboard.start_broadcasting()
-            logging.info("✅ WebSocket dashboard initialized")
         
-        logging.info("✅ All comprehensive services initialized successfully")
+        services_state["initialization_complete"] = True
+        logger.info("✅ All services initialized successfully")
         
     except Exception as e:
-        logging.error(f"Failed to initialize some services: {e}")
-        logging.error(traceback.format_exc())
+        logger.error(f"❌ Service initialization failed: {e}")
+        services_state["initialization_complete"] = False
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan with comprehensive management"""
-    
+    """Application lifespan management"""
     # Startup
-    logging.info("🚀 Starting Comprehensive Enhanced LLM Proxy...")
+    logger.info("🌟 Starting Complete LLM Proxy...")
+    await initialize_services()
     
-    try:
-        await initialize_comprehensive_services()
-        logging.info("✅ Comprehensive services initialized")
-        log_comprehensive_startup_summary()
-    except Exception as e:
-        logging.error(f"❌ Failed to start some services: {e}")
+    # Log startup summary
+    logger.info("=" * 60)
+    logger.info(f"🎯 Server: {settings.HOST}:{settings.PORT}")
+    logger.info(f"🔗 Ollama: {settings.OLLAMA_BASE_URL}")
+    logger.info(f"📊 Services: {services_state}")
+    logger.info(f"🤖 Models: {services_state.get('available_models', [])}")
+    logger.info("=" * 60)
     
     yield
     
     # Shutdown
-    logging.info("🛑 Shutting down Comprehensive Enhanced LLM Proxy...")
-    
-    try:
-        if websocket_dashboard:
-            await websocket_dashboard.stop_broadcasting()
-        if health_checker and hasattr(health_checker, 'stop_monitoring'):
-            await health_checker.stop_monitoring()
-        if ollama_client:
-            await ollama_client.cleanup()
-        logging.info("✅ Services shut down gracefully")
-    except Exception as e:
-        logging.error(f"❌ Error during shutdown: {e}")
+    logger.info("🛑 Shutting down...")
+    if ollama_client:
+        await ollama_client.cleanup()
 
-def log_comprehensive_startup_summary():
-    """Log comprehensive startup information"""
-    logging.info("=" * 80)
-    logging.info("🚀 COMPREHENSIVE ENHANCED LLM PROXY - STARTUP SUMMARY")
-    logging.info("=" * 80)
-    logging.info(f"📋 Configuration:")
-    logging.info(f"   • Host: {settings.HOST}:{settings.PORT}")
-    logging.info(f"   • Ollama URL: {settings.OLLAMA_BASE_URL}")
-    logging.info(f"   • Dashboard: {'✅ Enabled' if settings.ENABLE_DASHBOARD else '⏸️ Disabled'}")
-    logging.info(f"   • Auth: {'✅ Enabled' if settings.ENABLE_AUTH else '⏸️ Disabled'}")
-    logging.info(f"🎯 Core Services:")
-    logging.info(f"   • Ollama Client: {'✅' if ollama_client else '❌'}")
-    logging.info(f"   • LLM Router: {'✅' if llm_router else '❌'}")
-    logging.info(f"   • Metrics: {'✅' if metrics_collector else '❌'}")
-    logging.info(f"   • Health Monitor: {'✅' if health_checker else '❌'}")
-    logging.info(f"   • WebSocket Dashboard: {'✅' if websocket_dashboard else '❌'}")
-    logging.info(f"🚀 Enhanced Features:")
-    for feature, enabled in enhanced_capabilities.items():
-        status = "✅ Enabled" if enabled else "⏸️ Disabled"
-        logging.info(f"   • {feature.replace('_', ' ').title()}: {status}")
-    logging.info(f"🌐 Endpoints:")
-    logging.info(f"   • API: http://{settings.HOST}:{settings.PORT}")
-    logging.info(f"   • Health: http://{settings.HOST}:{settings.PORT}/health")
-    logging.info(f"   • Metrics: http://{settings.HOST}:{settings.PORT}/metrics")
-    logging.info(f"   • Dashboard: http://{settings.HOST}:{settings.PORT}{settings.DASHBOARD_PATH}")
-    logging.info(f"   • WebSocket: ws://{settings.HOST}:{settings.PORT}/ws/dashboard")
-    logging.info("=" * 80)
-
-# Create comprehensive FastAPI app
+# Create FastAPI app
 app = FastAPI(
-    title="Comprehensive Enhanced LLM Proxy",
-    description="Production-ready LLM routing proxy with full enhanced features and React dashboard",
-    version="2.2.0",
+    title="Complete LLM Proxy",
+    description="OpenAI-compatible API with 3-model routing and authentication",
+    version="3.0.0-complete",
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc"
 )
 
-# Add CORS middleware
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
     allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
 
-# FIXED: Add React Dashboard static file serving (your solution)
-if getattr(settings, 'ENABLE_DASHBOARD', False):
-    try:
-        # Mount React dashboard build directory
-        static_dir = Path(__file__).parent / "frontend" / "build"
-        if static_dir.exists():
-            app.mount(
-                settings.DASHBOARD_PATH, 
-                StaticFiles(directory=static_dir, html=True), 
-                name="react_dashboard"
-            )
-            logging.info(f"✅ React dashboard mounted at {settings.DASHBOARD_PATH}")
-        else:
-            logging.warning(f"⚠️ React dashboard build directory not found: {static_dir}")
+# Dashboard static files
+if settings.ENABLE_DASHBOARD:
+    # Try React dashboard first
+    react_build_dir = Path(__file__).parent / "frontend" / "build"
+    static_dir = Path(__file__).parent / "static" / "dashboard"
+    
+    dashboard_dir = react_build_dir if react_build_dir.exists() else static_dir
+    
+    if dashboard_dir.exists():
+        app.mount("/static", StaticFiles(directory=dashboard_dir), name="static")
+        
+        @app.get("/app/{path:path}")
+        async def serve_dashboard(path: str = ""):
+            if path and "." in path:
+                file_path = dashboard_dir / path
+                if file_path.exists():
+                    return FileResponse(file_path)
             
-            # Create fallback dashboard response
-            @app.get(settings.DASHBOARD_PATH)
-            async def dashboard_fallback():
-                return JSONResponse({
-                    "message": "Dashboard not built yet. Run 'npm run build' in frontend directory.",
-                    "build_path": str(static_dir),
-                    "instructions": [
-                        "cd frontend",
-                        "npm install",
-                        "npm run build"
-                    ]
-                })
-    except Exception as e:
-        logging.error(f"Failed to mount React dashboard: {e}")
+            index_path = dashboard_dir / "index.html"
+            if index_path.exists():
+                return FileResponse(index_path)
+            else:
+                return JSONResponse({"error": "Dashboard not found"})
+        
+        logger.info("✅ Dashboard mounted at /app")
 
-# Authentication dependency
+# Authentication
 async def get_current_user(request: Request) -> Optional[Dict[str, Any]]:
-    """Get current user from request with comprehensive auth"""
+    """Authentication dependency"""
     if not settings.ENABLE_AUTH:
         return {"user_id": "anonymous", "permissions": ["read", "write"]}
     
@@ -762,383 +503,221 @@ async def get_current_user(request: Request) -> Optional[Dict[str, Any]]:
     
     return {"user_id": "authenticated", "permissions": ["read", "write"]}
 
-# COMPREHENSIVE: Main API Routes
-@app.post("/v1/chat/completions", response_model=ChatCompletionResponse)
-async def chat_completions(
-    request: ChatCompletionRequest,
-    http_request: Request,
-    current_user: Optional[Dict[str, Any]] = Depends(get_current_user)
+# WebSocket session management
+@app.post("/auth/websocket-session")
+async def create_websocket_session(
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """Comprehensive chat completions endpoint"""
-    
-    start_time = asyncio.get_event_loop().time()
-    
+    """Create a session token for WebSocket authentication"""
     try:
-        if not ollama_client:
-            raise HTTPException(status_code=503, detail="Ollama client not available")
-        
-        if not llm_router:
-            raise HTTPException(status_code=503, detail="LLM router not available")
-        
-        # Track request
-        if metrics_collector:
-            metrics_collector.track_request("/v1/chat/completions")
-        
-        # Route request
-        selected_model = await llm_router.route_request(request)
-        
-        # Process request
-        response = await llm_router.process_chat_completion(request, selected_model)
-        
-        # Track model usage
-        if metrics_collector:
-            processing_time = asyncio.get_event_loop().time() - start_time
-            metrics_collector.track_request("/v1/chat/completions", processing_time)
-            metrics_collector.track_model_usage(selected_model)
-        
-        return response
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        if metrics_collector:
-            metrics_collector.track_error("chat_completion_error")
-        logging.error(f"Error in chat completions: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/v1/completions")
-async def completions(
-    request: CompletionRequest,
-    http_request: Request,
-    current_user: Optional[Dict[str, Any]] = Depends(get_current_user)
-):
-    """Comprehensive completions endpoint"""
-    
-    try:
-        # Convert to chat format
-        chat_request = ChatCompletionRequest(
-            model=request.model,
-            messages=[Message(role="user", content=request.prompt)],
-            temperature=request.temperature,
-            max_tokens=request.max_tokens,
-            top_p=request.top_p,
-            stream=request.stream
-        )
-        
-        response = await chat_completions(chat_request, http_request, current_user)
-        
-        # Convert response format for completions API
-        if not request.stream:
-            return {
-                "id": response.id,
-                "object": "text_completion",
-                "created": response.created,
-                "model": response.model,
-                "choices": [{
-                    "text": response.choices[0].get("message", {}).get("content", ""),
-                    "index": 0,
-                    "finish_reason": response.choices[0].get("finish_reason", "stop")
-                }],
-                "usage": response.usage
-            }
-        
-        return response
-        
-    except Exception as e:
-        logging.error(f"Error in completions: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/health", response_model=HealthResponse)
-async def health_check():
-    """Comprehensive health check with all services"""
-    
-    try:
-        services_status = []
-        
-        # Check Ollama
-        if ollama_client:
-            try:
-                ollama_healthy = await ollama_client.health_check()
-                ollama_stats = ollama_client.get_stats()
-                services_status.append({
-                    "name": "ollama",
-                    "status": "healthy" if ollama_healthy else "unhealthy",
-                    "last_check": datetime.now().isoformat(),
-                    "stats": ollama_stats
-                })
-            except Exception as e:
-                services_status.append({
-                    "name": "ollama",
-                    "status": "unhealthy",
-                    "last_check": datetime.now().isoformat(),
-                    "error": str(e)
-                })
-        
-        # Check Router
-        if llm_router:
-            services_status.append({
-                "name": "llm_router",
-                "status": "healthy",
-                "last_check": datetime.now().isoformat(),
-                "available_models": len(llm_router.available_models)
-            })
-        
-        # Check Enhanced Features
-        services_status.append({
-            "name": "enhanced_features",
-            "status": "healthy",
-            "last_check": datetime.now().isoformat(),
-            "capabilities": enhanced_capabilities
-        })
-        
-        overall_healthy = all(s["status"] == "healthy" for s in services_status)
-        
-        health_response = HealthResponse(
-            status="healthy" if overall_healthy else "degraded",
-            healthy=overall_healthy,
-            timestamp=datetime.now().isoformat(),
-            version="2.2.0",
-            services=services_status
-        )
-        
-        if not overall_healthy:
-            return JSONResponse(
-                status_code=503,
-                content=health_response.dict()
-            )
-        
-        return health_response
-        
-    except Exception as e:
-        logging.error(f"Health check failed: {e}")
-        raise HTTPException(status_code=503, detail=f"Health check failed: {str(e)}")
-
-@app.get("/models")
-async def list_available_models():
-    """List available models with comprehensive metadata"""
-    
-    try:
-        if not llm_router:
-            raise HTTPException(status_code=503, detail="LLM router not available")
-        
-        models = await llm_router.get_available_models()
-        return {"object": "list", "data": models}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logging.error(f"Error listing models: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/metrics")
-async def get_comprehensive_metrics():
-    """Get comprehensive system metrics"""
-    try:
-        if metrics_collector and hasattr(metrics_collector, 'get_all_metrics'):
-            return await metrics_collector.get_all_metrics()
-        else:
-            return {
-                "status": "basic_metrics",
-                "timestamp": datetime.now().isoformat(),
-                "message": "Enhanced metrics not available",
-                "basic_stats": {
-                    "requests_handled": "unknown",
-                    "uptime": "unknown"
-                }
-            }
-    except Exception as e:
-        logging.error(f"Error getting metrics: {e}")
-        return {"error": str(e), "timestamp": datetime.now().isoformat()}
-
-# COMPREHENSIVE: WebSocket endpoint (your fix included)
-@app.websocket("/ws/dashboard")
-async def websocket_endpoint(websocket: WebSocket):
-    """WebSocket endpoint for real-time dashboard with comprehensive error handling"""
-    if websocket_dashboard:
-        try:
-            await websocket_dashboard.connect(websocket)
-            try:
-                while True:
-                    # Keep connection alive
-                    await websocket.receive_text()
-            except WebSocketDisconnect:
-                pass
-            finally:
-                websocket_dashboard.disconnect(websocket)
-        except Exception as e:
-            logging.error(f"WebSocket error: {e}")
-    else:
-        await websocket.accept()
-        await websocket.send_text(json.dumps({
-            "error": "WebSocket dashboard not available",
-            "message": "Dashboard service not initialized"
-        }))
-        await websocket.close()
-
-# COMPREHENSIVE: Admin endpoints for enhanced features
-@app.get("/admin/status")
-async def get_admin_status():
-    """Get comprehensive admin status"""
-    return {
-        "timestamp": datetime.now().isoformat(),
-        "version": "2.2.0",
-        "services": {
-            "ollama_client": ollama_client is not None,
-            "llm_router": llm_router is not None,
-            "metrics_collector": metrics_collector is not None,
-            "health_checker": health_checker is not None,
-            "websocket_dashboard": websocket_dashboard is not None
-        },
-        "enhanced_capabilities": enhanced_capabilities,
-        "configuration": {
-            "enable_auth": settings.ENABLE_AUTH,
-            "enable_dashboard": settings.ENABLE_DASHBOARD,
-            "enable_streaming": settings.ENABLE_STREAMING,
-            "enable_model_warmup": settings.ENABLE_MODEL_WARMUP,
-            "enable_semantic_classification": settings.ENABLE_SEMANTIC_CLASSIFICATION,
-            "dashboard_path": settings.DASHBOARD_PATH
+        session_token = secrets.token_urlsafe(32)
+        websocket_sessions[session_token] = {
+            "user_id": current_user["user_id"],
+            "created_at": datetime.now(),
+            "expires_at": datetime.now() + timedelta(hours=24)
         }
+        
+        return {
+            "session_token": session_token,
+            "expires_in": 24 * 3600,
+            "websocket_url": f"ws://{settings.HOST}:{settings.PORT}/ws/dashboard?session={session_token}"
+        }
+    except Exception as e:
+        logger.error(f"Failed to create WebSocket session: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create session")
+
+@app.websocket("/ws/dashboard")
+async def websocket_dashboard(websocket: WebSocket, session: str = Query(None)):
+    """WebSocket endpoint for dashboard"""
+    
+    # Authentication
+    if settings.ENABLE_AUTH:
+        if not session or session not in websocket_sessions:
+            await websocket.close(code=1008, reason="Invalid session")
+            return
+        
+        session_data = websocket_sessions[session]
+        if session_data["expires_at"] < datetime.now():
+            del websocket_sessions[session]
+            await websocket.close(code=1008, reason="Session expired")
+            return
+    
+    await websocket.accept()
+    logger.info("🔌 WebSocket connected")
+    
+    try:
+        while True:
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            
+            if message.get("type") == "ping":
+                await websocket.send_text(json.dumps({"type": "pong"}))
+            
+            elif message.get("type") == "request_update":
+                # Send system status
+                status_data = {
+                    "timestamp": datetime.now().isoformat(),
+                    "services": services_state,
+                    "models": services_state.get("available_models", []),
+                    "stats": ollama_client.get_stats() if ollama_client else {}
+                }
+                await websocket.send_text(json.dumps({
+                    "type": "dashboard_update",
+                    "data": status_data
+                }))
+            
+            elif message.get("type") == "chat":
+                # Handle chat message
+                if model_router:
+                    try:
+                        # Create chat completion request
+                        chat_request = ChatCompletionRequest(
+                            model=message.get("model", "mistral:7b-instruct-q4_0"),
+                            messages=[Message(role="user", content=message.get("content", ""))]
+                        )
+                        
+                        # Get response
+                        result = await model_router.process_completion(chat_request)
+                        
+                        await websocket.send_text(json.dumps({
+                            "type": "chat_response",
+                            "data": result
+                        }))
+                    except Exception as e:
+                        await websocket.send_text(json.dumps({
+                            "type": "error",
+                            "message": str(e)
+                        }))
+                        
+    except WebSocketDisconnect:
+        logger.info("🔌 WebSocket disconnected")
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+
+# API Endpoints
+
+@app.get("/")
+async def root():
+    """Root endpoint"""
+    return {
+        "message": "Complete LLM Proxy",
+        "version": "3.0.0-complete",
+        "timestamp": datetime.now().isoformat(),
+        "endpoints": {
+            "health": "/health",
+            "models": "/v1/models",
+            "chat_completions": "/v1/chat/completions",
+            "dashboard": "/app",
+            "docs": "/docs"
+        },
+        "services": services_state
     }
 
-@app.get("/admin/circuit-breakers")
-async def get_circuit_breakers():
-    """Get circuit breaker status"""
-    try:
-        from services.circuit_breaker import get_circuit_breaker_manager
-        manager = get_circuit_breaker_manager()
-        return manager.get_all_status()
-    except ImportError:
-        return {
-            "message": "Circuit breakers not available",
-            "status": "feature_not_loaded",
-            "recommendation": "Install enhanced dependencies to enable circuit breakers"
-        }
-    except Exception as e:
-        return {"error": str(e)}
+@app.get("/health", response_model=HealthResponse)
+async def health():
+    """Health check"""
+    return HealthResponse(
+        status="healthy" if services_state["initialization_complete"] else "initializing",
+        healthy=services_state["initialization_complete"],
+        timestamp=datetime.now().isoformat(),
+        version="3.0.0-complete",
+        services=services_state
+    )
 
-@app.get("/admin/cache/stats")
-async def get_cache_stats():
-    """Get cache statistics"""
+@app.get("/v1/models")
+async def list_models():
+    """List available models (OpenAI-compatible)"""
     try:
-        from services.smart_cache import get_smart_cache
-        cache = get_smart_cache()
-        return cache.get_stats()
-    except ImportError:
-        return {
-            "message": "Smart cache not available",
-            "status": "feature_not_loaded",
-            "recommendation": "Install Redis and enhanced dependencies to enable smart caching"
-        }
+        if not model_router:
+            raise HTTPException(status_code=503, detail="Model router not available")
+        
+        models = await model_router.get_available_models()
+        return {"object": "list", "data": models}
+        
     except Exception as e:
-        return {"error": str(e)}
+        logger.error(f"Error listing models: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/admin/memory")
-async def get_memory_status():
-    """Get memory status and management info"""
+@app.post("/v1/chat/completions")
+async def chat_completions(
+    request: ChatCompletionRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """OpenAI-compatible chat completions endpoint"""
+    
     try:
-        from utils.memory_manager import get_memory_manager
-        manager = get_memory_manager()
-        return manager.get_status_summary()
-    except ImportError:
-        return {
-            "message": "Memory manager not available",
-            "status": "feature_not_loaded"
-        }
-    except Exception as e:
-        return {"error": str(e)}
-
-@app.post("/admin/warmup/{model}")
-async def warmup_model(model: str):
-    """Manually warmup a specific model"""
-    try:
+        if not model_router:
+            raise HTTPException(status_code=503, detail="Model router not available")
+        
         if not ollama_client:
             raise HTTPException(status_code=503, detail="Ollama client not available")
         
-        # Try enhanced warmup if available
-        if hasattr(ollama_client, 'warm_up_model'):
-            success = await ollama_client.warm_up_model(model)
-        else:
-            # Basic warmup
-            test_messages = [{"role": "user", "content": "Hello"}]
-            await ollama_client.generate_completion(model, test_messages, max_tokens=1)
-            success = True
+        # Process the completion
+        result = await model_router.process_completion(request)
         
-        return {
-            "message": f"Model {model} warmup {'successful' if success else 'failed'}",
-            "model": model,
-            "success": success,
-            "timestamp": datetime.now().isoformat()
-        }
+        return result
         
+    except HTTPException:
+        raise
     except Exception as e:
-        logging.error(f"Model warmup failed: {e}")
+        logger.error(f"Error in chat completions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# COMPREHENSIVE: Error handlers
+@app.get("/api/status")
+async def api_status():
+    """Detailed status for dashboard"""
+    return StatusResponse(
+        status="online" if services_state["initialization_complete"] else "starting",
+        services=services_state,
+        features={
+            "authentication": settings.ENABLE_AUTH,
+            "dashboard": settings.ENABLE_DASHBOARD,
+            "websocket": settings.ENABLE_WEBSOCKET
+        },
+        timestamp=datetime.now().isoformat()
+    )
+
+# Error handlers
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
-    """Comprehensive HTTP exception handler"""
     return JSONResponse(
         status_code=exc.status_code,
         content={
-            "error": exc.detail,
-            "status_code": exc.status_code,
-            "timestamp": datetime.now().isoformat(),
-            "path": str(request.url.path),
-            "method": request.method
+            "error": {
+                "status_code": exc.status_code,
+                "detail": exc.detail,
+                "timestamp": datetime.now().isoformat(),
+                "path": str(request.url.path)
+            }
         }
     )
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
-    """Comprehensive general exception handler"""
-    logging.error(f"Unhandled exception: {str(exc)}", exc_info=True)
-    
-    # Track error in metrics
-    if metrics_collector:
-        metrics_collector.track_error("unhandled_exception")
-    
+    logger.error(f"Unhandled exception: {str(exc)}")
     return JSONResponse(
         status_code=500,
         content={
-            "error": "Internal server error",
-            "type": type(exc).__name__,
-            "timestamp": datetime.now().isoformat(),
-            "path": str(request.url.path),
-            "method": request.method,
-            "request_id": getattr(request.state, 'request_id', 'unknown')
+            "error": {
+                "status_code": 500,
+                "detail": "Internal server error",
+                "timestamp": datetime.now().isoformat(),
+                "path": str(request.url.path)
+            }
         }
     )
 
-# Root endpoint for basic info
-@app.get("/")
-async def root():
-    """Root endpoint with comprehensive service info"""
-    return {
-        "name": "Comprehensive Enhanced LLM Proxy",
-        "version": "2.2.0",
-        "status": "operational",
-        "timestamp": datetime.now().isoformat(),
-        "endpoints": {
-            "health": "/health",
-            "metrics": "/metrics", 
-            "models": "/models",
-            "chat_completions": "/v1/chat/completions",
-            "completions": "/v1/completions",
-            "dashboard": getattr(settings, 'DASHBOARD_PATH', '/dashboard') if getattr(settings, 'ENABLE_DASHBOARD', False) else None,
-            "websocket": "/ws/dashboard",
-            "admin": "/admin/status",
-            "docs": "/docs"
-        },
-        "features": enhanced_capabilities,
-        "documentation": "/docs"
-    }
-
 if __name__ == "__main__":
+    logger.info(f"🚀 Starting Complete LLM Proxy")
+    logger.info(f"📍 Server: http://{settings.HOST}:{settings.PORT}")
+    logger.info(f"📊 Dashboard: http://{settings.HOST}:{settings.PORT}/app")
+    logger.info(f"🔌 WebSocket: ws://{settings.HOST}:{settings.PORT}/ws/dashboard")
+    
     uvicorn.run(
         "main:app",
         host=settings.HOST,
         port=settings.PORT,
         reload=settings.DEBUG,
-        log_level=settings.LOG_LEVEL.lower()
+        log_level=settings.LOG_LEVEL.lower(),
+        access_log=True
     )
