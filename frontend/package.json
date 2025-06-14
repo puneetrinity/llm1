@@ -9,10 +9,6 @@
     "recharts": "^2.8.0",
     "lucide-react": "^0.263.1"
   },
-  "devDependencies": {
-    "ajv": "^6.12.6",
-    "ajv-keywords": "^5.1.0"
-  },
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
