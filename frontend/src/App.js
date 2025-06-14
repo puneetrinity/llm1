@@ -1,4 +1,4 @@
-// frontend/src/App.js - Complete React Dashboard (FIXED)
+// frontend/src/App.js - Complete React Dashboard with Authentication
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, 
@@ -9,6 +9,161 @@ import './App.css';
 const API_BASE = window.location.origin;
 const WS_BASE = window.location.origin.replace('http', 'ws');
 
+// Authentication Hook
+const useAuth = () => {
+  const [apiKey, setApiKey] = useState(() => {
+    return localStorage.getItem('llm_proxy_api_key') || 
+           import.meta?.env?.VITE_API_KEY || 
+           process.env?.REACT_APP_API_KEY ||
+           'sk-default';
+  });
+  
+  const [sessionToken, setSessionToken] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authError, setAuthError] = useState(null);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+
+  // Auto-authenticate on component mount
+  useEffect(() => {
+    if (apiKey && !sessionToken) {
+      authenticate(apiKey);
+    }
+  }, [apiKey]);
+
+  const authenticate = async (key) => {
+    setIsAuthenticating(true);
+    setAuthError(null);
+
+    try {
+      // Test API key by getting session token
+      const response = await fetch('/auth/websocket-session', {
+        method: 'POST',
+        headers: {
+          'X-API-Key': key,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setSessionToken(data.session_token);
+        setApiKey(key);
+        setIsAuthenticated(true);
+        localStorage.setItem('llm_proxy_api_key', key);
+        console.log('✅ Authentication successful');
+        return true;
+      } else {
+        const errorData = await response.json();
+        const errorMsg = errorData.detail?.message || errorData.message || 'Invalid API key';
+        setAuthError(errorMsg);
+        setIsAuthenticated(false);
+        return false;
+      }
+    } catch (error) {
+      console.error('Authentication error:', error);
+      setAuthError('Connection failed. Please check your connection.');
+      setIsAuthenticated(false);
+      return false;
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
+  const logout = () => {
+    setApiKey('');
+    setSessionToken(null);
+    setIsAuthenticated(false);
+    setAuthError(null);
+    localStorage.removeItem('llm_proxy_api_key');
+  };
+
+  const updateApiKey = async (newKey) => {
+    return await authenticate(newKey);
+  };
+
+  return {
+    apiKey,
+    sessionToken,
+    isAuthenticated,
+    authError,
+    isAuthenticating,
+    authenticate,
+    logout,
+    updateApiKey
+  };
+};
+
+// Authentication UI Component
+const AuthSection = ({ auth, className = '' }) => {
+  const [showAuthForm, setShowAuthForm] = useState(!auth.isAuthenticated);
+  const [inputKey, setInputKey] = useState(auth.apiKey || '');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const success = await auth.updateApiKey(inputKey);
+    if (success) {
+      setShowAuthForm(false);
+    }
+  };
+
+  const handleLogout = () => {
+    auth.logout();
+    setShowAuthForm(true);
+    setInputKey('');
+  };
+
+  if (auth.isAuthenticated && !showAuthForm) {
+    return (
+      <div className={`auth-status authenticated ${className}`}>
+        <span className="auth-indicator">
+          🔑 <span className="api-key-preview">{auth.apiKey.substring(0, 8)}...</span>
+        </span>
+        <button onClick={() => setShowAuthForm(true)} className="change-key-btn">
+          Change Key
+        </button>
+        <button onClick={handleLogout} className="logout-btn">
+          Logout
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`auth-form ${className}`}>
+      <form onSubmit={handleSubmit} className="api-key-form">
+        <div className="form-row">
+          <input
+            type="password"
+            value={inputKey}
+            onChange={(e) => setInputKey(e.target.value)}
+            placeholder="Enter API Key (sk-...)"
+            className="api-key-input"
+            disabled={auth.isAuthenticating}
+          />
+          <button 
+            type="submit" 
+            disabled={auth.isAuthenticating || !inputKey.trim()}
+            className="auth-submit-btn"
+          >
+            {auth.isAuthenticating ? '🔄' : '🔑 Connect'}
+          </button>
+        </div>
+        
+        {auth.authError && (
+          <div className="auth-error">
+            ❌ {auth.authError}
+          </div>
+        )}
+        
+        <div className="auth-help">
+          💡 Default dev key: <code>sk-default</code>
+        </div>
+      </form>
+    </div>
+  );
+};
+
+// Main App Component
 function App() {
   const [activeTab, setActiveTab] = useState('chat');
   const [metrics, setMetrics] = useState(null);
@@ -17,15 +172,25 @@ function App() {
   const [cacheStats, setCacheStats] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef(null);
+  
+  // Authentication
+  const auth = useAuth();
 
-  // FIXED: Wrapped connectWebSocket in useCallback to fix dependency warning
+  // FIXED: Wrapped connectWebSocket in useCallback with auth dependency
   const connectWebSocket = useCallback(() => {
+    if (!auth.isAuthenticated || !auth.sessionToken) {
+      console.log('Cannot connect WebSocket: not authenticated');
+      return;
+    }
+
     try {
-      wsRef.current = new WebSocket(`${WS_BASE}/ws/dashboard`);
+      // Connect with session token authentication
+      const wsUrl = `${WS_BASE}/ws/dashboard?session=${auth.sessionToken}`;
+      wsRef.current = new WebSocket(wsUrl);
       
       wsRef.current.onopen = () => {
         setIsConnected(true);
-        console.log('WebSocket connected');
+        console.log('🔌 WebSocket connected with authentication');
       };
       
       wsRef.current.onmessage = (event) => {
@@ -37,31 +202,54 @@ function App() {
       
       wsRef.current.onclose = () => {
         setIsConnected(false);
-        // Reconnect after 5 seconds
-        setTimeout(connectWebSocket, 5000);
+        console.log('🔌 WebSocket disconnected');
+        // Reconnect after 5 seconds if still authenticated
+        if (auth.isAuthenticated) {
+          setTimeout(connectWebSocket, 5000);
+        }
+      };
+
+      wsRef.current.onerror = (error) => {
+        console.error('❌ WebSocket error:', error);
+        setIsConnected(false);
       };
     } catch (error) {
       console.error('WebSocket connection failed:', error);
     }
-  }, []);
+  }, [auth.isAuthenticated, auth.sessionToken]);
 
   // Initialize WebSocket for real-time updates
   useEffect(() => {
-    connectWebSocket();
-    loadInitialData();
+    if (auth.isAuthenticated && auth.sessionToken) {
+      connectWebSocket();
+      loadInitialData();
+    } else {
+      // Disconnect WebSocket if not authenticated
+      if (wsRef.current) {
+        wsRef.current.close();
+        setIsConnected(false);
+      }
+    }
     
     return () => {
       if (wsRef.current) {
         wsRef.current.close();
       }
     };
-  }, [connectWebSocket]); // FIXED: Added connectWebSocket to dependency array
+  }, [auth.isAuthenticated, auth.sessionToken, connectWebSocket]);
 
   const loadInitialData = async () => {
+    if (!auth.isAuthenticated) return;
+
     try {
+      const headers = {
+        'X-API-Key': auth.apiKey,
+        'Content-Type': 'application/json'
+      };
+
       const [metricsRes, healthRes] = await Promise.all([
-        fetch(`${API_BASE}/metrics`),
-        fetch(`${API_BASE}/health`)
+        fetch(`${API_BASE}/metrics`, { headers }),
+        fetch(`${API_BASE}/health`, { headers })
       ]);
       
       if (metricsRes.ok) {
@@ -76,21 +264,31 @@ function App() {
 
       // Try to load enhanced features data
       try {
-        const cbRes = await fetch(`${API_BASE}/admin/circuit-breakers`);
+        const cbRes = await fetch(`${API_BASE}/admin/circuit-breakers`, { headers });
         if (cbRes.ok) {
           setCircuitBreakers(await cbRes.json());
         }
-      } catch (e) { /* Enhanced features not available */ }
+      } catch (e) { 
+        console.log('Circuit breakers not available');
+      }
 
       try {
-        const cacheRes = await fetch(`${API_BASE}/admin/cache/stats`);
+        const cacheRes = await fetch(`${API_BASE}/admin/cache/stats`, { headers });
         if (cacheRes.ok) {
           setCacheStats(await cacheRes.json());
         }
-      } catch (e) { /* Enhanced features not available */ }
+      } catch (e) { 
+        console.log('Cache stats not available');
+      }
 
     } catch (error) {
       console.error('Failed to load initial data:', error);
+      
+      // Handle authentication errors
+      if (error.message?.includes('401') || error.message?.includes('403')) {
+        console.log('Authentication failed, logging out...');
+        auth.logout();
+      }
     }
   };
 
@@ -105,7 +303,11 @@ function App() {
 
   return (
     <div className="app">
-      <Header isConnected={isConnected} health={health} />
+      <Header 
+        isConnected={isConnected} 
+        health={health} 
+        auth={auth}
+      />
       
       <nav className="tab-nav">
         <button 
@@ -135,17 +337,29 @@ function App() {
       </nav>
 
       <main className="main-content">
-        {activeTab === 'chat' && <ChatInterface />}
-        {activeTab === 'dashboard' && <Dashboard metrics={metrics} health={health} />}
-        {activeTab === 'performance' && <Performance metrics={metrics} circuitBreakers={circuitBreakers} />}
-        {activeTab === 'admin' && <Admin cacheStats={cacheStats} />}
+        {!auth.isAuthenticated ? (
+          <div className="auth-required">
+            <div className="auth-required-content">
+              <h2>🔐 Authentication Required</h2>
+              <p>Please enter your API key to access the LLM Proxy interface.</p>
+              <AuthSection auth={auth} />
+            </div>
+          </div>
+        ) : (
+          <>
+            {activeTab === 'chat' && <ChatInterface auth={auth} />}
+            {activeTab === 'dashboard' && <Dashboard metrics={metrics} health={health} />}
+            {activeTab === 'performance' && <Performance metrics={metrics} circuitBreakers={circuitBreakers} />}
+            {activeTab === 'admin' && <Admin cacheStats={cacheStats} auth={auth} />}
+          </>
+        )}
       </main>
     </div>
   );
 }
 
-// Header Component
-function Header({ isConnected, health }) {
+// Header Component with Authentication
+function Header({ isConnected, health, auth }) {
   const healthStatus = health?.healthy ? 'healthy' : 'unhealthy';
   const connectionStatus = isConnected ? 'connected' : 'disconnected';
 
@@ -156,6 +370,7 @@ function Header({ isConnected, health }) {
         <span className="version">v2.2.0</span>
       </div>
       <div className="header-right">
+        <AuthSection auth={auth} className="header-auth" />
         <div className={`status-indicator ${connectionStatus}`}>
           <span className="dot"></span>
           WebSocket: {connectionStatus}
@@ -169,8 +384,8 @@ function Header({ isConnected, health }) {
   );
 }
 
-// Chat Interface Component
-function ChatInterface() {
+// Chat Interface Component with Authentication
+function ChatInterface({ auth }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -188,7 +403,7 @@ function ChatInterface() {
   }, [messages]);
 
   const sendMessage = async () => {
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || isLoading || !auth.isAuthenticated) return;
 
     const userMessage = { role: 'user', content: input };
     setMessages(prev => [...prev, userMessage]);
@@ -200,6 +415,7 @@ function ChatInterface() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-API-Key': auth.apiKey, // ✅ AUTHENTICATION HEADER
         },
         body: JSON.stringify({
           model: selectedModel,
@@ -208,6 +424,15 @@ function ChatInterface() {
           stream: streamEnabled
         })
       });
+
+      if (!response.ok) {
+        // Handle authentication errors
+        if (response.status === 401 || response.status === 403) {
+          const errorData = await response.json();
+          throw new Error(errorData.detail?.message || 'Authentication failed');
+        }
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
 
       if (streamEnabled) {
         await handleStreamingResponse(response);
@@ -221,9 +446,22 @@ function ChatInterface() {
       }
     } catch (error) {
       console.error('Chat error:', error);
+      
+      let errorMessage = '❌ Error: Failed to get response from LLM';
+      
+      if (error.message.includes('Authentication') || error.message.includes('401') || error.message.includes('403')) {
+        errorMessage = '🔑 Authentication Error: Please check your API key';
+        // Trigger re-authentication
+        auth.logout();
+      } else if (error.message.includes('rate limit') || error.message.includes('429')) {
+        errorMessage = '⏳ Rate Limit: Please wait before sending another message';
+      } else if (error.message.includes('500')) {
+        errorMessage = '🛠️ Server Error: The service is experiencing issues';
+      }
+      
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: '❌ Error: Failed to get response from LLM'
+        content: errorMessage
       }]);
     } finally {
       setIsLoading(false);
@@ -341,10 +579,13 @@ function ChatInterface() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-          placeholder="Type your message..."
-          disabled={isLoading}
+          placeholder={auth.isAuthenticated ? "Type your message..." : "Please authenticate first..."}
+          disabled={isLoading || !auth.isAuthenticated}
         />
-        <button onClick={sendMessage} disabled={isLoading || !input.trim()}>
+        <button 
+          onClick={sendMessage} 
+          disabled={isLoading || !input.trim() || !auth.isAuthenticated}
+        >
           {isLoading ? '⏳' : '➤'}
         </button>
       </div>
@@ -352,7 +593,7 @@ function ChatInterface() {
   );
 }
 
-// Dashboard Component
+// Dashboard Component (unchanged)
 function Dashboard({ metrics, health }) {
   if (!metrics) {
     return <div className="loading">Loading dashboard data...</div>;
@@ -471,7 +712,7 @@ function Dashboard({ metrics, health }) {
   );
 }
 
-// Performance Component
+// Performance Component (unchanged)
 function Performance({ metrics, circuitBreakers }) {
   return (
     <div className="performance">
@@ -525,25 +766,57 @@ function Performance({ metrics, circuitBreakers }) {
   );
 }
 
-// Admin Component
-function Admin({ cacheStats }) {
-  // FIXED: Removed unused logs state variables that were causing no-unused-vars warnings
-
+// Admin Component with Authentication
+function Admin({ cacheStats, auth }) {
   const clearCache = async () => {
+    if (!auth.isAuthenticated) return;
+
     try {
-      await fetch(`${API_BASE}/admin/cache/clear`, { method: 'POST' });
-      alert('Cache cleared successfully');
+      const response = await fetch(`${API_BASE}/admin/cache/clear`, { 
+        method: 'POST',
+        headers: {
+          'X-API-Key': auth.apiKey,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        alert('Cache cleared successfully');
+      } else if (response.status === 401 || response.status === 403) {
+        alert('Authentication failed. Please check your API key.');
+        auth.logout();
+      } else {
+        alert('Failed to clear cache');
+      }
     } catch (error) {
+      console.error('Clear cache error:', error);
       alert('Failed to clear cache');
     }
   };
 
   const restartService = async () => {
+    if (!auth.isAuthenticated) return;
+
     if (window.confirm('Are you sure you want to restart the service?')) {
       try {
-        await fetch(`${API_BASE}/admin/restart`, { method: 'POST' });
-        alert('Service restart initiated');
+        const response = await fetch(`${API_BASE}/admin/restart`, { 
+          method: 'POST',
+          headers: {
+            'X-API-Key': auth.apiKey,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          alert('Service restart initiated');
+        } else if (response.status === 401 || response.status === 403) {
+          alert('Authentication failed. Please check your API key.');
+          auth.logout();
+        } else {
+          alert('Failed to restart service');
+        }
       } catch (error) {
+        console.error('Restart service error:', error);
         alert('Failed to restart service');
       }
     }
@@ -582,13 +855,14 @@ function Admin({ cacheStats }) {
           <div>Version: 2.2.0</div>
           <div>Uptime: {new Date().toLocaleString()}</div>
           <div>Environment: Production</div>
+          <div>Authenticated User: {auth.apiKey.substring(0, 8)}...</div>
         </div>
       </div>
     </div>
   );
 }
 
-// Metric Card Component
+// Metric Card Component (unchanged)
 function MetricCard({ title, value, icon, color }) {
   return (
     <div className={`metric-card ${color}`}>
