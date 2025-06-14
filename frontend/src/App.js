@@ -1,4 +1,4 @@
-// frontend/src/App.js - Complete React Dashboard with Authentication
+// frontend/src/App.js - Compiled React Dashboard with Authentication
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, 
@@ -28,14 +28,13 @@ const useAuth = () => {
     if (apiKey && !sessionToken) {
       authenticate(apiKey);
     }
-  }, [apiKey]);
+  }, [apiKey, sessionToken]);
 
   const authenticate = async (key) => {
     setIsAuthenticating(true);
     setAuthError(null);
 
     try {
-      // Test API key by getting session token
       const response = await fetch('/auth/websocket-session', {
         method: 'POST',
         headers: {
@@ -163,202 +162,20 @@ const AuthSection = ({ auth, className = '' }) => {
   );
 };
 
-// Main App Component
-function App() {
-  const [activeTab, setActiveTab] = useState('chat');
-  const [metrics, setMetrics] = useState(null);
-  const [health, setHealth] = useState(null);
-  const [circuitBreakers, setCircuitBreakers] = useState(null);
-  const [cacheStats, setCacheStats] = useState(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const wsRef = useRef(null);
-  
-  // Authentication
-  const auth = useAuth();
-
-  // FIXED: Wrapped connectWebSocket in useCallback with auth dependency
-  const connectWebSocket = useCallback(() => {
-    if (!auth.isAuthenticated || !auth.sessionToken) {
-      console.log('Cannot connect WebSocket: not authenticated');
-      return;
-    }
-
-    try {
-      // Connect with session token authentication
-      const wsUrl = `${WS_BASE}/ws/dashboard?session=${auth.sessionToken}`;
-      wsRef.current = new WebSocket(wsUrl);
-      
-      wsRef.current.onopen = () => {
-        setIsConnected(true);
-        console.log('🔌 WebSocket connected with authentication');
-      };
-      
-      wsRef.current.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.type === 'dashboard_update') {
-          updateDashboardData(data.data);
-        }
-      };
-      
-      wsRef.current.onclose = () => {
-        setIsConnected(false);
-        console.log('🔌 WebSocket disconnected');
-        // Reconnect after 5 seconds if still authenticated
-        if (auth.isAuthenticated) {
-          setTimeout(connectWebSocket, 5000);
-        }
-      };
-
-      wsRef.current.onerror = (error) => {
-        console.error('❌ WebSocket error:', error);
-        setIsConnected(false);
-      };
-    } catch (error) {
-      console.error('WebSocket connection failed:', error);
-    }
-  }, [auth.isAuthenticated, auth.sessionToken]);
-
-  // Initialize WebSocket for real-time updates
-  useEffect(() => {
-    if (auth.isAuthenticated && auth.sessionToken) {
-      connectWebSocket();
-      loadInitialData();
-    } else {
-      // Disconnect WebSocket if not authenticated
-      if (wsRef.current) {
-        wsRef.current.close();
-        setIsConnected(false);
-      }
-    }
-    
-    return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
-    };
-  }, [auth.isAuthenticated, auth.sessionToken, connectWebSocket]);
-
-  const loadInitialData = async () => {
-    if (!auth.isAuthenticated) return;
-
-    try {
-      const headers = {
-        'X-API-Key': auth.apiKey,
-        'Content-Type': 'application/json'
-      };
-
-      const [metricsRes, healthRes] = await Promise.all([
-        fetch(`${API_BASE}/metrics`, { headers }),
-        fetch(`${API_BASE}/health`, { headers })
-      ]);
-      
-      if (metricsRes.ok) {
-        const metricsData = await metricsRes.json();
-        setMetrics(metricsData);
-      }
-      
-      if (healthRes.ok) {
-        const healthData = await healthRes.json();
-        setHealth(healthData);
-      }
-
-      // Try to load enhanced features data
-      try {
-        const cbRes = await fetch(`${API_BASE}/admin/circuit-breakers`, { headers });
-        if (cbRes.ok) {
-          setCircuitBreakers(await cbRes.json());
-        }
-      } catch (e) { 
-        console.log('Circuit breakers not available');
-      }
-
-      try {
-        const cacheRes = await fetch(`${API_BASE}/admin/cache/stats`, { headers });
-        if (cacheRes.ok) {
-          setCacheStats(await cacheRes.json());
-        }
-      } catch (e) { 
-        console.log('Cache stats not available');
-      }
-
-    } catch (error) {
-      console.error('Failed to load initial data:', error);
-      
-      // Handle authentication errors
-      if (error.message?.includes('401') || error.message?.includes('403')) {
-        console.log('Authentication failed, logging out...');
-        auth.logout();
-      }
-    }
-  };
-
-  const updateDashboardData = (data) => {
-    if (data.system_overview) {
-      setMetrics(data);
-    }
-    if (data.healthy !== undefined) {
-      setHealth(data);
-    }
-  };
-
+// Metric Card Component
+function MetricCard({ title, value, icon, color }) {
   return (
-    <div className="app">
-      <Header 
-        isConnected={isConnected} 
-        health={health} 
-        auth={auth}
-      />
-      
-      <nav className="tab-nav">
-        <button 
-          className={activeTab === 'chat' ? 'active' : ''} 
-          onClick={() => setActiveTab('chat')}
-        >
-          💬 Chat Interface
-        </button>
-        <button 
-          className={activeTab === 'dashboard' ? 'active' : ''} 
-          onClick={() => setActiveTab('dashboard')}
-        >
-          📊 Dashboard
-        </button>
-        <button 
-          className={activeTab === 'performance' ? 'active' : ''} 
-          onClick={() => setActiveTab('performance')}
-        >
-          ⚡ Performance
-        </button>
-        <button 
-          className={activeTab === 'admin' ? 'active' : ''} 
-          onClick={() => setActiveTab('admin')}
-        >
-          🔧 Admin
-        </button>
-      </nav>
-
-      <main className="main-content">
-        {!auth.isAuthenticated ? (
-          <div className="auth-required">
-            <div className="auth-required-content">
-              <h2>🔐 Authentication Required</h2>
-              <p>Please enter your API key to access the LLM Proxy interface.</p>
-              <AuthSection auth={auth} />
-            </div>
-          </div>
-        ) : (
-          <>
-            {activeTab === 'chat' && <ChatInterface auth={auth} />}
-            {activeTab === 'dashboard' && <Dashboard metrics={metrics} health={health} />}
-            {activeTab === 'performance' && <Performance metrics={metrics} circuitBreakers={circuitBreakers} />}
-            {activeTab === 'admin' && <Admin cacheStats={cacheStats} auth={auth} />}
-          </>
-        )}
-      </main>
+    <div className={`metric-card ${color}`}>
+      <div className="metric-icon">{icon}</div>
+      <div className="metric-content">
+        <div className="metric-title">{title}</div>
+        <div className="metric-value">{value}</div>
+      </div>
     </div>
   );
 }
 
-// Header Component with Authentication
+// Header Component
 function Header({ isConnected, health, auth }) {
   const healthStatus = health?.healthy ? 'healthy' : 'unhealthy';
   const connectionStatus = isConnected ? 'connected' : 'disconnected';
@@ -384,7 +201,7 @@ function Header({ isConnected, health, auth }) {
   );
 }
 
-// Chat Interface Component with Authentication
+// Chat Interface Component
 function ChatInterface({ auth }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -415,7 +232,7 @@ function ChatInterface({ auth }) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Key': auth.apiKey, // ✅ AUTHENTICATION HEADER
+          'X-API-Key': auth.apiKey,
         },
         body: JSON.stringify({
           model: selectedModel,
@@ -426,7 +243,6 @@ function ChatInterface({ auth }) {
       });
 
       if (!response.ok) {
-        // Handle authentication errors
         if (response.status === 401 || response.status === 403) {
           const errorData = await response.json();
           throw new Error(errorData.detail?.message || 'Authentication failed');
@@ -451,7 +267,6 @@ function ChatInterface({ auth }) {
       
       if (error.message.includes('Authentication') || error.message.includes('401') || error.message.includes('403')) {
         errorMessage = '🔑 Authentication Error: Please check your API key';
-        // Trigger re-authentication
         auth.logout();
       } else if (error.message.includes('rate limit') || error.message.includes('429')) {
         errorMessage = '⏳ Rate Limit: Please wait before sending another message';
@@ -593,20 +408,19 @@ function ChatInterface({ auth }) {
   );
 }
 
-// Dashboard Component (unchanged)
+// Dashboard Component
 function Dashboard({ metrics, health }) {
   if (!metrics) {
     return <div className="loading">Loading dashboard data...</div>;
   }
 
-  // Prepare chart data
   const responseTimeData = metrics.response_times?.recent?.map((time, index) => ({
     request: index + 1,
     time: time
   })) || [];
 
   const modelUsageData = Object.entries(metrics.models || {}).map(([model, data]) => ({
-    model: model.split(':')[0], // Simplified name
+    model: model.split(':')[0],
     requests: data.requests || 0,
     tokens: data.tokens || 0
   }));
@@ -712,13 +526,12 @@ function Dashboard({ metrics, health }) {
   );
 }
 
-// Performance Component (unchanged)
+// Performance Component
 function Performance({ metrics, circuitBreakers }) {
   return (
     <div className="performance">
       <h2>Performance Monitoring</h2>
       
-      {/* Circuit Breakers */}
       {circuitBreakers && (
         <div className="section">
           <h3>Circuit Breakers</h3>
@@ -737,7 +550,6 @@ function Performance({ metrics, circuitBreakers }) {
         </div>
       )}
 
-      {/* Performance Metrics */}
       {metrics && (
         <div className="section">
           <h3>Performance Metrics</h3>
@@ -766,7 +578,7 @@ function Performance({ metrics, circuitBreakers }) {
   );
 }
 
-// Admin Component with Authentication
+// Admin Component
 function Admin({ cacheStats, auth }) {
   const clearCache = async () => {
     if (!auth.isAuthenticated) return;
@@ -811,7 +623,6 @@ function Admin({ cacheStats, auth }) {
           alert('Service restart initiated');
         } else if (response.status === 401 || response.status === 403) {
           alert('Authentication failed. Please check your API key.');
-          auth.logout();
         } else {
           alert('Failed to restart service');
         }
@@ -835,7 +646,6 @@ function Admin({ cacheStats, auth }) {
         </button>
       </div>
 
-      {/* Cache Statistics */}
       {cacheStats && (
         <div className="section">
           <h3>Cache Statistics</h3>
@@ -848,7 +658,6 @@ function Admin({ cacheStats, auth }) {
         </div>
       )}
 
-      {/* System Information */}
       <div className="section">
         <h3>System Information</h3>
         <div className="system-info">
@@ -862,15 +671,168 @@ function Admin({ cacheStats, auth }) {
   );
 }
 
-// Metric Card Component (unchanged)
-function MetricCard({ title, value, icon, color }) {
+// Main App Component
+function App() {
+  const [activeTab, setActiveTab] = useState('chat');
+  const [metrics, setMetrics] = useState(null);
+  const [health, setHealth] = useState(null);
+  const [circuitBreakers, setCircuitBreakers] = useState(null);
+  const [cacheStats, setCacheStats] = useState(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const wsRef = useRef(null);
+  
+  const auth = useAuth();
+
+  const connectWebSocket = useCallback(() => {
+    if (!auth.isAuthenticated || !auth.sessionToken) {
+      console.log('Cannot connect WebSocket: not authenticated');
+      return;
+    }
+
+    try {
+      const wsUrl = `${WS_BASE}/ws/dashboard?session=${auth.sessionToken}`;
+      wsRef.current = new WebSocket(wsUrl);
+      
+      wsRef.current.onopen = () => {
+        setIsConnected(true);
+        console.log('🔌 WebSocket connected with authentication');
+      };
+      
+      wsRef.current.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'dashboard_update') {
+          updateDashboardData(data.data);
+        }
+      };
+      
+      wsRef.current.onclose = () => {
+        setIsConnected(false);
+        console.log('🔌 WebSocket disconnected');
+        if (auth.isAuthenticated) {
+          setTimeout(connectWebSocket, 5000);
+        }
+      };
+
+      wsRef.current.onerror = (error) => {
+        console.error('❌ WebSocket error:', error);
+        setIsConnected(false);
+      };
+    } catch (error) {
+      console.error('WebSocket connection failed:', error);
+    }
+  }, [auth.isAuthenticated, auth.sessionToken]);
+
+  const loadInitialData = useCallback(async () => {
+    if (!auth.isAuthenticated) return;
+
+    try {
+      const headers = {
+        'X-API-Key': auth.apiKey,
+        'Content-Type': 'application/json'
+      };
+
+      const [metricsRes, healthRes] = await Promise.all([
+        fetch(`${API_BASE}/metrics`, { headers }),
+        fetch(`${API_BASE}/health`, { headers })
+      ]);
+      
+      if (metricsRes.ok) setMetrics(await metricsRes.json());
+      if (healthRes.ok) setHealth(await healthRes.json());
+
+      try {
+        const cbRes = await fetch(`${API_BASE}/admin/circuit-breakers`, { headers });
+        if (cbRes.ok) setCircuitBreakers(await cbRes.json());
+      } catch (e) { console.log('Circuit breakers not available'); }
+
+      try {
+        const cacheRes = await fetch(`${API_BASE}/admin/cache/stats`, { headers });
+        if (cacheRes.ok) setCacheStats(await cacheRes.json());
+      } catch (e) { console.log('Cache stats not available'); }
+
+    } catch (error) {
+      console.error('Failed to load initial data:', error);
+      if (error.message?.includes('401') || error.message?.includes('403')) {
+        auth.logout();
+      }
+    }
+  }, [auth]);
+
+  useEffect(() => {
+    if (auth.isAuthenticated && auth.sessionToken) {
+      connectWebSocket();
+      loadInitialData();
+    } else {
+      if (wsRef.current) {
+        wsRef.current.close();
+        setIsConnected(false);
+      }
+    }
+    
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, [auth.isAuthenticated, auth.sessionToken, connectWebSocket, loadInitialData]);
+
+  const updateDashboardData = (data) => {
+    if (data.system_overview) setMetrics(data);
+    if (data.healthy !== undefined) setHealth(data);
+  };
+
   return (
-    <div className={`metric-card ${color}`}>
-      <div className="metric-icon">{icon}</div>
-      <div className="metric-content">
-        <div className="metric-title">{title}</div>
-        <div className="metric-value">{value}</div>
-      </div>
+    <div className="app">
+      <Header 
+        isConnected={isConnected} 
+        health={health} 
+        auth={auth}
+      />
+      
+      <nav className="tab-nav">
+        <button 
+          className={activeTab === 'chat' ? 'active' : ''} 
+          onClick={() => setActiveTab('chat')}
+        >
+          💬 Chat Interface
+        </button>
+        <button 
+          className={activeTab === 'dashboard' ? 'active' : ''} 
+          onClick={() => setActiveTab('dashboard')}
+        >
+          📊 Dashboard
+        </button>
+        <button 
+          className={activeTab === 'performance' ? 'active' : ''} 
+          onClick={() => setActiveTab('performance')}
+        >
+          ⚡ Performance
+        </button>
+        <button 
+          className={activeTab === 'admin' ? 'active' : ''} 
+          onClick={() => setActiveTab('admin')}
+        >
+          🔧 Admin
+        </button>
+      </nav>
+
+      <main className="main-content">
+        {!auth.isAuthenticated ? (
+          <div className="auth-required">
+            <div className="auth-required-content">
+              <h2>🔐 Authentication Required</h2>
+              <p>Please enter your API key to access the LLM Proxy interface.</p>
+              <AuthSection auth={auth} />
+            </div>
+          </div>
+        ) : (
+          <>
+            {activeTab === 'chat' && <ChatInterface auth={auth} />}
+            {activeTab === 'dashboard' && <Dashboard metrics={metrics} health={health} />}
+            {activeTab === 'performance' && <Performance metrics={metrics} circuitBreakers={circuitBreakers} />}
+            {activeTab === 'admin' && <Admin cacheStats={cacheStats} auth={auth} />}
+          </>
+        )}
+      </main>
     </div>
   );
 }
