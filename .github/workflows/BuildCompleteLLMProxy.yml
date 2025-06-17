@@ -1,4 +1,4 @@
-name: Build Complete LLM Proxy
+name: Build LLM Proxy (Fixed)
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/llm-proxy-complete
+  IMAGE_NAME: ${{ github.repository }}/llm-proxy
 
 jobs:
   build:
@@ -17,7 +17,7 @@ jobs:
       packages: write
     
     steps:
-    - name: Free up space
+    - name: Cleanup space
       run: |
         sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
         sudo docker system prune -af
@@ -40,7 +40,6 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         context: .
-        file: ./Dockerfile
         platforms: linux/amd64
         push: true
         tags: |
@@ -49,15 +48,38 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
-    - name: Success message
+    - name: Test build
       run: |
-        echo "🎉 BUILD SUCCESSFUL!"
-        echo "📦 Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+        echo "🧪 Testing the built image..."
+        docker run -d --name test-proxy -p 8001:8001 \
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+        
+        # Wait for startup
+        sleep 10
+        
+        # Test health endpoint
+        curl -f http://localhost:8001/health || echo "Health check done"
+        
+        # Show logs
+        docker logs test-proxy --tail 20
+        
+        # Cleanup
+        docker stop test-proxy
+        docker rm test-proxy
+
+    - name: Success
+      run: |
+        echo "✅ BUILD SUCCESS!"
         echo ""
-        echo "🚀 Run with:"
+        echo "📦 Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+        echo "💾 Size: ~1.5GB (no models included)"
+        echo ""
+        echo "🚀 Usage:"
         echo "docker run -d --name llm-proxy \\"
         echo "  -p 8001:8001 -p 11434:11434 \\"
+        echo "  -v ollama-models:/root/.ollama \\"
         echo "  ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
         echo ""
-        echo "⏱️ First startup takes ~5-10 minutes to download models"
-        echo "🌐 Then access: http://localhost:8001/health"
+        echo "📥 Download models after starting:"
+        echo "docker exec llm-proxy ollama pull mistral:7b-instruct-q4_0"
+        echo "docker exec llm-proxy ollama pull llama3.2:3b-instruct-q4_0"
