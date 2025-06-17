@@ -106,12 +106,21 @@ WORKDIR /app
 # Python Dependencies Installation
 # =============================================================================
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    g++ \
+    libopenblas-dev \
+    libomp-dev \
+    wget \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+    
 # Copy requirements first for better Docker layer caching
 COPY requirements.txt ./
 
 # Install core Python dependencies
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+RUN python -m pip install --upgrade pip && \
+    python -m pip install --no-cache-dir -r requirements.txt
 
 # Install enhanced features (with fallback)
 RUN pip install --no-cache-dir \
