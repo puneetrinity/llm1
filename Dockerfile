@@ -1,5 +1,5 @@
-# Complete LLM Proxy with Ollama and 4 Models
-FROM nvidia/cuda:12.1-devel-ubuntu22.04
+# Enhanced LLM Proxy with Ollama and 4 Models - REPLACE YOUR EXISTING Dockerfile
+FROM python:3.11-slim
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
