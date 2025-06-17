@@ -68,12 +68,11 @@ class EnhancedLLMRouter:
             'summarization': r'\b(?:summarize|summary|tldr|brief|key points)\b'
         }
         
-        # Model capabilities mapping - Updated for 4 models
+        # Model capabilities mapping
         self.model_capabilities = {
-            'phi:3.5': ['math', 'reasoning', 'logic', 'scientific', 'analysis'],
-            'mistral:7b-instruct-q4_0': ['factual', 'general', 'translation', 'summary'],
-            'gemma:7b-instruct': ['coding', 'technical', 'programming', 'documentation'],
-            'llama3:8b-instruct-q4_0': ['creative', 'storytelling', 'writing', 'conversation']
+            'mistral:7b-instruct-q4_0': ['factual', 'math', 'general', 'translation'],
+            'deepseek-v2:7b-q4_0': ['analysis', 'coding', 'resume', 'technical'],
+            'llama3:8b-instruct-q4_0': ['creative', 'interview', 'storytelling', 'conversation']
         }
         
         self._initialized = False
@@ -96,11 +95,7 @@ class EnhancedLLMRouter:
             else:
                 # Fallback initialization
                 self.available_models = {
-                    'phi:3.5': {'priority': 1, 'good_for': ['math', 'reasoning']},
-                    'mistral:7b-instruct-q4_0': {'priority': 2, 'good_for': ['general']},
-                    'gemma:7b-instruct': {'priority': 2, 'good_for': ['coding']},
-                    'llama3:8b-instruct-q4_0': {'priority': 3, 'good_for': ['creative']}
-                },
+                    'mistral:7b-instruct-q4_0': {'priority': 1, 'good_for': ['general']},
                     'deepseek-v2:7b-q4_0': {'priority': 2, 'good_for': ['analysis']},
                     'llama3:8b-instruct-q4_0': {'priority': 2, 'good_for': ['creative']}
                 }

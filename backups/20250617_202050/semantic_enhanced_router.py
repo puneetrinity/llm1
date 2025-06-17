@@ -15,41 +15,16 @@ class EnhancedLLMRouter:
         self.classification_cache = {}
         self.cache_max_size = 1000  # Memory limit for cache
         
-        # Enhanced model configuration optimized for 4-model system
+        # Enhanced model configuration optimized for your A5000 setup
         self.model_config = {
-            'phi:3.5': {
-                'priority': 1,  # Highest priority for math/reasoning
-                'cost_per_token': 0.0002,
-                'max_context': 8192,
-                'memory_mb': 4500,
-                'good_for': ['math', 'reasoning', 'logic', 'scientific', 'analysis'],
-                'specialties': ['complex_math', 'scientific_analysis', 'logical_reasoning', 'problem_solving']
-            },
             'mistral:7b-instruct-q4_0': {
-                'priority': 2,
+                'priority': 1,
                 'cost_per_token': 0.0001,
                 'max_context': 8192,
-                'memory_mb': 4000,
-                'good_for': ['factual', 'general', 'quick_facts', 'summaries'],
-                'specialties': ['quick_facts', 'efficient_responses', 'general_chat', 'summaries']
+                'memory_mb': 4500,
+                'good_for': ['factual', 'math', 'general', 'creative'],
+                'specialties': ['quick_facts', 'calculations', 'general_chat']
             },
-            'gemma:7b-instruct': {
-                'priority': 2,
-                'cost_per_token': 0.00015,
-                'max_context': 8192,
-                'memory_mb': 4200,
-                'good_for': ['coding', 'technical', 'programming', 'documentation'],
-                'specialties': ['technical_documentation', 'programming', 'coding_help', 'api_docs']
-            },
-            'llama3:8b-instruct-q4_0': {
-                'priority': 3,
-                'cost_per_token': 0.00012,
-                'max_context': 8192,
-                'memory_mb': 5000,
-                'good_for': ['creative', 'storytelling', 'writing', 'conversations'],
-                'specialties': ['creative_writing', 'storytelling', 'conversations', 'narrative']
-            }
-        },
             'deepseek-v2:7b-q4_0': {
                 'priority': 1,  # High priority for coding tasks
                 'cost_per_token': 0.00015,
@@ -68,32 +43,31 @@ class EnhancedLLMRouter:
             }
         }
         
-        # Intent to model mapping - optimized for 4-model system
+        # Intent to model mapping - optimized for your use case
         self.intent_model_mapping = {
-            # Math and reasoning → Phi-4 (specialized for complex reasoning)
-            'math': 'phi:3.5',
-            'reasoning': 'phi:3.5',
-            'analysis': 'phi:3.5',
-            'logic': 'phi:3.5',
-            'scientific': 'phi:3.5',
+            # Coding tasks → DeepSeek (code specialist)
+            'coding': 'deepseek-v2:7b-q4_0',
             
-            # Coding and technical → Gemma (technical specialist)
-            'coding': 'gemma:7b-instruct',
-            'technical': 'gemma:7b-instruct',
-            'programming': 'gemma:7b-instruct',
-            'documentation': 'gemma:7b-instruct',
+            # Analysis tasks → Llama3 (analytical reasoning)
+            'analysis': 'llama3:8b-instruct-q4_0',
             
-            # Creative tasks → Llama3 (creative specialist)
-            'creative': 'llama3:8b-instruct-q4_0',
-            'storytelling': 'llama3:8b-instruct-q4_0',
-            'writing': 'llama3:8b-instruct-q4_0',
-            'interview': 'llama3:8b-instruct-q4_0',
+            # HR/Resume tasks → Llama3 (evaluation & analysis)
             'resume': 'llama3:8b-instruct-q4_0',
             
-            # Quick facts and general → Mistral (efficient responses)
+            # Interview preparation → Llama3 (conversational & evaluative)
+            'interview': 'llama3:8b-instruct-q4_0',
+            
+            # Creative writing → Mistral (creative & fluent)
+            'creative': 'mistral:7b-instruct-q4_0',
+            
+            # Quick facts → Mistral (fast & accurate)
             'factual': 'mistral:7b-instruct-q4_0',
-            'general': 'mistral:7b-instruct-q4_0',
-            'summary': 'mistral:7b-instruct-q4_0'
+            
+            # Math problems → Mistral (good at calculations)
+            'math': 'mistral:7b-instruct-q4_0',
+            
+            # Default fallback → Mistral (most versatile)
+            'general': 'mistral:7b-instruct-q4_0'
         }
         
         # Enhanced rule-based patterns for immediate classification

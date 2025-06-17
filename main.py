@@ -298,13 +298,29 @@ class ModelRouter:
     def __init__(self, ollama_client):
         self.ollama_client = ollama_client
         
-        # Configuration for your 3 models
+        # Configuration for your 4 models - Updated to match banner
         self.model_config = {
-            'mistral:7b-instruct-q4_0': {
+            'phi:3.5': {
                 'priority': 1,
-                'good_for': ['factual', 'general', 'math', 'analysis'],
-                'description': 'General purpose model, good for factual questions'
+                'good_for': ['math', 'reasoning', 'logic', 'scientific', 'analysis'],
+                'description': 'Phi-4 Reasoning - Complex math, logic, scientific analysis'
             },
+            'mistral:7b-instruct-q4_0': {
+                'priority': 2,
+                'good_for': ['factual', 'general', 'quick_facts', 'summaries'],
+                'description': 'Mistral 7B - Quick facts, summaries, efficient responses'
+            },
+            'gemma:7b-instruct': {
+                'priority': 2,
+                'good_for': ['coding', 'technical', 'programming', 'documentation'],
+                'description': 'Gemma 7B - Technical documentation, coding, programming'
+            },
+            'llama3:8b-instruct-q4_0': {
+                'priority': 3,
+                'good_for': ['creative', 'storytelling', 'writing', 'conversations'],
+                'description': 'Llama3 8B-Instruct - Creative writing, conversations, storytelling'
+            }
+        },
             'deepseek-v2:7b-q4_0': {
                 'priority': 2,
                 'good_for': ['coding', 'technical', 'programming', 'debug'],
@@ -364,11 +380,33 @@ class ModelRouter:
         text_content = " ".join([msg.content for msg in request.messages])
         text_lower = text_content.lower()
         
-        # Model selection logic
-        if any(word in text_lower for word in ['code', 'function', 'program', 'debug', 'script']):
-            # Prefer DeepSeek for coding
-            if 'deepseek-v2:7b-q4_0' in self.available_models:
-                return 'deepseek-v2:7b-q4_0'
+        # Model selection logic - Updated for 4 models matching banner
+        
+        # Math, logic, scientific analysis → Phi-4
+        if any(word in text_lower for word in [
+            'calculate', 'solve', 'equation', 'math', 'formula', 'logic', 
+            'analyze', 'scientific', 'reasoning', 'proof', 'theorem'
+        ]):
+            if 'phi:3.5' in self.available_models:
+                return 'phi:3.5'
+        
+        # Coding, technical, programming → Gemma
+        elif any(word in text_lower for word in [
+            'code', 'function', 'program', 'debug', 'script', 'api', 
+            'technical', 'documentation', 'programming', 'development'
+        ]):
+            if 'gemma:7b-instruct' in self.available_models:
+                return 'gemma:7b-instruct'
+        
+        # Creative writing, storytelling → Llama3
+        elif any(word in text_lower for word in [
+            'story', 'creative', 'write', 'poem', 'chat', 'narrative', 
+            'storytelling', 'conversation', 'dialogue'
+        ]):
+            if 'llama3:8b-instruct-q4_0' in self.available_models:
+                return 'llama3:8b-instruct-q4_0'
+        
+        # Default to Mistral for quick facts and general queries
         
         elif any(word in text_lower for word in ['story', 'creative', 'write', 'poem', 'chat']):
             # Prefer Llama3 for creative tasks

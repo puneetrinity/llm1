@@ -14,27 +14,33 @@ class ModelWarmupService:
         self.warmup_task = None
         self.model_last_used = {}
         self.model_priorities = {
-            'mistral:7b-instruct-q4_0': 1,      # Highest priority (most used)
-            'deepseek-v2:7b-q4_0': 2,           # Medium priority
-            'llama3:8b-instruct-q4_0': 2        # Medium priority
+            'phi:3.5': 1,                           # Highest priority (reasoning)
+            'mistral:7b-instruct-q4_0': 2,          # High priority (general)
+            'gemma:7b-instruct': 2,                 # High priority (technical)
+            'llama3:8b-instruct-q4_0': 3            # Medium priority (creative)
         }
         
-        # Warmup prompts for each model type
+        # Warmup prompts for each model type - Updated for 4 models
         self.warmup_prompts = {
-            'mistral:7b-instruct-q4_0': [
+            'phi:3.5': [
                 "What is 2+2?",
-                "Hello, how are you?",
-                "What is the capital of France?"
+                "Solve for x: 3x + 5 = 14",
+                "Analyze the logic in this statement"
             ],
-            'deepseek-v2:7b-q4_0': [
-                "Analyze the skills in this resume: Python, React, AWS",
-                "Review this code: def hello(): return 'world'",
-                "Evaluate this candidate's experience"
+            'mistral:7b-instruct-q4_0': [
+                "What is the capital of France?",
+                "Hello, how are you?",
+                "Give me a quick summary"
+            ],
+            'gemma:7b-instruct': [
+                "Write a Python function to sort a list",
+                "Explain REST API principles", 
+                "Debug this code: def hello(): return 'world'"
             ],
             'llama3:8b-instruct-q4_0': [
-                "Tell me about career opportunities in AI",
-                "Prepare me for a software engineer interview",
-                "Write a brief story about innovation"
+                "Write a short story about AI",
+                "Tell me about career opportunities",
+                "Create a creative dialogue"
             ]
         }
     

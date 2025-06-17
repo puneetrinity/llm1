@@ -55,11 +55,12 @@ class EnhancedSettings(BaseSettings):
     # Enhanced Model Configuration
     MODEL_PRIORITIES: Dict[str, int] = Field(
         default={
-            "mistral:7b-instruct-q4_0": 1,      # Highest priority
-            "deepseek-v2:7b-q4_0": 2,           # Medium priority  
-            "llama3:8b-instruct-q4_0": 2        # Medium priority
+            "phi:3.5": 1,                           # Highest priority (reasoning)
+            "mistral:7b-instruct-q4_0": 2,          # High priority (general)
+            "gemma:7b-instruct": 2,                 # High priority (technical)  
+            "llama3:8b-instruct-q4_0": 3            # Medium priority (creative)
         },
-        description="Model priorities"
+        description="Model priorities for 4-model system"
     )
     
     # Memory Management
