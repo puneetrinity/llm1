@@ -8,7 +8,7 @@ FROM python:3.11-slim
 LABEL maintainer="LLM Proxy Team" \
       version="2.2.0" \
       description="Enhanced 4-Model LLM Proxy with Pre-built Frontend" \
-      models="phi-3.5,mistral-7b,gemma-7b,llama3-8b" \
+      models="mistral-7b,gemma-7b,llama3-8b" \
       frontend="pre-built"
 
 # =============================================================================
@@ -27,7 +27,6 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # =============================================================================
 ENV DEFAULT_MODEL="mistral:7b-instruct-q4_0" \
     ENABLE_4_MODEL_ROUTING=true \
-    PHI_MODEL="phi:3.5" \
     MISTRAL_MODEL="mistral:7b-instruct-q4_0" \
     GEMMA_MODEL="gemma:7b-instruct" \
     LLAMA_MODEL="llama3:8b-instruct-q4_0"
@@ -190,7 +189,7 @@ echo "🚀 Enhanced 4-Model LLM Proxy Starting"
 echo "======================================"
 echo "Version: 2.2.0"
 echo "Frontend: Pre-built"
-echo "Models: Phi-3.5 | Mistral 7B | Gemma 7B | Llama3 8B"
+echo "Models:  Mistral 7B | Gemma 7B | Llama3 8B"
 echo ""
 
 # Environment info
@@ -225,8 +224,8 @@ fi
 if [ "$AUTO_DOWNLOAD_MODELS" = "true" ]; then
     echo "📦 Auto-downloading 4 models..."
     
-    models=("$PHI_MODEL" "$MISTRAL_MODEL" "$GEMMA_MODEL" "$LLAMA_MODEL")
-    model_names=("🧠 Phi-3.5" "⚡ Mistral 7B" "⚙️ Gemma 7B" "🎨 Llama3 8B")
+    models=("$MISTRAL_MODEL" "$GEMMA_MODEL" "$LLAMA_MODEL")
+    model_names=("⚡ Mistral 7B" "⚙️ Gemma 7B" "🎨 Llama3 8B")
     
     for i in "${!models[@]}"; do
         model="${models[$i]}"
@@ -281,7 +280,6 @@ echo "📦 Downloading 4 Models for Enhanced LLM Proxy"
 echo "==============================================="
 
 models=(
-    "phi:3.5:🧠 Phi-3.5 (Math & Reasoning)"
     "mistral:7b-instruct-q4_0:⚡ Mistral 7B (General & Quick Facts)"
     "gemma:7b-instruct:⚙️ Gemma 7B (Technical & Coding)"
     "llama3:8b-instruct-q4_0:🎨 Llama3 8B (Creative & Conversations)"
