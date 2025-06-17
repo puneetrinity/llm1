@@ -1,4 +1,4 @@
-# Fixed LLM Proxy - No models, selective copy to avoid conflicts
+# Clean LLM Proxy Dockerfile - No models, no syntax errors
 FROM python:3.11-slim
 
 # Install system dependencies
@@ -13,13 +13,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install Ollama
 RUN curl -fsSL https://ollama.com/install.sh | sh
 
-# Set working directory
 WORKDIR /app
 
-# Copy requirements first (for caching)
+# Copy and install Python dependencies
 COPY requirements.txt ./
-
-# Install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
@@ -32,59 +29,50 @@ RUN pip install --no-cache-dir \
     aioredis \
     prometheus-client \
     numpy \
-    scikit-learn \
-    || echo "Some enhanced features may be limited"
+    scikit-learn
 
-# Copy ONLY the files we need (avoid directory conflicts)
+# Copy application files
 COPY main*.py ./
 COPY services/ ./services/
-COPY config*.py ./ 2>/dev/null || true
+COPY config*.py ./
 
-# Handle frontend - copy build or create minimal
-COPY frontend/build/ ./static/ 2>/dev/null || \
-    (mkdir -p ./static && \
-     echo '<!DOCTYPE html><html><head><title>LLM Proxy</title></head><body><h1>🚀 LLM Proxy Ready</h1><p><a href="/docs">API Docs</a> | <a href="/health">Health</a></p></body></html>' > ./static/index.html)
+# Create static directory and handle frontend
+RUN mkdir -p ./static
+COPY frontend/build/ ./static/
+RUN if [ ! -f "./static/index.html" ]; then \
+        echo '<!DOCTYPE html>' > ./static/index.html && \
+        echo '<html><head><title>LLM Proxy</title></head>' >> ./static/index.html && \
+        echo '<body><h1>🚀 LLM Proxy Ready</h1>' >> ./static/index.html && \
+        echo '<p><a href="/docs">API Docs</a> | <a href="/health">Health</a></p>' >> ./static/index.html && \
+        echo '</body></html>' >> ./static/index.html; \
+    fi
 
-# Create directories AFTER copying files
-RUN mkdir -p \
-    data/cache \
-    data/logs \
-    logs \
-    cache \
-    && chmod 755 data data/cache data/logs logs cache static
+# Create directories
+RUN mkdir -p data/cache data/logs logs cache && \
+    chmod 755 data data/cache data/logs logs cache static
 
-# Create basic .env
-RUN cat > .env << 'EOF'
-PORT=8001
-HOST=0.0.0.0
-DEBUG=false
-LOG_LEVEL=INFO
-OLLAMA_BASE_URL=http://localhost:11434
-ENABLE_STREAMING=true
-ENABLE_SEMANTIC_CLASSIFICATION=true
-ENABLE_AUTH=false
-DEFAULT_API_KEY=sk-dev-key
-MAX_MEMORY_MB=8192
-EOF
+# Create .env configuration
+RUN echo 'PORT=8001' > .env && \
+    echo 'HOST=0.0.0.0' >> .env && \
+    echo 'DEBUG=false' >> .env && \
+    echo 'LOG_LEVEL=INFO' >> .env && \
+    echo 'OLLAMA_BASE_URL=http://localhost:11434' >> .env && \
+    echo 'ENABLE_STREAMING=true' >> .env && \
+    echo 'ENABLE_SEMANTIC_CLASSIFICATION=true' >> .env && \
+    echo 'ENABLE_AUTH=false' >> .env && \
+    echo 'DEFAULT_API_KEY=sk-dev-key' >> .env && \
+    echo 'MAX_MEMORY_MB=8192' >> .env
 
 # Create startup script
-RUN cat > start.sh << 'EOF'
-#!/bin/bash
-echo "🚀 Starting LLM Proxy (no models pre-installed)"
-
-# Start Ollama in background
-ollama serve &
-sleep 3
-
-echo "✅ Ollama ready at http://localhost:11434"
-echo "📥 Download models with: docker exec <container> ollama pull mistral:7b-instruct-q4_0"
-
-# Start LLM proxy
-echo "🌐 Starting LLM Proxy at http://localhost:8001"
-exec python main.py
-EOF
-
-RUN chmod +x start.sh
+RUN echo '#!/bin/bash' > start.sh && \
+    echo 'echo "🚀 Starting LLM Proxy (models not included)"' >> start.sh && \
+    echo 'ollama serve &' >> start.sh && \
+    echo 'sleep 3' >> start.sh && \
+    echo 'echo "✅ Ollama ready at http://localhost:11434"' >> start.sh && \
+    echo 'echo "📥 Download models: docker exec <container> ollama pull mistral:7b-instruct-q4_0"' >> start.sh && \
+    echo 'echo "🌐 Starting LLM Proxy at http://localhost:8001"' >> start.sh && \
+    echo 'exec python main.py' >> start.sh && \
+    chmod +x start.sh
 
 # Expose ports
 EXPOSE 8001 11434
@@ -93,5 +81,5 @@ EXPOSE 8001 11434
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8001/health || exit 1
 
-# Default command
+# Start
 CMD ["./start.sh"]
