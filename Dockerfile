@@ -1,129 +1,46 @@
-# Enhanced 4-Model LLM Proxy Dockerfile
-# Frontend built externally - Space optimized
-# Supports: Phi-3.5, Mistral 7B, Gemma 7B, Llama3 8B with smart routing
+# Complete LLM Proxy with Ollama and 4 Models
+FROM nvidia/cuda:12.1-devel-ubuntu22.04
 
-FROM python:3.11-slim
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV OLLAMA_HOST=0.0.0.0:11434
+ENV OLLAMA_ORIGINS="*"
 
-# Metadata
-LABEL maintainer="LLM Proxy Team" \
-      version="2.2.0" \
-      description="Enhanced 4-Model LLM Proxy with Pre-built Frontend" \
-      models="phi-3.5,mistral-7b,gemma-7b,llama3-8b" \
-      frontend="pre-built"
-
-# =============================================================================
-# Environment Variables
-# =============================================================================
-
-# System settings
-ENV DEBIAN_FRONTEND=noninteractive \
-    PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
-
-# =============================================================================
-# 4-Model System Configuration
-# =============================================================================
-ENV DEFAULT_MODEL="mistral:7b-instruct-q4_0" \
-    ENABLE_4_MODEL_ROUTING=true \
-    PHI_MODEL="phi:3.5" \
-    MISTRAL_MODEL="mistral:7b-instruct-q4_0" \
-    GEMMA_MODEL="gemma:7b-instruct" \
-    LLAMA_MODEL="llama3:8b-instruct-q4_0"
-
-# =============================================================================
-# Ollama Configuration
-# =============================================================================
-ENV OLLAMA_HOST=0.0.0.0:11434 \
-    OLLAMA_BASE_URL=http://ollama:11434 \
-    OLLAMA_NUM_PARALLEL=4 \
-    OLLAMA_MAX_LOADED_MODELS=4 \
-    OLLAMA_GPU_OVERHEAD=0 \
-    OLLAMA_DEBUG=INFO
-
-# =============================================================================
-# Memory Management (Production Optimized)
-# =============================================================================
-ENV MAX_MEMORY_MB=16384 \
-    CACHE_MEMORY_LIMIT_MB=2048 \
-    MODEL_MEMORY_LIMIT_MB=8192 \
-    SEMANTIC_MODEL_MAX_MEMORY_MB=1024
-
-# =============================================================================
-# Enhanced Features Configuration
-# =============================================================================
-ENV ENABLE_SEMANTIC_CLASSIFICATION=true \
-    ENABLE_STREAMING=true \
-    ENABLE_MODEL_WARMUP=true \
-    ENABLE_DETAILED_METRICS=true \
-    ENABLE_DASHBOARD=true \
-    ENABLE_REACT_DASHBOARD=true \
-    ENABLE_WEBSOCKET_DASHBOARD=true \
-    ENABLE_ENHANCED_ROUTING=true
-
-# =============================================================================
-# Performance & Caching
-# =============================================================================
-ENV ENABLE_REDIS_CACHE=true \
-    REDIS_URL=redis://redis:6379 \
-    ENABLE_SEMANTIC_CACHE=true \
-    SEMANTIC_SIMILARITY_THRESHOLD=0.85 \
-    ENABLE_CIRCUIT_BREAKER=true \
-    ENABLE_CONNECTION_POOLING=true \
-    ENABLE_PERFORMANCE_MONITORING=true
-
-# =============================================================================
-# Security & CORS
-# =============================================================================
-ENV ENABLE_AUTH=false \
-    CORS_ORIGINS='["*"]' \
-    CORS_ALLOW_CREDENTIALS=true
-
-# =============================================================================
-# Application Settings
-# =============================================================================
-ENV HOST=0.0.0.0 \
-    PORT=8001 \
-    LOG_LEVEL=INFO \
-    DEBUG=false \
-    DASHBOARD_PATH=/app/static
-
-# =============================================================================
-# System Dependencies Installation
-# =============================================================================
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
     curl \
+    wget \
+    python3 \
+    python3-pip \
+    python3-dev \
+    build-essential \
+    git \
     ca-certificates \
-    dos2unix \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+    gnupg \
+    software-properties-common \
+    supervisor \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
+    apt-get install -y nodejs
+
+# Install Ollama
+RUN curl -fsSL https://ollama.com/install.sh | sh
 
 # Set working directory
 WORKDIR /app
 
-# =============================================================================
-# Python Dependencies Installation
-# =============================================================================
+# Create directories
+RUN mkdir -p /app/data/models /app/logs /var/log/supervisor
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    g++ \
-    libopenblas-dev \
-    libomp-dev \
-    wget \
-    git \
-    && rm -rf /var/lib/apt/lists/*
-    
-# Copy requirements first for better Docker layer caching
+# Copy requirements and install Python dependencies
 COPY requirements.txt ./
+RUN pip3 install --no-cache-dir -r requirements.txt
 
-# Install core Python dependencies
-RUN python -m pip install --upgrade pip && \
-    python -m pip install --no-cache-dir -r requirements.txt
-
-# Install enhanced features (with fallback)
-RUN pip install --no-cache-dir \
+# Install ALL enhanced features
+RUN pip3 install --no-cache-dir \
     sentence-transformers \
     faiss-cpu \
     sse-starlette \
@@ -132,220 +49,182 @@ RUN pip install --no-cache-dir \
     prometheus-client \
     numpy \
     scikit-learn \
-    || echo "⚠️ Some enhanced features may be limited" && \
-    pip cache purge || true
+    transformers \
+    torch \
+    torchvision \
+    torchaudio
 
-# =============================================================================
-# Application Code and Static Files
-# =============================================================================
+# Copy application code
+COPY . .
 
-# Copy pre-built frontend static files
-# These should be built externally and placed in frontend/build/ or static/
-COPY frontend/build/ ./static/
-# Alternative: COPY static/ ./static/
-
-# Verify frontend files exist
-RUN ls -la ./static/ && \
-    test -f ./static/index.html && \
-    echo "✅ Frontend files verified" || \
-    (echo "❌ Frontend build not found! Please build frontend first:" && \
-     echo "   cd frontend && npm install && npm run build" && \
-     exit 1)
-
-# Copy application source code
-COPY main*.py ./
-COPY config*.py ./
-COPY services/ ./services/
-COPY *.sh ./
-
-# Copy frontend source (for reference/debugging)
-COPY frontend/package*.json ./frontend/
-COPY frontend/src/ ./frontend/src/
-
-# =============================================================================
-# Directory Setup and Permissions
-# =============================================================================
-
-# Create application directories
-RUN mkdir -p \
-    data/cache \
-    data/logs \
-    data/models \
-    logs \
-    cache \
-    models \
-    && chmod 755 data data/cache data/logs data/models logs cache models static
-
-# Make scripts executable
-RUN find . -name "*.sh" -type f -exec chmod +x {} \; 2>/dev/null || true
-
-# =============================================================================
-# Startup Script Creation
-# =============================================================================
-RUN cat > start.sh << 'EOF'
-#!/bin/bash
-set -e
-
-echo "🚀 Enhanced 4-Model LLM Proxy Starting"
-echo "======================================"
-echo "Version: 2.2.0"
-echo "Frontend: Pre-built"
-echo "Models: Phi-3.5 | Mistral 7B | Gemma 7B | Llama3 8B"
-echo ""
-
-# Environment info
-echo "📊 Configuration:"
-echo "  • Host: $HOST"
-echo "  • Port: $PORT"
-echo "  • Debug: $DEBUG"
-echo "  • 4-Model Routing: $ENABLE_4_MODEL_ROUTING"
-echo "  • Enhanced Features: $ENABLE_SEMANTIC_CLASSIFICATION"
-echo "  • Ollama URL: $OLLAMA_BASE_URL"
-echo ""
-
-# Wait for Ollama service
-echo "📡 Waiting for Ollama service..."
-OLLAMA_READY=false
-for i in {1..60}; do
-    if curl -f $OLLAMA_BASE_URL/api/tags >/dev/null 2>&1; then
-        echo "✅ Ollama is ready!"
-        OLLAMA_READY=true
-        break
+# Build frontend if exists
+RUN if [ -d "frontend" ] && [ -f "frontend/package.json" ]; then \
+        cd frontend && \
+        npm install --legacy-peer-deps && \
+        npm run build && \
+        cp -r build/* /app/static/ 2>/dev/null || mkdir -p /app/static; \
+    else \
+        mkdir -p /app/static && \
+        echo '<!DOCTYPE html><html><head><title>LLM Proxy Complete</title></head><body><h1>🚀 LLM Proxy Complete</h1><p>API: <a href="/v1/models">/v1/models</a></p><p>Health: <a href="/health">/health</a></p></body></html>' > /app/static/index.html; \
     fi
-    echo "   Waiting for Ollama... ($i/60)"
-    sleep 2
-done
 
-if [ "$OLLAMA_READY" = false ]; then
-    echo "⚠️ Ollama not responding, but starting anyway..."
-    echo "   Make sure Ollama service is running at: $OLLAMA_BASE_URL"
-fi
+# Create enhanced .env configuration
+RUN cat > .env << 'EOF'
+# Complete LLM Proxy Configuration
+PORT=8001
+HOST=0.0.0.0
+DEBUG=false
+LOG_LEVEL=INFO
 
-# Auto-download models if enabled
-if [ "$AUTO_DOWNLOAD_MODELS" = "true" ]; then
-    echo "📦 Auto-downloading 4 models..."
-    
-    models=("$PHI_MODEL" "$MISTRAL_MODEL" "$GEMMA_MODEL" "$LLAMA_MODEL")
-    model_names=("🧠 Phi-3.5" "⚡ Mistral 7B" "⚙️ Gemma 7B" "🎨 Llama3 8B")
-    
-    for i in "${!models[@]}"; do
-        model="${models[$i]}"
-        name="${model_names[$i]}"
-        echo "Downloading $name ($model)..."
-        curl -X POST $OLLAMA_BASE_URL/api/pull \
-            -H "Content-Type: application/json" \
-            -d "{\"name\":\"$model\"}" \
-            >/dev/null 2>&1 || echo "⚠️ Failed to download $model"
-    done
-    
-    echo "✅ Model downloads initiated"
-fi
+# Ollama Configuration
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_HOST=0.0.0.0:11434
+OLLAMA_ORIGINS=*
 
-# Determine main file
-MAIN_FILE=""
-if [ -f "main_master.py" ]; then
-    MAIN_FILE="main_master.py"
-elif [ -f "main_with_react.py" ]; then
-    MAIN_FILE="main_with_react.py"
-elif [ -f "main.py" ]; then
-    MAIN_FILE="main.py"
+# Enhanced Features - ALL ENABLED
+ENABLE_SEMANTIC_CLASSIFICATION=true
+ENABLE_STREAMING=true
+ENABLE_MODEL_WARMUP=true
+ENABLE_CACHING=true
+ENABLE_MONITORING=true
+
+# Memory Configuration
+MAX_MEMORY_MB=16384
+MODEL_MEMORY_LIMIT_MB=8192
+CACHE_MEMORY_LIMIT_MB=2048
+
+# Model Configuration
+DEFAULT_MODEL=mistral:7b-instruct-q4_0
+FALLBACK_MODEL=llama3.2:3b-instruct-q4_0
+
+# Security
+ENABLE_AUTH=false
+DEFAULT_API_KEY=sk-complete-proxy-key
+
+# Performance
+MAX_CONCURRENT_REQUESTS=10
+REQUEST_TIMEOUT=300
+ENABLE_METRICS=true
+EOF
+
+# Create model download script
+RUN cat > /app/download_models.sh << 'EOF'
+#!/bin/bash
+echo "🚀 Starting Ollama service..."
+ollama serve &
+OLLAMA_PID=$!
+
+sleep 10
+
+echo "📥 Downloading 4 LLM models..."
+
+# Model 1: Mistral 7B (General purpose)
+echo "📦 Downloading Mistral 7B..."
+ollama pull mistral:7b-instruct-q4_0
+
+# Model 2: Llama 3.2 3B (Fast responses)
+echo "📦 Downloading Llama 3.2 3B..."
+ollama pull llama3.2:3b-instruct-q4_0
+
+# Model 3: Codellama (Code generation)
+echo "📦 Downloading CodeLlama 7B..."
+ollama pull codellama:7b-instruct-q4_0
+
+# Model 4: Gemma 2B (Lightweight)
+echo "📦 Downloading Gemma 2B..."
+ollama pull gemma2:2b-instruct-q4_0
+
+echo "✅ All 4 models downloaded!"
+ollama list
+
+# Keep Ollama running
+wait $OLLAMA_PID
+EOF
+
+RUN chmod +x /app/download_models.sh
+
+# Create supervisor configuration
+RUN cat > /etc/supervisor/conf.d/supervisord.conf << 'EOF'
+[supervisord]
+nodaemon=true
+user=root
+logfile=/var/log/supervisor/supervisord.log
+pidfile=/var/run/supervisord.pid
+
+[program:ollama]
+command=ollama serve
+environment=OLLAMA_HOST="0.0.0.0:11434",OLLAMA_ORIGINS="*"
+autostart=true
+autorestart=true
+stderr_logfile=/var/log/supervisor/ollama.err.log
+stdout_logfile=/var/log/supervisor/ollama.out.log
+
+[program:llm-proxy]
+command=python3 main.py
+directory=/app
+autostart=true
+autorestart=true
+stderr_logfile=/var/log/supervisor/llm-proxy.err.log
+stdout_logfile=/var/log/supervisor/llm-proxy.out.log
+environment=PYTHONPATH="/app"
+EOF
+
+# Create startup script that downloads models then starts services
+RUN cat > /app/start.sh << 'EOF'
+#!/bin/bash
+echo "🚀 Starting Complete LLM Proxy..."
+
+# Start Ollama in background
+echo "📡 Starting Ollama..."
+ollama serve &
+sleep 10
+
+# Download models if not already present
+if [ ! -f "/root/.ollama/models/manifests/registry.ollama.ai/library/mistral/7b-instruct-q4_0" ]; then
+    echo "📥 Downloading models for first time..."
+    
+    ollama pull mistral:7b-instruct-q4_0 &
+    ollama pull llama3.2:3b-instruct-q4_0 &
+    ollama pull codellama:7b-instruct-q4_0 &
+    ollama pull gemma2:2b-instruct-q4_0 &
+    
+    wait
+    echo "✅ All models ready!"
 else
-    echo "❌ No suitable main file found!"
-    echo "Available Python files:"
-    ls -la *.py
-    exit 1
+    echo "✅ Models already downloaded"
 fi
 
-echo "📂 Using main file: $MAIN_FILE"
-echo ""
-echo "🎯 Access points will be:"
-echo "  • Dashboard: http://localhost:$PORT/app"
-echo "  • API Docs:  http://localhost:$PORT/docs"
-echo "  • Health:    http://localhost:$PORT/health"
-echo "  • Metrics:   http://localhost:$PORT/metrics"
-echo ""
-echo "🌐 Starting FastAPI application..."
+# List available models
+echo "📋 Available models:"
+ollama list
 
-# Start the application
-exec python "$MAIN_FILE"
+# Start the proxy
+echo "🚀 Starting LLM Proxy..."
+cd /app
+exec python3 main.py
 EOF
 
-RUN chmod +x start.sh
+RUN chmod +x /app/start.sh
 
-# =============================================================================
-# Model Download Helper Script
-# =============================================================================
-RUN cat > download_models.sh << 'EOF'
+# Create health check script
+RUN cat > /app/health_check.sh << 'EOF'
 #!/bin/bash
-echo "📦 Downloading 4 Models for Enhanced LLM Proxy"
-echo "==============================================="
-
-models=(
-    "phi:3.5:🧠 Phi-3.5 (Math & Reasoning)"
-    "mistral:7b-instruct-q4_0:⚡ Mistral 7B (General & Quick Facts)"
-    "gemma:7b-instruct:⚙️ Gemma 7B (Technical & Coding)"
-    "llama3:8b-instruct-q4_0:🎨 Llama3 8B (Creative & Conversations)"
-)
-
-for model_info in "${models[@]}"; do
-    IFS=':' read -r model desc <<< "$model_info"
-    echo "📥 Downloading $desc..."
-    
-    if command -v ollama >/dev/null 2>&1; then
-        ollama pull "$model" || echo "⚠️ Failed to download $model"
-    else
-        curl -X POST http://localhost:11434/api/pull \
-            -H "Content-Type: application/json" \
-            -d "{\"name\":\"$model\"}" || echo "⚠️ Failed to download $model"
-    fi
-done
-
-echo ""
-echo "✅ Model downloads complete!"
-echo "📊 Verify with: curl http://localhost:11434/api/tags"
+# Check if both Ollama and proxy are running
+curl -f http://localhost:11434/api/tags >/dev/null 2>&1 && \
+curl -f http://localhost:8001/health >/dev/null 2>&1
 EOF
 
-RUN chmod +x download_models.sh
+RUN chmod +x /app/health_check.sh
 
-# =============================================================================
-# Health Check Configuration
-# =============================================================================
-HEALTHCHECK --interval=30s --timeout=30s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:${PORT}/health || exit 1
+# Expose ports
+EXPOSE 8001 11434
 
-# =============================================================================
-# Security and User Configuration
-# =============================================================================
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD /app/health_check.sh
 
-# Create non-root user for security
-RUN groupadd -r appgroup && \
-    useradd -r -g appgroup -d /app -s /bin/bash appuser && \
-    chown -R appuser:appgroup /app
+# Set volumes for model persistence
+VOLUME ["/root/.ollama"]
 
-# Expose port
-EXPOSE 8001
-
-# Switch to non-root user
-USER appuser
-
-# =============================================================================
-# Default Command
-# =============================================================================
-CMD ["./start.sh"]
-
-# =============================================================================
-# Build Instructions
-# =============================================================================
-
-# To build this image:
-# 1. First build the frontend:
-#    cd frontend && npm install && npm run build && cd ..
-#
-# 2. Then build the Docker image:
-#    docker build -t llm-proxy-enhanced:latest .
-#
-# 3. Or use with docker-compose:
-#    docker-compose up --build
-#
-# 4. For production with specific models:
-#    docker run -e AUTO_DOWNLOAD_MODELS=true llm-proxy-enhanced:latest
+# Default command
+CMD ["/app/start.sh"]
