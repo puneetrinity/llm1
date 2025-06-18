@@ -1,4 +1,4 @@
-# Include everything for enhanced 4-model system
+# Include everything for enhanced 4-model system - FIXED VERSION
 **
 
 # Allow all essential files for 4-model proxy
@@ -14,6 +14,8 @@
 !download_models.sh
 !test_system.sh
 !frontend/
+!utils/
+!models/
 
 # Block specific problematic files/directories
 .git
@@ -40,3 +42,57 @@ tests/
 *.log
 *.bak
 *.backup
+
+# Only block large AI model files, not Python code directories
+*.bin
+*.safetensors
+*.gguf
+*.h5
+*.pt
+*.pth
+downloaded-models/
+ollama-models/
+ai-models/
+
+# Python cache
+**__pycache__**/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Environment
+.env.local
+.env.production
+
+# Docker
+.docker/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+
+# Dashboard build artifacts
+frontend/build/
+frontend/node_modules/
+static/
+.dashboard_building
+
+# Backups
+*.backup*
+main.py.backup_*
