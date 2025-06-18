@@ -125,6 +125,5 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=120s --retries=3 \
 # Expose port
 EXPOSE 8001
 
-# Debug: keep container running for manual inspection
-CMD ["tail", "-f", "/dev/null"]
-#CMD ["./start_clean.sh"]
+# Start the full application (production)
+CMD ["./start_clean.sh"]
