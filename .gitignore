@@ -19,7 +19,6 @@ data/cache/*
 data/logs/*
 !data/cache/.gitkeep
 !data/logs/.gitkeep
-!data/models/.gitkeep
 
 # Docker
 
