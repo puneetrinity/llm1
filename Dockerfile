@@ -94,7 +94,15 @@ RUN echo "#!/bin/bash" > start_clean.sh \
     && echo "echo ''" >> start_clean.sh \
     && echo "echo '📡 Starting Ollama...'" >> start_clean.sh \
     && echo "ollama serve > /tmp/ollama.log 2>&1 &" >> start_clean.sh \
-    && echo "sleep 15" >> start_clean.sh \
+    && echo "# Wait for Ollama to be ready" >> start_clean.sh \
+    && echo "for i in {1..30}; do" >> start_clean.sh \
+    && echo "  if curl -s http://localhost:11434/api/tags > /dev/null; then" >> start_clean.sh \
+    && echo "    echo 'Ollama is ready.'" >> start_clean.sh \
+    && echo "    break" >> start_clean.sh \
+    && echo "  fi" >> start_clean.sh \
+    && echo "  echo 'Waiting for Ollama to be ready...'" >> start_clean.sh \
+    && echo "  sleep 2" >> start_clean.sh \
+    && echo "done" >> start_clean.sh \
     && echo "echo '📦 Checking models...'" >> start_clean.sh \
     && echo 'if ! ollama list | grep -q "phi3.5"; then' >> start_clean.sh \
     && echo '  echo "Downloading Phi3.5..."' >> start_clean.sh \
