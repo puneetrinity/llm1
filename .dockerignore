@@ -27,6 +27,7 @@ node_modules
 data/
 logs/
 cache/
+# models/  # <-- Commented out to allow models/ in build context
 __pycache__
 *.pyc
 *.pyo
