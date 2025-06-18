@@ -1,31 +1,43 @@
-# Include what we need for enhanced features
+# Include everything for enhanced 4-model system
 **
 
-# Allow essential files
+# Allow all essential files for 4-model proxy
 !requirements.txt
 !main*.py
 !services/
 !config*.py
 !middleware/
 !backups/
+!start.sh
+!enhanced_setup.sh
+!start_dev.sh
+!download_models.sh
+!test_system.sh
+!frontend/
 
-# Block problematic directories
+# Block specific problematic files/directories
 .git
 .github
-frontend/node_modules/
+.env*
+.vscode
+.idea
+node_modules
 data/
 logs/
 cache/
 models/
-.env*
-.vscode
-.idea
 __pycache__
 *.pyc
 *.pyo
 *.pyd
 .DS_Store
 Thumbs.db
-*.md
 Dockerfile*
 docker-compose*
+*.md
+.pytest_cache
+coverage/
+tests/
+*.log
+*.bak
+*.backup
