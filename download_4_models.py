@@ -1,127 +1,115 @@
 #!/usr/bin/env python3
 """
-download_4_models.py - Download the 4 models for the updated LLM Proxy system
+download_4_models.py - Download the correct 4 models for the LLM proxy
 """
 
 import subprocess
 import sys
 import time
+import os
 
-def print_status(message, status="info"):
-    """Print status messages with colors"""
-    colors = {
-        "info": "\033[94m",
-        "success": "\033[92m",
-        "warning": "\033[93m",
-        "error": "\033[91m",
-        "reset": "\033[0m"
-    }
-    icons = {
-        "info": "ℹ️",
-        "success": "✅",
-        "warning": "⚠️",
-        "error": "❌"
-    }
-    print(f"{colors.get(status, '')}{icons.get(status, '')} {message}{colors['reset']}")
-
-def run_ollama_command(command):
-    """Run ollama command and return result"""
+def run_command(command):
+    """Run a command and return success status"""
     try:
-        result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=1800)
+        result = subprocess.run(command, shell=True, capture_output=True, text=True)
         return result.returncode == 0, result.stdout, result.stderr
-    except subprocess.TimeoutExpired:
-        return False, "", "Command timed out"
     except Exception as e:
         return False, "", str(e)
 
-def check_ollama_running():
-    """Check if Ollama service is running"""
-    success, _, _ = run_ollama_command("ollama list")
+def check_ollama():
+    """Check if Ollama is running"""
+    success, _, _ = run_command("ollama list")
     return success
 
 def start_ollama():
     """Start Ollama service"""
-    print_status("Starting Ollama service...", "info")
-    subprocess.Popen("ollama serve", shell=True)
-    time.sleep(10)
+    print("🤖 Starting Ollama...")
+    if os.name == 'nt':  # Windows
+        subprocess.Popen("ollama serve", shell=True)
+    else:  # Unix/Linux
+        subprocess.Popen("ollama serve &", shell=True)
+    
+    # Wait for Ollama to start
+    for i in range(30):
+        if check_ollama():
+            print("✅ Ollama is ready!")
+            return True
+        print(f"   Waiting for Ollama... ({i+1}/30)")
+        time.sleep(2)
+    
+    return False
 
 def download_model(model_name, description):
     """Download a single model"""
-    print_status(f"Downloading {description}...", "info")
-    success, stdout, stderr = run_ollama_command(f"ollama pull {model_name}")
+    print(f"📥 Downloading {description}...")
+    success, stdout, stderr = run_command(f"ollama pull {model_name}")
     
     if success:
-        print_status(f"{description} downloaded successfully", "success")
+        print(f"✅ {description} ready!")
         return True
     else:
-        print_status(f"Failed to download {description}: {stderr}", "error")
+        print(f"❌ Failed to download {model_name}: {stderr}")
         return False
 
 def main():
-    print("📦 Downloading 4 Models for Updated LLM Proxy")
-    print("==============================================")
-    print()
+    """Main download function"""
+    print("📦 Downloading 4 Models for LLM Proxy")
+    print("=====================================")
+    print("")
+    print("🎯 Target Models:")
+    print("├── 🧠 Phi-3.5 (Reasoning)")
+    print("├── ⚡ Mistral 7B (General)")  
+    print("├── ⚙️  Gemma 7B (Technical)")
+    print("└── 🎨 Llama3 8B (Creative)")
+    print("")
     
-    # Check if Ollama is running
-    if not check_ollama_running():
-        print_status("Ollama not running, attempting to start...", "warning")
-        start_ollama()
-        
-        time.sleep(5)
-        if not check_ollama_running():
-            print_status("Failed to start Ollama. Please start it manually with 'ollama serve'", "error")
-            return False
-    
-    print_status("Ollama is running", "success")
-    print()
+    # Check/start Ollama
+    if not check_ollama():
+        if not start_ollama():
+            print("❌ Failed to start Ollama. Please start it manually:")
+            print("   ollama serve")
+            sys.exit(1)
+    else:
+        print("✅ Ollama is already running!")
     
     # Models to download
     models = [
-        ("phi:3.5", "🧠 Phi-3.5 (Reasoning model)"),
-        ("mistral:7b-instruct-q4_0", "⚡ Mistral 7B (General model)"),
-        ("gemma:7b-instruct", "⚙️ Gemma 7B (Technical model)"),
-        ("llama3:8b-instruct-q4_0", "🎨 Llama3 8B (Creative model)")
+        ("phi:3.5", "🧠 Phi-3.5 (Reasoning)"),
+        ("mistral:7b-instruct-q4_0", "⚡ Mistral 7B (General)"),
+        ("gemma:7b-instruct", "⚙️  Gemma 7B (Technical)"),
+        ("llama3:8b-instruct-q4_0", "🎨 Llama3 8B (Creative)")
     ]
     
-    print_status("Starting downloads (this may take a while)...", "info")
-    print()
+    print("📥 Downloading models in priority order...")
     
-    success_count = 0
+    failed_models = []
     for model_name, description in models:
-        if download_model(model_name, description):
-            success_count += 1
-        print()
+        if not download_model(model_name, description):
+            failed_models.append(model_name)
     
-    print("=" * 50)
-    if success_count == len(models):
-        print_status("🎉 All 4 models downloaded successfully!", "success")
+    print("")
+    if failed_models:
+        print(f"⚠️  Some models failed to download: {', '.join(failed_models)}")
+        print("   You can try downloading them manually:")
+        for model in failed_models:
+            print(f"   ollama pull {model}")
     else:
-        print_status(f"Downloaded {success_count}/{len(models)} models", "warning")
+        print("🎉 All 4 models downloaded successfully!")
     
-    print()
-    print_status("Verifying downloaded models:", "info")
-    success, stdout, stderr = run_ollama_command("ollama list")
+    print("")
+    print("📊 Verify with:")
+    print("   ollama list")
+    
+    # Show current models
+    success, stdout, stderr = run_command("ollama list")
     if success:
+        print("")
+        print("📋 Currently available models:")
         print(stdout)
-    else:
-        print_status("Failed to list models", "error")
     
-    print()
-    print("🎯 Your 4 models will now route as:")
-    print("├── Math/Logic queries    → Phi-3.5")
-    print("├── Coding/Technical      → Gemma 7B")
-    print("├── Creative/Writing      → Llama3 8B")
-    print("└── General/Quick facts   → Mistral 7B")
-    
-    return success_count == len(models)
+    print("")
+    print("🚀 Ready to start your 4-model LLM proxy:")
+    print("   python main_master.py")
 
 if __name__ == "__main__":
-    try:
-        success = main()
-        sys.exit(0 if success else 1)
-    except KeyboardInterrupt:
-        print_status("Download interrupted by user", "warning")
-        sys.exit(1)
-    except Exception as e:
-        print_status(f"Unexpected error: {e}", "error")
-        sys.exit(1)
+    main()

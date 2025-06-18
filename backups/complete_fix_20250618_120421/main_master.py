@@ -273,22 +273,6 @@ class ModelRouter:
                 'description': 'Llama3 8B-Instruct - Creative writing, conversations, storytelling'
             }
         },
-            'mistral:7b-instruct-q4_0': {
-                'priority': 2,
-                'good_for': ['factual', 'general', 'quick_facts', 'summaries'],
-                'description': 'Mistral 7B - Quick facts, summaries, efficient responses'
-            },
-            'gemma:7b-instruct': {
-                'priority': 2,
-                'good_for': ['coding', 'technical', 'programming', 'documentation'],
-                'description': 'Gemma 7B - Technical documentation, coding, programming'
-            },
-            'llama3:8b-instruct-q4_0': {
-                'priority': 3,
-                'good_for': ['creative', 'storytelling', 'writing', 'conversations'],
-                'description': 'Llama3 8B-Instruct - Creative writing, conversations, storytelling'
-            }
-        },
             'deepseek-v2:7b-q4_0': {
                 'priority': 2,
                 'good_for': ['coding', 'technical', 'programming', 'debug'],
@@ -375,6 +359,13 @@ class ModelRouter:
                 return 'llama3:8b-instruct-q4_0'
         
         # Default to Mistral for quick facts and general queries
+        
+        elif any(word in text_lower for word in ['story', 'creative', 'write', 'poem', 'chat']):
+            # Prefer Llama3 for creative tasks
+            if 'llama3:8b-instruct-q4_0' in self.available_models:
+                return 'llama3:8b-instruct-q4_0'
+        
+        # Default to Mistral for factual/general queries
         if 'mistral:7b-instruct-q4_0' in self.available_models:
             return 'mistral:7b-instruct-q4_0'
         

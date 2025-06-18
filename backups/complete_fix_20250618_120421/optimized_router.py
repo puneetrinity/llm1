@@ -100,11 +100,8 @@ class EnhancedLLMRouter:
                     'mistral:7b-instruct-q4_0': {'priority': 2, 'good_for': ['general']},
                     'gemma:7b-instruct': {'priority': 2, 'good_for': ['coding']},
                     'llama3:8b-instruct-q4_0': {'priority': 3, 'good_for': ['creative']}
-                }
-                    'mistral:7b-instruct-q4_0': {'priority': 2, 'good_for': ['general']},
-                    'gemma:7b-instruct': {'priority': 2, 'good_for': ['coding']},
-                    'llama3:8b-instruct-q4_0': {'priority': 3, 'good_for': ['creative']}
                 },
+                    'deepseek-v2:7b-q4_0': {'priority': 2, 'good_for': ['analysis']},
                     'llama3:8b-instruct-q4_0': {'priority': 2, 'good_for': ['creative']}
                 }
                 logging.warning("Using fallback model configuration")

@@ -62,6 +62,12 @@ class EnhancedSettings(BaseSettings):
         },
         description="Model priorities for 4-model system"
     )
+            "mistral:7b-instruct-q4_0": 2,          # High priority (general)
+            "gemma:7b-instruct": 2,                 # High priority (technical)  
+            "llama3:8b-instruct-q4_0": 3            # Medium priority (creative)
+        },
+        description="Model priorities for 4-model system"
+    )
     
     # Memory Management
     MAX_CONCURRENT_MODELS: int = Field(default=3, description="Max concurrent models")
