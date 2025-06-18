@@ -28,9 +28,13 @@ data/
 logs/
 cache/
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 # models/  # <-- Commented out to allow models/ in build context
 >>>>>>> 3523d13 (Dockerchange)
+=======
+# models/  # <-- Commented out to allow models/ in build context
+>>>>>>> 25c7f3e2efdaac897ec357a296fef82e13db4482
 __pycache__
 *.pyc
 *.pyo
