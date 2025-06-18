@@ -11,20 +11,17 @@ pip-log.txt
 pip-delete-this-directory.txt
 
 # Environment
-.env
 .env.local
 .env.production
 
 # Data directories
 data/cache/*
 data/logs/*
-data/models/*
 !data/cache/.gitkeep
 !data/logs/.gitkeep
 !data/models/.gitkeep
 
 # Docker
-.docker/
 
 # IDE
 .vscode/
