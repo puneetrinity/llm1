@@ -27,6 +27,10 @@ node_modules
 data/
 logs/
 cache/
+<<<<<<< HEAD
+=======
+# models/  # <-- Commented out to allow models/ in build context
+>>>>>>> 3523d13 (Dockerchange)
 __pycache__
 *.pyc
 *.pyo
