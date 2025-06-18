@@ -38,7 +38,7 @@ COPY config_enhanced.py .
 COPY services/ ./services/
 COPY utils/ ./utils/
 COPY middleware/ ./middleware/
-#COPY models/ ./models/
+COPY models/ ./models/
 
 # Create directories
 RUN mkdir -p logs data cache models static
