@@ -18,7 +18,7 @@ class EnhancedLLMRouter:
 
         # Enhanced model configuration optimized for 4-model system
         self.model_config = {
-            'phi3.5': {
+            'phi:3.5': {
                 'priority': 1,  # Highest priority for math/reasoning
                 'cost_per_token': 0.0002,
                 'max_context': 8192,
@@ -72,11 +72,11 @@ class EnhancedLLMRouter:
         # Intent to model mapping - optimized for 4-model system
         self.intent_model_mapping = {
             # Math and reasoning → Phi-4 (specialized for complex reasoning)
-            'math': 'phi3.5',
-            'reasoning': 'phi3.5',
-            'analysis': 'phi3.5',
-            'logic': 'phi3.5',
-            'scientific': 'phi3.5',
+            'math': 'phi:3.5',
+            'reasoning': 'phi:3.5',
+            'analysis': 'phi:3.5',
+            'logic': 'phi:3.5',
+            'scientific': 'phi:3.5',
 
             # Coding and technical → Gemma (technical specialist)
             'coding': 'gemma:7b-instruct',

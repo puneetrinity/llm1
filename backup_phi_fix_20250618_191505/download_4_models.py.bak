@@ -80,7 +80,7 @@ def main():
 
     # Models to download
     models = [
-        ("phi3.5", "🧠 Phi-3.5 (Reasoning)"),
+        ("phi:3.5", "🧠 Phi-3.5 (Reasoning)"),
         ("mistral:7b-instruct-q4_0", "⚡ Mistral 7B (General)"),
         ("gemma:7b-instruct", "⚙️  Gemma 7B (Technical)"),
         ("llama3:8b-instruct-q4_0", "🎨 Llama3 8B (Creative)")

@@ -1,16 +1,10 @@
 #!/usr/bin/env python3
 """
 update_to_4_models.py - Update LLM Proxy to 4-Model Configuration
-Windows VS Code Compatible Version
+Windows VS Code Compatible Version - FIXED SYNTAX ERRORS
 
 This script systematically updates all router files to match the 4-model banner
 while preserving all existing functionality.
-
-Target Models:
-- 🧠 Phi-3.5 Reasoning     → Complex math, logic, scientific analysis
-- 🎨 Llama3 8B-Instruct   → Creative writing, conversations, storytelling  
-- ⚙️  Gemma 7B-Instruct    → Technical documentation, coding, programming
-- ⚡ Mistral 7B           → Quick facts, summaries, efficient responses
 """
 
 import os
@@ -25,36 +19,6 @@ class ModelConfigUpdater:
     def __init__(self):
         self.backup_dir = None
         self.files_updated = []
-        self.models_config = {
-            'phi3.5': {
-                'priority': 1,
-                'description': 'Phi-4 Reasoning - Complex math, logic, scientific analysis',
-                'good_for': ['math', 'reasoning', 'logic', 'scientific', 'analysis'],
-                'specialties': ['complex_math', 'scientific_analysis', 'logical_reasoning', 'problem_solving'],
-                'keywords': ['calculate', 'solve', 'equation', 'math', 'formula', 'logic', 'analyze', 'scientific', 'reasoning', 'proof', 'theorem']
-            },
-            'mistral:7b-instruct-q4_0': {
-                'priority': 2,
-                'description': 'Mistral 7B - Quick facts, summaries, efficient responses',
-                'good_for': ['factual', 'general', 'quick_facts', 'summaries'],
-                'specialties': ['quick_facts', 'efficient_responses', 'general_chat', 'summaries'],
-                'keywords': ['what is', 'define', 'explain', 'fact', 'information', 'summary']
-            },
-            'gemma:7b-instruct': {
-                'priority': 2,
-                'description': 'Gemma 7B - Technical documentation, coding, programming',
-                'good_for': ['coding', 'technical', 'programming', 'documentation'],
-                'specialties': ['technical_documentation', 'programming', 'coding_help', 'api_docs'],
-                'keywords': ['code', 'function', 'program', 'debug', 'script', 'api', 'technical', 'documentation', 'programming', 'development']
-            },
-            'llama3:8b-instruct-q4_0': {
-                'priority': 3,
-                'description': 'Llama3 8B-Instruct - Creative writing, conversations, storytelling',
-                'good_for': ['creative', 'storytelling', 'writing', 'conversations'],
-                'specialties': ['creative_writing', 'storytelling', 'conversations', 'narrative'],
-                'keywords': ['story', 'creative', 'write', 'poem', 'chat', 'narrative', 'storytelling', 'conversation', 'dialogue']
-            }
-        }
 
     def print_status(self, message: str, status: str = "info"):
         """Print colored status messages"""
@@ -108,7 +72,7 @@ class ModelConfigUpdater:
         # Updated model_config with 4 models
         new_model_config = '''        # Enhanced model configuration optimized for 4-model system
         self.model_config = {
-            'phi3.5': {
+            'phi:3.5': {
                 'priority': 1,  # Highest priority for math/reasoning
                 'cost_per_token': 0.0002,
                 'max_context': 8192,
@@ -146,11 +110,11 @@ class ModelConfigUpdater:
         new_intent_mapping = '''        # Intent to model mapping - optimized for 4-model system
         self.intent_model_mapping = {
             # Math and reasoning → Phi-4 (specialized for complex reasoning)
-            'math': 'phi3.5',
-            'reasoning': 'phi3.5',
-            'analysis': 'phi3.5',
-            'logic': 'phi3.5',
-            'scientific': 'phi3.5',
+            'math': 'phi:3.5',
+            'reasoning': 'phi:3.5',
+            'analysis': 'phi:3.5',
+            'logic': 'phi:3.5',
+            'scientific': 'phi:3.5',
             
             # Coding and technical → Gemma (technical specialist)
             'coding': 'gemma:7b-instruct',
@@ -206,7 +170,7 @@ class ModelConfigUpdater:
         # Updated model capabilities
         new_capabilities = '''        # Model capabilities mapping - Updated for 4 models
         self.model_capabilities = {
-            'phi3.5': ['math', 'reasoning', 'logic', 'scientific', 'analysis'],
+            'phi:3.5': ['math', 'reasoning', 'logic', 'scientific', 'analysis'],
             'mistral:7b-instruct-q4_0': ['factual', 'general', 'translation', 'summary'],
             'gemma:7b-instruct': ['coding', 'technical', 'programming', 'documentation'],
             'llama3:8b-instruct-q4_0': ['creative', 'storytelling', 'writing', 'conversation']
@@ -222,7 +186,7 @@ class ModelConfigUpdater:
 
         # Update fallback initialization
         new_fallback = '''                self.available_models = {
-                    'phi3.5': {'priority': 1, 'good_for': ['math', 'reasoning']},
+                    'phi:3.5': {'priority': 1, 'good_for': ['math', 'reasoning']},
                     'mistral:7b-instruct-q4_0': {'priority': 2, 'good_for': ['general']},
                     'gemma:7b-instruct': {'priority': 2, 'good_for': ['coding']},
                     'llama3:8b-instruct-q4_0': {'priority': 3, 'good_for': ['creative']}
@@ -253,7 +217,7 @@ class ModelConfigUpdater:
         # New model config for main files
         new_model_config = '''        # Configuration for your 4 models - Updated to match banner
         self.model_config = {
-            'phi3.5': {
+            'phi:3.5': {
                 'priority': 1,
                 'good_for': ['math', 'reasoning', 'logic', 'scientific', 'analysis'],
                 'description': 'Phi-4 Reasoning - Complex math, logic, scientific analysis'
@@ -291,8 +255,8 @@ class ModelConfigUpdater:
             'calculate', 'solve', 'equation', 'math', 'formula', 'logic', 
             'analyze', 'scientific', 'reasoning', 'proof', 'theorem'
         ]):
-            if 'phi3.5' in self.available_models:
-                return 'phi3.5'
+            if 'phi:3.5' in self.available_models:
+                return 'phi:3.5'
         
         # Coding, technical, programming → Gemma
         elif any(word in text_lower for word in [
@@ -336,7 +300,7 @@ class ModelConfigUpdater:
 
         # Update model priorities
         new_priorities = '''        self.model_priorities = {
-            'phi3.5': 1,                           # Highest priority (reasoning)
+            'phi:3.5': 1,                           # Highest priority (reasoning)
             'mistral:7b-instruct-q4_0': 2,          # High priority (general)
             'gemma:7b-instruct': 2,                 # High priority (technical)
             'llama3:8b-instruct-q4_0': 3            # Medium priority (creative)
@@ -345,7 +309,7 @@ class ModelConfigUpdater:
         # Update warmup prompts
         new_prompts = '''        # Warmup prompts for each model type - Updated for 4 models
         self.warmup_prompts = {
-            'phi3.5': [
+            'phi:3.5': [
                 "What is 2+2?",
                 "Solve for x: 3x + 5 = 14",
                 "Analyze the logic in this statement"
@@ -402,7 +366,7 @@ class ModelConfigUpdater:
         # Update model priorities in config
         new_config_priorities = '''    MODEL_PRIORITIES: Dict[str, int] = Field(
         default={
-            "phi3.5": 1,                           # Highest priority (reasoning)
+            "phi:3.5": 1,                           # Highest priority (reasoning)
             "mistral:7b-instruct-q4_0": 2,          # High priority (general)
             "gemma:7b-instruct": 2,                 # High priority (technical)  
             "llama3:8b-instruct-q4_0": 3            # Medium priority (creative)
@@ -424,130 +388,141 @@ class ModelConfigUpdater:
         self.print_status(f"Updated {file_path}", "success")
 
     def create_model_download_script(self):
-        """Create download_4_models.py script"""
-        download_script = '''#!/usr/bin/env python3
-"""
-download_4_models.py - Download the 4 models for the updated LLM Proxy system
-"""
+        """Create download_4_models.py script - FIXED VERSION"""
+        # Create the download script content without complex string escaping
+        script_lines = [
+            '#!/usr/bin/env python3',
+            '"""',
+            'download_4_models.py - Download the 4 models for the updated LLM Proxy system',
+            '"""',
+            '',
+            'import subprocess',
+            'import sys',
+            'import time',
+            '',
+            'def print_status(message, status="info"):',
+            '    """Print status messages with colors"""',
+            '    colors = {',
+            '        "info": "\\033[94m",',
+            '        "success": "\\033[92m",',
+            '        "warning": "\\033[93m",',
+            '        "error": "\\033[91m",',
+            '        "reset": "\\033[0m"',
+            '    }',
+            '    icons = {',
+            '        "info": "ℹ️",',
+            '        "success": "✅",',
+            '        "warning": "⚠️",',
+            '        "error": "❌"',
+            '    }',
+            '    print(f"{colors.get(status, \'\')}{icons.get(status, \'\')} {message}{colors[\'reset\']}")',
+            '',
+            'def run_ollama_command(command):',
+            '    """Run ollama command and return result"""',
+            '    try:',
+            '        result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=1800)',
+            '        return result.returncode == 0, result.stdout, result.stderr',
+            '    except subprocess.TimeoutExpired:',
+            '        return False, "", "Command timed out"',
+            '    except Exception as e:',
+            '        return False, "", str(e)',
+            '',
+            'def check_ollama_running():',
+            '    """Check if Ollama service is running"""',
+            '    success, _, _ = run_ollama_command("ollama list")',
+            '    return success',
+            '',
+            'def start_ollama():',
+            '    """Start Ollama service"""',
+            '    print_status("Starting Ollama service...", "info")',
+            '    subprocess.Popen("ollama serve", shell=True)',
+            '    time.sleep(10)',
+            '',
+            'def download_model(model_name, description):',
+            '    """Download a single model"""',
+            '    print_status(f"Downloading {description}...", "info")',
+            '    success, stdout, stderr = run_ollama_command(f"ollama pull {model_name}")',
+            '    ',
+            '    if success:',
+            '        print_status(f"{description} downloaded successfully", "success")',
+            '        return True',
+            '    else:',
+            '        print_status(f"Failed to download {description}: {stderr}", "error")',
+            '        return False',
+            '',
+            'def main():',
+            '    print("📦 Downloading 4 Models for Updated LLM Proxy")',
+            '    print("==============================================")',
+            '    print()',
+            '    ',
+            '    # Check if Ollama is running',
+            '    if not check_ollama_running():',
+            '        print_status("Ollama not running, attempting to start...", "warning")',
+            '        start_ollama()',
+            '        ',
+            '        time.sleep(5)',
+            '        if not check_ollama_running():',
+            '            print_status("Failed to start Ollama. Please start it manually with \'ollama serve\'", "error")',
+            '            return False',
+            '    ',
+            '    print_status("Ollama is running", "success")',
+            '    print()',
+            '    ',
+            '    # Models to download',
+            '    models = [',
+            '        ("phi:3.5", "🧠 Phi-3.5 (Reasoning model)"),',
+            '        ("mistral:7b-instruct-q4_0", "⚡ Mistral 7B (General model)"),',
+            '        ("gemma:7b-instruct", "⚙️ Gemma 7B (Technical model)"),',
+            '        ("llama3:8b-instruct-q4_0", "🎨 Llama3 8B (Creative model)")',
+            '    ]',
+            '    ',
+            '    print_status("Starting downloads (this may take a while)...", "info")',
+            '    print()',
+            '    ',
+            '    success_count = 0',
+            '    for model_name, description in models:',
+            '        if download_model(model_name, description):',
+            '            success_count += 1',
+            '        print()',
+            '    ',
+            '    print("=" * 50)',
+            '    if success_count == len(models):',
+            '        print_status("🎉 All 4 models downloaded successfully!", "success")',
+            '    else:',
+            '        print_status(f"Downloaded {success_count}/{len(models)} models", "warning")',
+            '    ',
+            '    print()',
+            '    print_status("Verifying downloaded models:", "info")',
+            '    success, stdout, stderr = run_ollama_command("ollama list")',
+            '    if success:',
+            '        print(stdout)',
+            '    else:',
+            '        print_status("Failed to list models", "error")',
+            '    ',
+            '    print()',
+            '    print("🎯 Your 4 models will now route as:")',
+            '    print("├── Math/Logic queries    → Phi-3.5")',
+            '    print("├── Coding/Technical      → Gemma 7B")',
+            '    print("├── Creative/Writing      → Llama3 8B")',
+            '    print("└── General/Quick facts   → Mistral 7B")',
+            '    ',
+            '    return success_count == len(models)',
+            '',
+            'if __name__ == "__main__":',
+            '    try:',
+            '        success = main()',
+            '        sys.exit(0 if success else 1)',
+            '    except KeyboardInterrupt:',
+            '        print_status("Download interrupted by user", "warning")',
+            '        sys.exit(1)',
+            '    except Exception as e:',
+            '        print_status(f"Unexpected error: {e}", "error")',
+            '        sys.exit(1)',
+        ]
 
-import subprocess
-import sys
-import time
-import threading
-from concurrent.futures import ThreadPoolExecutor
-
-def print_status(message, status="info"):
-    colors = {"info": "\\033[94m", "success": "\\033[92m", "warning": "\\033[93m", "error": "\\033[91m", "reset": "\\033[0m"}
-    icons = {"info": "ℹ️", "success": "✅", "warning": "⚠️", "error": "❌"}
-    print(f"{colors.get(status, '')}{icons.get(status, '')} {message}{colors['reset']}")
-
-def run_ollama_command(command):
-    """Run ollama command and return result"""
-    try:
-        result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=1800)  # 30 min timeout
-        return result.returncode == 0, result.stdout, result.stderr
-    except subprocess.TimeoutExpired:
-        return False, "", "Command timed out"
-    except Exception as e:
-        return False, "", str(e)
-
-def check_ollama_running():
-    """Check if Ollama service is running"""
-    success, _, _ = run_ollama_command("ollama list")
-    return success
-
-def start_ollama():
-    """Start Ollama service"""
-    print_status("Starting Ollama service...", "info")
-    subprocess.Popen("ollama serve", shell=True)
-    time.sleep(10)  # Give it time to start
-
-def download_model(model_name, description):
-    """Download a single model"""
-    print_status(f"Downloading {description}...", "info")
-    success, stdout, stderr = run_ollama_command(f"ollama pull {model_name}")
-    
-    if success:
-        print_status(f"{description} downloaded successfully", "success")
-        return True
-    else:
-        print_status(f"Failed to download {description}: {stderr}", "error")
-        return False
-
-def main():
-    print("📦 Downloading 4 Models for Updated LLM Proxy")
-    print("==============================================")
-    print()
-    
-    # Check if Ollama is running
-    if not check_ollama_running():
-        print_status("Ollama not running, attempting to start...", "warning")
-        start_ollama()
-        
-        # Wait and check again
-        time.sleep(5)
-        if not check_ollama_running():
-            print_status("Failed to start Ollama. Please start it manually with 'ollama serve'", "error")
-            return False
-    
-    print_status("Ollama is running", "success")
-    print()
-    
-    # Models to download
-    models = [
-        ("phi3.5", "🧠 Phi-3.5 (Reasoning model)"),
-        ("mistral:7b-instruct-q4_0", "⚡ Mistral 7B (General model)"),
-        ("gemma:7b-instruct", "⚙️ Gemma 7B (Technical model)"),
-        ("llama3:8b-instruct-q4_0", "🎨 Llama3 8B (Creative model)")
-    ]
-    
-    print_status("Starting downloads (this may take a while)...", "info")
-    print()
-    
-    # Download models sequentially for better reliability
-    success_count = 0
-    for model_name, description in models:
-        if download_model(model_name, description):
-            success_count += 1
-        print()  # Add spacing between downloads
-    
-    print("=" * 50)
-    if success_count == len(models):
-        print_status("🎉 All 4 models downloaded successfully!", "success")
-    else:
-        print_status(f"Downloaded {success_count}/{len(models)} models", "warning")
-    
-    print()
-    print_status("Verifying downloaded models:", "info")
-    success, stdout, stderr = run_ollama_command("ollama list")
-    if success:
-        print(stdout)
-    else:
-        print_status("Failed to list models", "error")
-    
-    print()
-    print("🎯 Your 4 models will now route as:")
-    print("├── Math/Logic queries    → Phi-3.5")
-    print("├── Coding/Technical      → Gemma 7B") 
-    print("├── Creative/Writing      → Llama3 8B")
-    print("└── General/Quick facts   → Mistral 7B")
-    
-    return success_count == len(models)
-
-if __name__ == "__main__":
-    try:
-        success = main()
-        sys.exit(0 if success else 1)
-    except KeyboardInterrupt:
-        print_status("Download interrupted by user", "warning")
-        sys.exit(1)
-    except Exception as e:
-        print_status(f"Unexpected error: {e}", "error")
-        sys.exit(1)
-'''
-
+        # Write the script line by line to avoid string escaping issues
         with open("download_4_models.py", 'w', encoding='utf-8') as f:
-            f.write(download_script)
+            f.write('\n'.join(script_lines))
 
         self.print_status("Created download_4_models.py", "success")
 
@@ -653,7 +628,7 @@ if __name__ == "__main__":
 
 
 def main():
-    """Main entry point"""
+    """Main entry point - FIXED for RunPod"""
     updater = ModelConfigUpdater()
     success = updater.run_update()
 
@@ -663,7 +638,7 @@ def main():
     else:
         print("\n❌ Update failed. Check the error messages above.")
 
-    input("\nPress Enter to exit...")
+    # Removed the input() line that was causing EOFError in RunPod
     return success
 
 

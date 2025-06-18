@@ -63,7 +63,7 @@ with open('services/semantic_enhanced_router.py', 'r') as f:
 # Updated model_config with 4 models
 new_model_config = '''        # Enhanced model configuration optimized for 4-model system
         self.model_config = {
-            'phi3.5': {
+            'phi:3.5': {
                 'priority': 1,  # Highest priority for math/reasoning
                 'cost_per_token': 0.0002,
                 'max_context': 8192,
@@ -101,11 +101,11 @@ new_model_config = '''        # Enhanced model configuration optimized for 4-mod
 new_intent_mapping = '''        # Intent to model mapping - optimized for 4-model system
         self.intent_model_mapping = {
             # Math and reasoning → Phi-4 (specialized for complex reasoning)
-            'math': 'phi3.5',
-            'reasoning': 'phi3.5',
-            'analysis': 'phi3.5',
-            'logic': 'phi3.5',
-            'scientific': 'phi3.5',
+            'math': 'phi:3.5',
+            'reasoning': 'phi:3.5',
+            'analysis': 'phi:3.5',
+            'logic': 'phi:3.5',
+            'scientific': 'phi:3.5',
             
             # Coding and technical → Gemma (technical specialist)
             'coding': 'gemma:7b-instruct',
@@ -157,7 +157,7 @@ with open('services/optimized_router.py', 'r') as f:
 # Updated model capabilities for optimized router
 new_capabilities = '''        # Model capabilities mapping - Updated for 4 models
         self.model_capabilities = {
-            'phi3.5': ['math', 'reasoning', 'logic', 'scientific', 'analysis'],
+            'phi:3.5': ['math', 'reasoning', 'logic', 'scientific', 'analysis'],
             'mistral:7b-instruct-q4_0': ['factual', 'general', 'translation', 'summary'],
             'gemma:7b-instruct': ['coding', 'technical', 'programming', 'documentation'],
             'llama3:8b-instruct-q4_0': ['creative', 'storytelling', 'writing', 'conversation']
@@ -170,7 +170,7 @@ content = re.sub(capabilities_pattern, new_capabilities, content, flags=re.DOTAL
 # Update fallback initialization
 fallback_pattern = r"                self\.available_models = \{[^}]+\}"
 new_fallback = '''                self.available_models = {
-                    'phi3.5': {'priority': 1, 'good_for': ['math', 'reasoning']},
+                    'phi:3.5': {'priority': 1, 'good_for': ['math', 'reasoning']},
                     'mistral:7b-instruct-q4_0': {'priority': 2, 'good_for': ['general']},
                     'gemma:7b-instruct': {'priority': 2, 'good_for': ['coding']},
                     'llama3:8b-instruct-q4_0': {'priority': 3, 'good_for': ['creative']}
@@ -198,7 +198,7 @@ with open('main.py', 'r') as f:
 # Find and replace the model_config in ModelRouter class
 new_model_config = '''        # Configuration for your 4 models - Updated to match banner
         self.model_config = {
-            'phi3.5': {
+            'phi:3.5': {
                 'priority': 1,
                 'good_for': ['math', 'reasoning', 'logic', 'scientific', 'analysis'],
                 'description': 'Phi-4 Reasoning - Complex math, logic, scientific analysis'
@@ -232,8 +232,8 @@ new_select_logic = '''        # Model selection logic - Updated for 4 models mat
             'calculate', 'solve', 'equation', 'math', 'formula', 'logic', 
             'analyze', 'scientific', 'reasoning', 'proof', 'theorem'
         ]):
-            if 'phi3.5' in self.available_models:
-                return 'phi3.5'
+            if 'phi:3.5' in self.available_models:
+                return 'phi:3.5'
         
         # Coding, technical, programming → Gemma
         elif any(word in text_lower for word in [
@@ -282,7 +282,7 @@ with open('main_master.py', 'r') as f:
 # Same updates as main.py - model config and routing logic
 new_model_config = '''        # Configuration for your 4 models - Updated to match banner
         self.model_config = {
-            'phi3.5': {
+            'phi:3.5': {
                 'priority': 1,
                 'good_for': ['math', 'reasoning', 'logic', 'scientific', 'analysis'],
                 'description': 'Phi-4 Reasoning - Complex math, logic, scientific analysis'
@@ -314,8 +314,8 @@ new_select_logic = '''        # Model selection logic - Updated for 4 models mat
             'calculate', 'solve', 'equation', 'math', 'formula', 'logic', 
             'analyze', 'scientific', 'reasoning', 'proof', 'theorem'
         ]):
-            if 'phi3.5' in self.available_models:
-                return 'phi3.5'
+            if 'phi:3.5' in self.available_models:
+                return 'phi:3.5'
         
         # Coding, technical, programming → Gemma
         elif any(word in text_lower for word in [
@@ -359,7 +359,7 @@ with open('services/model_warmup.py', 'r') as f:
 
 # Update model priorities
 new_priorities = '''        self.model_priorities = {
-            'phi3.5': 1,                           # Highest priority (reasoning)
+            'phi:3.5': 1,                           # Highest priority (reasoning)
             'mistral:7b-instruct-q4_0': 2,          # High priority (general)
             'gemma:7b-instruct': 2,                 # High priority (technical)
             'llama3:8b-instruct-q4_0': 3            # Medium priority (creative)
@@ -368,7 +368,7 @@ new_priorities = '''        self.model_priorities = {
 # Update warmup prompts
 new_prompts = '''        # Warmup prompts for each model type - Updated for 4 models
         self.warmup_prompts = {
-            'phi3.5': [
+            'phi:3.5': [
                 "What is 2+2?",
                 "Solve for x: 3x + 5 = 14",
                 "Analyze the logic in this statement"
@@ -418,7 +418,7 @@ with open('config_enhanced.py', 'r') as f:
 # Update model priorities in config
 new_config_priorities = '''    MODEL_PRIORITIES: Dict[str, int] = Field(
         default={
-            "phi3.5": 1,                           # Highest priority (reasoning)
+            "phi:3.5": 1,                           # Highest priority (reasoning)
             "mistral:7b-instruct-q4_0": 2,          # High priority (general)
             "gemma:7b-instruct": 2,                 # High priority (technical)  
             "llama3:8b-instruct-q4_0": 3            # Medium priority (creative)
@@ -459,7 +459,7 @@ echo "📥 Downloading models in priority order..."
 
 # Priority 1: Phi for reasoning (smallest first for testing)
 echo "🧠 Downloading Phi-3.5 (Reasoning model)..."
-ollama pull phi3.5 &
+ollama pull phi:3.5 &
 PHI_PID=$!
 
 # Priority 2: Mistral for general use

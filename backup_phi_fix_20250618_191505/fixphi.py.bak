@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
 fix_phi_model_name.py - Fix Phi Model Name Throughout Codebase
-Changes 'phi3.5' to 'phi3.5' in all relevant files
+Changes 'phi:3.5' to 'phi3.5' in all relevant files
 
-The correct Ollama model name is 'phi3.5', not 'phi3.5'
+The correct Ollama model name is 'phi3.5', not 'phi:3.5'
 This script systematically updates all files in the codebase.
 """
 
@@ -74,7 +74,7 @@ class PhiModelNameFixer:
             return False
     
     def update_file(self, file_path: str) -> Tuple[bool, int]:
-        """Update a single file, replacing phi3.5 with phi3.5"""
+        """Update a single file, replacing phi:3.5 with phi3.5"""
         if not os.path.exists(file_path):
             self.print_status(f"File not found: {file_path}", "warning")
             return False, 0
@@ -88,14 +88,14 @@ class PhiModelNameFixer:
             before_count = len(re.findall(r'phi:3\.5', content))
             
             if before_count == 0:
-                self.print_status(f"No phi3.5 references in {file_path}", "info")
+                self.print_status(f"No phi:3.5 references in {file_path}", "info")
                 return True, 0
             
             # Create backup
             if not self.backup_file(file_path):
                 return False, 0
             
-            # Replace phi3.5 with phi3.5
+            # Replace phi:3.5 with phi3.5
             updated_content = re.sub(r'phi:3\.5', 'phi3.5', content)
             
             # Write updated content
@@ -115,7 +115,7 @@ class PhiModelNameFixer:
             return False, 0
     
     def find_additional_files(self) -> List[str]:
-        """Find additional files that might contain phi3.5"""
+        """Find additional files that might contain phi:3.5"""
         additional_files = []
         
         # Search Python files
@@ -126,7 +126,7 @@ class PhiModelNameFixer:
             try:
                 with open(py_file, 'r', encoding='utf-8', errors='ignore') as f:
                     content = f.read()
-                    if 'phi3.5' in content and str(py_file) not in self.target_files:
+                    if 'phi:3.5' in content and str(py_file) not in self.target_files:
                         additional_files.append(str(py_file))
             except:
                 continue
@@ -139,7 +139,7 @@ class PhiModelNameFixer:
             try:
                 with open(sh_file, 'r', encoding='utf-8', errors='ignore') as f:
                     content = f.read()
-                    if 'phi3.5' in content and str(sh_file) not in self.target_files:
+                    if 'phi:3.5' in content and str(sh_file) not in self.target_files:
                         additional_files.append(str(sh_file))
             except:
                 continue
@@ -152,7 +152,7 @@ class PhiModelNameFixer:
             try:
                 with open(config_file, 'r', encoding='utf-8', errors='ignore') as f:
                     content = f.read()
-                    if 'phi3.5' in content and str(config_file) not in self.target_files:
+                    if 'phi:3.5' in content and str(config_file) not in self.target_files:
                         additional_files.append(str(config_file))
             except:
                 continue
@@ -193,7 +193,7 @@ class PhiModelNameFixer:
         """Main execution function"""
         print("🔧 Fixing Phi Model Name in Codebase")
         print("====================================")
-        print("Changing 'phi3.5' → 'phi3.5' everywhere")
+        print("Changing 'phi:3.5' → 'phi3.5' everywhere")
         print()
         
         # Create backup directory
@@ -211,7 +211,7 @@ class PhiModelNameFixer:
         additional_files = self.find_additional_files()
         
         if additional_files:
-            self.print_status(f"Found {len(additional_files)} additional files with phi3.5", "info")
+            self.print_status(f"Found {len(additional_files)} additional files with phi:3.5", "info")
             for file_path in additional_files:
                 success, changes = self.update_file(file_path)
                 if success:
@@ -222,7 +222,7 @@ class PhiModelNameFixer:
         self.print_status("Model name fix completed!", "success")
         print()
         self.print_status("Summary of changes:", "info")
-        print(f"   📝 Changed: phi3.5 → phi3.5")
+        print(f"   📝 Changed: phi:3.5 → phi3.5")
         print(f"   📁 Backups: {self.backup_dir}/")
         print(f"   📄 Files updated: {len(self.files_updated)}")
         print(f"   🔢 Total changes: {self.total_changes}")

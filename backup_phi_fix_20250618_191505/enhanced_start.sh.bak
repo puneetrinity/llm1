@@ -33,7 +33,7 @@ echo "📦 Pulling and preloading 4 models..."
 
 # Priority 1: Phi for reasoning
 echo "   🔄 Pulling Phi-3.5 (Reasoning - Priority 1)..."
-ollama pull phi3.5 &
+ollama pull phi:3.5 &
 PHI_PID=$!
 
 # Priority 2: Mistral for general
@@ -61,7 +61,7 @@ echo "   🔥 Warming up Phi-3.5..."
 curl -X POST http://localhost:11434/api/chat \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "phi3.5",
+    "model": "phi:3.5",
     "messages": [{"role": "user", "content": "What is 2+2?"}],
     "stream": false,
     "options": {"num_predict": 5}

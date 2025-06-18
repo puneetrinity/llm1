@@ -74,7 +74,7 @@ class EnhancedLLMRouter:
 
         # Model capabilities mapping - Updated for 4 models
         self.model_capabilities = {
-            'phi:3.5': ['math', 'reasoning', 'logic', 'scientific', 'analysis'],
+            'phi3.5': ['math', 'reasoning', 'logic', 'scientific', 'analysis'],
             'mistral:7b-instruct-q4_0': ['factual', 'general', 'translation', 'summary'],
             'gemma:7b-instruct': ['coding', 'technical', 'programming', 'documentation'],
             'llama3:8b-instruct-q4_0': ['creative', 'storytelling', 'writing', 'conversation']
@@ -100,7 +100,7 @@ class EnhancedLLMRouter:
             else:
                 # Fallback initialization
                 self.available_models = {
-                    'phi:3.5': {'priority': 1, 'good_for': ['math', 'reasoning']},
+                    'phi3.5': {'priority': 1, 'good_for': ['math', 'reasoning']},
                     'mistral:7b-instruct-q4_0': {'priority': 2, 'good_for': ['general']},
                     'gemma:7b-instruct': {'priority': 2, 'good_for': ['coding']},
                     'llama3:8b-instruct-q4_0': {'priority': 3, 'good_for': ['creative']}

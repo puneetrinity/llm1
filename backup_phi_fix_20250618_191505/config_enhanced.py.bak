@@ -74,7 +74,7 @@ class EnhancedSettings(BaseSettings):
     MODEL_PRIORITIES: Dict[str, int] = Field(
         default={
             # Highest priority (reasoning)
-            "phi3.5": 1,
+            "phi:3.5": 1,
             "mistral:7b-instruct-q4_0": 2,          # High priority (general)
             "gemma:7b-instruct": 2,                 # High priority (technical)
             # Medium priority (creative)

@@ -315,7 +315,7 @@ class ModelRouter:
 
         # Configuration for your 4 models - Updated to match banner
         self.model_config = {
-            'phi:3.5': {
+            'phi3.5': {
                 'priority': 1,
                 'good_for': ['math', 'reasoning', 'logic', 'scientific', 'analysis'],
                 'description': 'Phi-4 Reasoning - Complex math, logic, scientific analysis'
@@ -402,8 +402,8 @@ class ModelRouter:
             'calculate', 'solve', 'equation', 'math', 'formula', 'logic', 
             'analyze', 'scientific', 'reasoning', 'proof', 'theorem'
         ]):
-            if 'phi:3.5' in self.available_models:
-                return 'phi:3.5'
+            if 'phi3.5' in self.available_models:
+                return 'phi3.5'
         
         # Coding, technical, programming → Gemma
         elif any(word in text_lower for word in [

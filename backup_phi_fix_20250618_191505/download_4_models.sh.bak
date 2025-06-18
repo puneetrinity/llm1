@@ -24,7 +24,7 @@ echo "📥 Downloading models in priority order..."
 
 # Priority 1: Phi for reasoning
 echo "🧠 Downloading Phi-3.5 (Reasoning model)..."
-ollama pull phi3.5 &
+ollama pull phi:3.5 &
 PHI_PID=$!
 
 # Priority 2: Mistral for general use

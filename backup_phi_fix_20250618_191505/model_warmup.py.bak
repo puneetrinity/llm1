@@ -16,7 +16,7 @@ class ModelWarmupService:
         self.model_last_used = {}
         self.model_priorities = {
             # Highest priority (reasoning)
-            'phi3.5': 1,
+            'phi:3.5': 1,
             'mistral:7b-instruct-q4_0': 2,          # High priority (general)
             'gemma:7b-instruct': 2,                 # High priority (technical)
             # Medium priority (creative)
@@ -25,7 +25,7 @@ class ModelWarmupService:
 
         # Warmup prompts for each model type - Updated for 4 models
         self.warmup_prompts = {
-            'phi3.5': [
+            'phi:3.5': [
                 "What is 2+2?",
                 "Solve for x: 3x + 5 = 14",
                 "Analyze the logic in this statement"
