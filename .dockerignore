@@ -1,29 +1,31 @@
-# Exclude everything by default
+# Include what we need for enhanced features
 **
 
-# Include only what we need
+# Allow essential files
 !requirements.txt
 !main*.py
 !services/
+!config*.py
+!middleware/
+!backups/
 
-# Exclude common files that cause issues
+# Block problematic directories
 .git
 .github
+frontend/node_modules/
+data/
+logs/
+cache/
+models/
 .env*
 .vscode
 .idea
-node_modules
-frontend
-data
-logs
-cache
-models
-*.md
-Dockerfile*
-docker-compose*
 __pycache__
 *.pyc
 *.pyo
 *.pyd
 .DS_Store
 Thumbs.db
+*.md
+Dockerfile*
+docker-compose*
