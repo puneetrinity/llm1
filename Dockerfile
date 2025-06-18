@@ -83,48 +83,48 @@ RUN echo "# Enhanced LLM Proxy Configuration" > .env \
     && echo "CORS_ORIGINS=[\"*\"]" >> .env \
     && echo "CORS_ALLOW_CREDENTIALS=true" >> .env
 
-# Create clean startup script
+# Create clean startup script with debug output
 RUN echo "#!/bin/bash" > start_clean.sh \
-    && echo "set -e" >> start_clean.sh \
-    && echo "" >> start_clean.sh \
-    && echo "echo '🚀 Enhanced LLM Proxy - Clean Start'" >> start_clean.sh \
-    && echo "echo '=================================='" >> start_clean.sh \
-    && echo "echo 'Using: main.py (complete version)'" >> start_clean.sh \
-    && echo "echo 'Models: Phi3.5 | Mistral 7B | Gemma 7B | Llama3 8B'" >> start_clean.sh \
-    && echo "echo ''" >> start_clean.sh \
-    && echo "echo '📡 Starting Ollama...'" >> start_clean.sh \
+    && echo "set -ex" >> start_clean.sh \
+    && echo "echo '[DEBUG] Starting Enhanced LLM Proxy - Clean Start'" >> start_clean.sh \
+    && echo "echo '[DEBUG] Using: main.py (complete version)'" >> start_clean.sh \
+    && echo "echo '[DEBUG] Models: Phi3.5 | Mistral 7B | Gemma 7B | Llama3 8B'" >> start_clean.sh \
+    && echo "echo '[DEBUG] Starting Ollama...'" >> start_clean.sh \
     && echo "ollama serve > /tmp/ollama.log 2>&1 &" >> start_clean.sh \
     && echo "# Wait for Ollama to be ready" >> start_clean.sh \
     && echo "for i in {1..30}; do" >> start_clean.sh \
     && echo "  if curl -s http://localhost:11434/api/tags > /dev/null; then" >> start_clean.sh \
-    && echo "    echo 'Ollama is ready.'" >> start_clean.sh \
+    && echo "    echo '[DEBUG] Ollama is ready.'" >> start_clean.sh \
     && echo "    break" >> start_clean.sh \
     && echo "  fi" >> start_clean.sh \
-    && echo "  echo 'Waiting for Ollama to be ready...'" >> start_clean.sh \
+    && echo "  echo '[DEBUG] Waiting for Ollama to be ready...'" >> start_clean.sh \
     && echo "  sleep 2" >> start_clean.sh \
     && echo "done" >> start_clean.sh \
-    && echo "echo '📦 Checking models...'" >> start_clean.sh \
+    && echo "echo '[DEBUG] Checking models...'" >> start_clean.sh \
     && echo 'if ! ollama list | grep -q "phi3.5"; then' >> start_clean.sh \
-    && echo '  echo "Downloading Phi3.5..."' >> start_clean.sh \
+    && echo '  echo "[DEBUG] Downloading Phi3.5..."' >> start_clean.sh \
     && echo '  ollama pull phi3.5 &' >> start_clean.sh \
     && echo 'fi' >> start_clean.sh \
     && echo 'if ! ollama list | grep -q "mistral:7b-instruct-q4_0"; then' >> start_clean.sh \
-    && echo '  echo "Downloading Mistral 7B..."' >> start_clean.sh \
+    && echo '  echo "[DEBUG] Downloading Mistral 7B..."' >> start_clean.sh \
     && echo '  ollama pull mistral:7b-instruct-q4_0 &' >> start_clean.sh \
     && echo 'fi' >> start_clean.sh \
     && echo 'if ! ollama list | grep -q "gemma:7b-instruct"; then' >> start_clean.sh \
-    && echo '  echo "Downloading Gemma 7B..."' >> start_clean.sh \
+    && echo '  echo "[DEBUG] Downloading Gemma 7B..."' >> start_clean.sh \
     && echo '  ollama pull gemma:7b-instruct &' >> start_clean.sh \
     && echo 'fi' >> start_clean.sh \
     && echo 'if ! ollama list | grep -q "llama3:8b-instruct-q4_0"; then' >> start_clean.sh \
-    && echo '  echo "Downloading Llama3 8B..."' >> start_clean.sh \
+    && echo '  echo "[DEBUG] Downloading Llama3 8B..."' >> start_clean.sh \
     && echo '  ollama pull llama3:8b-instruct-q4_0 &' >> start_clean.sh \
     && echo 'fi' >> start_clean.sh \
     && echo 'wait' >> start_clean.sh \
-    && echo "echo '✅ All models ready'" >> start_clean.sh \
-    && echo "echo '🌐 Starting Enhanced LLM Proxy...'" >> start_clean.sh \
-    && echo "python main.py" >> start_clean.sh
-RUN chmod +x start_clean.sh
+    && echo "echo '[DEBUG] All models ready'" >> start_clean.sh \
+    && echo "echo '[DEBUG] Starting Enhanced LLM Proxy...'" >> start_clean.sh \
+    && echo "python main.py || (echo '[ERROR] Python app failed, tailing logs:' && tail -n 100 /tmp/ollama.log && sleep 3600)" >> start_clean.sh
+RUN sed -i 's/\r$//' start_clean.sh && chmod +x start_clean.sh
+
+# Ensure start_clean.sh uses Unix line endings and is executable
+RUN sed -i 's/\r$//' start_clean.sh && chmod +x start_clean.sh
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=30s --start-period=120s --retries=3 \
