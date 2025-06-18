@@ -282,17 +282,11 @@ class ModelRouter:
                 'priority': 3,
                 'good_for': ['creative', 'storytelling', 'writing', 'conversations'],
                 'description': 'Llama3 8B-Instruct - Creative writing, conversations, storytelling'
-            }
-        },
+            },
             'deepseek-v2:7b-q4_0': {
                 'priority': 2,
                 'good_for': ['coding', 'technical', 'programming', 'debug'],
                 'description': 'Specialized for coding and technical tasks'
-            },
-            'llama3:8b-instruct-q4_0': {
-                'priority': 3,
-                'good_for': ['creative', 'storytelling', 'writing', 'chat'],
-                'description': 'Best for creative writing and conversational tasks'
             }
         }
 

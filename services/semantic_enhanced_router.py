@@ -19,8 +19,8 @@ class EnhancedLLMRouter:
         # Enhanced model configuration optimized for 4-model system
         self.model_config = {
             'phi3.5': {
-                'priority': 1,  # Highest priority for math/reasoning
-                'cost_per_token': 0.0002,
+                'priority': 1,
+                'cost_per_token': 0.0001,
                 'max_context': 8192,
                 'memory_mb': 4500,
                 'good_for': ['math', 'reasoning', 'logic', 'scientific', 'analysis'],
@@ -49,8 +49,7 @@ class EnhancedLLMRouter:
                 'memory_mb': 5000,
                 'good_for': ['creative', 'storytelling', 'writing', 'conversations'],
                 'specialties': ['creative_writing', 'storytelling', 'conversations', 'narrative']
-            }
-        },
+            },
             'deepseek-v2:7b-q4_0': {
                 'priority': 1,  # High priority for coding tasks
                 'cost_per_token': 0.00015,
@@ -58,14 +57,6 @@ class EnhancedLLMRouter:
                 'memory_mb': 4200,
                 'good_for': ['coding', 'analysis', 'technical'],
                 'specialties': ['code_review', 'debugging', 'programming', 'technical_analysis']
-            },
-            'llama3:8b-instruct-q4_0': {
-                'priority': 2,
-                'cost_per_token': 0.00012,
-                'max_context': 8192,
-                'memory_mb': 5000,
-                'good_for': ['creative', 'interview', 'resume', 'analysis'],
-                'specialties': ['hr_tasks', 'interviews', 'writing', 'evaluation']
             }
         }
 

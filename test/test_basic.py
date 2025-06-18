@@ -10,7 +10,7 @@ def test_health_endpoint(client):
 
 
 def test_models_endpoint(client):
-    response = client.get("/models")
+    response = client.get("/v1/models")
     assert response.status_code == 200
     data = response.json()
     assert "data" in data

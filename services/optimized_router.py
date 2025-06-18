@@ -105,12 +105,6 @@ class EnhancedLLMRouter:
                     'gemma:7b-instruct': {'priority': 2, 'good_for': ['coding']},
                     'llama3:8b-instruct-q4_0': {'priority': 3, 'good_for': ['creative']}
                 }
-                    'mistral:7b-instruct-q4_0': {'priority': 2, 'good_for': ['general']},
-                    'gemma:7b-instruct': {'priority': 2, 'good_for': ['coding']},
-                    'llama3:8b-instruct-q4_0': {'priority': 3, 'good_for': ['creative']}
-                },
-                    'llama3:8b-instruct-q4_0': {'priority': 2, 'good_for': ['creative']}
-                }
                 logging.warning("Using fallback model configuration")
 
             # Initialize semantic classifier with better error handling
@@ -415,8 +409,7 @@ class EnhancedLLMRouter:
     def get_classification_stats(self) -> Dict[str, Any]:
         """Get comprehensive classification statistics"""
 
-        total_classifications = self.cache_stats['hits'] +
-            self.cache_stats['misses']
+        total_classifications = self.cache_stats['hits'] + self.cache_stats['misses']
         hit_rate = (self.cache_stats['hits'] /
                     max(1, total_classifications)) * 100
 
@@ -450,8 +443,7 @@ class EnhancedLLMRouter:
         """Get routing optimization recommendations"""
         recommendations = []
 
-        total_calls = self.cache_stats['rule_based_calls'] +
-            self.cache_stats['semantic_calls']
+        total_calls = self.cache_stats['rule_based_calls'] + self.cache_stats['semantic_calls']
         if total_calls > 0:
             semantic_ratio = self.cache_stats['semantic_calls'] / total_calls
             if semantic_ratio < 0.1:
