@@ -29,12 +29,12 @@ try:
 except ImportError as e:
     print(f"Info: Circuit breaker not available: {e}")
     CircuitBreakerManager = None
-    get_circuit_breaker_manager = lambda: None
+    def get_circuit_breaker_manager(): return None
     CIRCUIT_BREAKER_AVAILABLE = False
 
 __all__ = [
     "OllamaClient",
-    "LLMRouter", 
+    "LLMRouter",
     "AuthService",
     "CIRCUIT_BREAKER_AVAILABLE"
 ]

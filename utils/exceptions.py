@@ -6,16 +6,18 @@ from typing import Dict, Any, Optional
 from datetime import datetime
 from fastapi import HTTPException
 
+
 class ErrorCategory(Enum):
     VALIDATION = "validation"
     AUTHENTICATION = "authentication"
-    EXTERNAL_SERVICE = "external_service" 
+    EXTERNAL_SERVICE = "external_service"
     RESOURCE = "resource"
     INTERNAL = "internal"
 
+
 class LLMProxyError(Exception):
     """Standardized error with proper HTTP response"""
-    
+
     def __init__(
         self,
         message: str,
@@ -31,7 +33,7 @@ class LLMProxyError(Exception):
         self.status_code = status_code
         self.user_message = user_message or message
         self.timestamp = datetime.utcnow()
-    
+
     def to_http_exception(self) -> HTTPException:
         return HTTPException(
             status_code=self.status_code,
@@ -46,6 +48,8 @@ class LLMProxyError(Exception):
         )
 
 # Specific errors your app needs
+
+
 class ModelNotAvailableError(LLMProxyError):
     def __init__(self, model_name: str):
         super().__init__(
@@ -55,6 +59,7 @@ class ModelNotAvailableError(LLMProxyError):
             status_code=400,
             user_message=f"The model '{model_name}' is not available. Please check the model name."
         )
+
 
 class OllamaConnectionError(LLMProxyError):
     def __init__(self, ollama_url: str, reason: str):
@@ -66,6 +71,7 @@ class OllamaConnectionError(LLMProxyError):
             user_message="AI service is temporarily unavailable. Please try again in a few moments."
         )
 
+
 class InvalidRequestError(LLMProxyError):
     def __init__(self, field: str, issue: str):
         super().__init__(
@@ -75,4 +81,3 @@ class InvalidRequestError(LLMProxyError):
             status_code=400,
             user_message=f"Invalid request: {issue}"
         )
-

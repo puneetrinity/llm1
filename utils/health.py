@@ -17,13 +17,14 @@ except ImportError:
         last_check: str
         details: Optional[Dict[str, Any]] = None
 
+
 class HealthChecker:
     def __init__(self):
         self.start_time = datetime.now()
         self.health_checks: Dict[str, ServiceStatus] = {}
         self.monitoring_task: Optional[asyncio.Task] = None
         self.last_check_time = datetime.now()
-        
+
         # Health thresholds
         self.thresholds = {
             "response_time_p95": 10.0,  # seconds
@@ -32,20 +33,20 @@ class HealthChecker:
             "disk_usage": 90.0,         # percentage
             "error_rate": 5.0           # percentage
         }
-        
+
         self.alerts = []
         self.stats = {
             'total_checks': 0,
             'failed_checks': 0,
             'alerts_triggered': 0
         }
-        
+
     async def start_monitoring(self):
         """Start health monitoring background task"""
         if self.monitoring_task is None:
             self.monitoring_task = asyncio.create_task(self.monitor_system())
             logging.info("Health monitoring started")
-    
+
     async def stop_monitoring(self):
         """Stop health monitoring"""
         if self.monitoring_task:
@@ -56,48 +57,48 @@ class HealthChecker:
                 pass
             self.monitoring_task = None
             logging.info("Health monitoring stopped")
-    
+
     async def monitor_system(self):
         """Background health monitoring loop"""
         while True:
             try:
                 await self._perform_health_checks()
                 await asyncio.sleep(60)  # Check every minute
-                
+
             except asyncio.CancelledError:
                 logging.info("Health monitoring cancelled")
                 break
             except Exception as e:
                 logging.error(f"Error in health monitoring: {str(e)}")
                 await asyncio.sleep(30)  # Wait shorter on error
-    
+
     async def _perform_health_checks(self):
         """Perform all health checks"""
         self.last_check_time = datetime.now()
         self.stats['total_checks'] += 1
-        
+
         try:
             # System resource checks
             await self._check_system_resources()
-            
+
             # Service-specific checks
             await self._check_services()
-            
+
         except Exception as e:
             logging.error(f"Error performing health checks: {str(e)}")
             self.stats['failed_checks'] += 1
-    
+
     async def _check_system_resources(self):
         """Check system resource usage"""
         try:
             # CPU usage
             cpu_percent = psutil.cpu_percent(interval=1)
             cpu_healthy = cpu_percent < self.thresholds["cpu_usage"]
-            
+
             # Memory usage
             memory = psutil.virtual_memory()
             memory_healthy = memory.percent < self.thresholds["memory_usage"]
-            
+
             # Disk usage
             try:
                 disk = psutil.disk_usage('/')
@@ -105,7 +106,7 @@ class HealthChecker:
             except Exception:
                 disk_healthy = True
                 disk = None
-            
+
             # Update health checks with proper string conversion
             self.health_checks["cpu"] = ServiceStatus(
                 name="cpu",
@@ -117,7 +118,7 @@ class HealthChecker:
                     "healthy": cpu_healthy
                 }
             )
-            
+
             self.health_checks["memory"] = ServiceStatus(
                 name="memory",
                 status="healthy" if memory_healthy else "unhealthy",
@@ -130,7 +131,7 @@ class HealthChecker:
                     "healthy": memory_healthy
                 }
             )
-            
+
             if disk:
                 self.health_checks["disk"] = ServiceStatus(
                     name="disk",
@@ -144,15 +145,17 @@ class HealthChecker:
                         "healthy": disk_healthy
                     }
                 )
-            
+
             # Check for alerts
             if not cpu_healthy:
                 self._trigger_alert("cpu", f"High CPU usage: {cpu_percent}%")
             if not memory_healthy:
-                self._trigger_alert("memory", f"High memory usage: {memory.percent}%")
+                self._trigger_alert(
+                    "memory", f"High memory usage: {memory.percent}%")
             if disk and not disk_healthy:
-                self._trigger_alert("disk", f"High disk usage: {disk.percent}%")
-                
+                self._trigger_alert(
+                    "disk", f"High disk usage: {disk.percent}%")
+
         except Exception as e:
             logging.error(f"Error checking system resources: {str(e)}")
             self.health_checks["system"] = ServiceStatus(
@@ -161,13 +164,13 @@ class HealthChecker:
                 last_check=datetime.now().isoformat(),
                 details={"error": str(e)}
             )
-    
+
     async def _check_services(self):
         """Check application services"""
         try:
             # Basic service check - this can be extended
             service_healthy = True
-            
+
             self.health_checks["application"] = ServiceStatus(
                 name="application",
                 status="healthy" if service_healthy else "unhealthy",
@@ -177,10 +180,10 @@ class HealthChecker:
                     "healthy": service_healthy
                 }
             )
-            
+
         except Exception as e:
             logging.error(f"Error checking services: {str(e)}")
-    
+
     def _trigger_alert(self, component: str, message: str):
         """Trigger an alert"""
         alert = {
@@ -189,27 +192,27 @@ class HealthChecker:
             "timestamp": datetime.now().isoformat(),
             "severity": "warning"
         }
-        
+
         self.alerts.append(alert)
         self.stats['alerts_triggered'] += 1
-        
+
         # Keep only recent alerts (last 100)
         if len(self.alerts) > 100:
             self.alerts = self.alerts[-50:]
-        
+
         logging.warning(f"Health alert: {component} - {message}")
-    
+
     async def check_service_health(self, service_name: str, check_function) -> ServiceStatus:
         """Check health of a specific service"""
         try:
             start_time = datetime.now()
             is_healthy = await check_function()
             response_time = (datetime.now() - start_time).total_seconds()
-            
+
             status = "healthy" if is_healthy else "unhealthy"
             if response_time > self.thresholds.get("response_time_p95", 10.0):
                 status = "slow"
-            
+
             return ServiceStatus(
                 name=service_name,
                 status=status,
@@ -220,7 +223,7 @@ class HealthChecker:
                     "threshold": self.thresholds.get("response_time_p95", 10.0)
                 }
             )
-            
+
         except Exception as e:
             logging.error(f"Health check failed for {service_name}: {str(e)}")
             return ServiceStatus(
@@ -229,35 +232,35 @@ class HealthChecker:
                 last_check=datetime.now().isoformat(),
                 details={"error": str(e)}
             )
-    
+
     def add_external_service_check(self, service_name: str, status: ServiceStatus):
         """Add health status from external service"""
         self.health_checks[service_name] = status
-    
+
     def remove_service_check(self, service_name: str):
         """Remove a service health check"""
         if service_name in self.health_checks:
             del self.health_checks[service_name]
-    
+
     async def get_health_status(self) -> Dict[str, Any]:
         """Get comprehensive health status"""
         try:
             # Ensure we have recent health checks
             if datetime.now() - self.last_check_time > timedelta(minutes=2):
                 await self._perform_health_checks()
-            
+
             # Determine overall health
             overall_healthy = True
             unhealthy_services = []
-            
+
             for service_name, status in self.health_checks.items():
                 if status.status in ["unhealthy", "unknown"]:
                     overall_healthy = False
                     unhealthy_services.append(service_name)
-            
+
             # Calculate uptime
             uptime = datetime.now() - self.start_time
-            
+
             # Get system metrics
             try:
                 system_metrics = {
@@ -267,7 +270,7 @@ class HealthChecker:
                 }
             except Exception:
                 system_metrics = {"error": "Could not collect system metrics"}
-            
+
             return {
                 "healthy": overall_healthy,
                 "timestamp": datetime.now().isoformat(),
@@ -288,7 +291,7 @@ class HealthChecker:
                 "stats": self.stats,
                 "recent_alerts": self.alerts[-5:] if self.alerts else []
             }
-            
+
         except Exception as e:
             logging.error(f"Error getting health status: {str(e)}")
             return {
@@ -298,13 +301,14 @@ class HealthChecker:
                 "error": str(e),
                 "uptime_seconds": (datetime.now() - self.start_time).total_seconds()
             }
-    
+
     def get_health_summary(self) -> Dict[str, Any]:
         """Get a brief health summary"""
         try:
-            healthy_count = sum(1 for s in self.health_checks.values() if s.status == "healthy")
+            healthy_count = sum(
+                1 for s in self.health_checks.values() if s.status == "healthy")
             total_count = len(self.health_checks)
-            
+
             return {
                 "overall_status": "healthy" if healthy_count == total_count else "degraded",
                 "healthy_services": healthy_count,
@@ -313,31 +317,31 @@ class HealthChecker:
                 "recent_alerts": len(self.alerts),
                 "monitoring_active": self.monitoring_task is not None
             }
-            
+
         except Exception as e:
             return {
                 "overall_status": "unknown",
                 "error": str(e)
             }
-    
+
     def get_thresholds(self) -> Dict[str, float]:
         """Get current health thresholds"""
         return self.thresholds.copy()
-    
+
     def update_thresholds(self, new_thresholds: Dict[str, float]):
         """Update health thresholds"""
         self.thresholds.update(new_thresholds)
         logging.info(f"Health thresholds updated: {new_thresholds}")
-    
+
     def get_alerts(self, limit: int = 10) -> List[Dict[str, Any]]:
         """Get recent alerts"""
         return self.alerts[-limit:] if self.alerts else []
-    
+
     def clear_alerts(self):
         """Clear all alerts"""
         self.alerts.clear()
         logging.info("Health alerts cleared")
-    
+
     async def get_system_info(self) -> Dict[str, Any]:
         """Get detailed system information"""
         try:
@@ -348,7 +352,7 @@ class HealthChecker:
                 "current_frequency": psutil.cpu_freq().current if psutil.cpu_freq() else 0,
                 "cpu_usage": psutil.cpu_percent(interval=1)
             }
-            
+
             memory_info = psutil.virtual_memory()
             memory = {
                 "total": round(memory_info.total / (1024**3), 2),
@@ -356,7 +360,7 @@ class HealthChecker:
                 "used": round(memory_info.used / (1024**3), 2),
                 "percentage": memory_info.percent
             }
-            
+
             disk_info = psutil.disk_usage('/')
             disk = {
                 "total": round(disk_info.total / (1024**3), 2),
@@ -364,18 +368,18 @@ class HealthChecker:
                 "free": round(disk_info.free / (1024**3), 2),
                 "percentage": round((disk_info.used / disk_info.total) * 100, 2)
             }
-            
+
             return {
                 "cpu": cpu_info,
                 "memory": memory,
                 "disk": disk,
                 "uptime": (datetime.now() - self.start_time).total_seconds()
             }
-            
+
         except Exception as e:
             logging.error(f"Error getting system info: {str(e)}")
             return {"error": str(e)}
-    
+
     async def cleanup(self):
         """Cleanup resources"""
         await self.stop_monitoring()

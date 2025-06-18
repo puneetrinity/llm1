@@ -14,11 +14,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any
 
+
 class ModelFixTool:
     def __init__(self):
         self.backup_dir = None
         self.files_fixed = []
-        
+
     def print_status(self, message: str, status: str = "info"):
         """Print colored status messages"""
         colors = {
@@ -29,35 +30,36 @@ class ModelFixTool:
         }
         icon = colors.get(status, "ℹ️ ")
         print(f"{icon} {message}")
-    
+
     def create_backup(self):
         """Create backup directory"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.backup_dir = f"backups/complete_fix_{timestamp}"
         os.makedirs(self.backup_dir, exist_ok=True)
         self.print_status(f"Backup directory: {self.backup_dir}", "info")
-    
+
     def backup_file(self, file_path: str):
         """Backup a file before modifying it"""
         if os.path.exists(file_path):
-            backup_path = os.path.join(self.backup_dir, os.path.basename(file_path))
+            backup_path = os.path.join(
+                self.backup_dir, os.path.basename(file_path))
             shutil.copy2(file_path, backup_path)
             return True
         return False
-    
+
     def fix_main_master(self):
         """Fix main_master.py with complete 4-model configuration"""
         file_path = "main_master.py"
-        
+
         if not os.path.exists(file_path):
             self.print_status(f"{file_path} not found", "warning")
             return
-            
+
         self.backup_file(file_path)
-        
+
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
-        
+
         # Replace model config completely
         new_config = '''        # Configuration for your 4 models - Updated to match banner
         self.model_config = {
@@ -82,7 +84,7 @@ class ModelFixTool:
                 'description': 'Llama3 8B-Instruct - Creative writing, conversations, storytelling'
             }
         }'''
-        
+
         # Replace routing logic completely
         new_routing = '''        # Model selection logic - Updated for 4 models matching banner
         
@@ -116,34 +118,36 @@ class ModelFixTool:
         
         # Fallback to first available model
         return list(self.available_models.keys())[0]'''
-        
+
         # Replace model config
         old_config_pattern = r'        # Configuration for your.*?        }'
-        content = re.sub(old_config_pattern, new_config, content, flags=re.DOTALL)
-        
+        content = re.sub(old_config_pattern, new_config,
+                         content, flags=re.DOTALL)
+
         # Replace routing logic
         old_routing_pattern = r'        # Model selection logic.*?return list\(self\.available_models\.keys\(\)\)\[0\]'
-        content = re.sub(old_routing_pattern, new_routing, content, flags=re.DOTALL)
-        
+        content = re.sub(old_routing_pattern, new_routing,
+                         content, flags=re.DOTALL)
+
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(content)
-        
+
         self.files_fixed.append(file_path)
         self.print_status(f"Fixed {file_path}", "success")
-    
+
     def fix_optimized_router(self):
         """Fix services/optimized_router.py - remove deepseek references"""
         file_path = "services/optimized_router.py"
-        
+
         if not os.path.exists(file_path):
             self.print_status(f"{file_path} not found", "warning")
             return
-            
+
         self.backup_file(file_path)
-        
+
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
-        
+
         # Replace fallback initialization
         new_fallback = '''                self.available_models = {
                     'phi:3.5': {'priority': 1, 'good_for': ['math', 'reasoning']},
@@ -151,30 +155,31 @@ class ModelFixTool:
                     'gemma:7b-instruct': {'priority': 2, 'good_for': ['coding']},
                     'llama3:8b-instruct-q4_0': {'priority': 3, 'good_for': ['creative']}
                 }'''
-        
+
         old_fallback_pattern = r'                self\.available_models = \{[^}]+\},'
-        content = re.sub(old_fallback_pattern, new_fallback, content, flags=re.DOTALL)
-        
+        content = re.sub(old_fallback_pattern, new_fallback,
+                         content, flags=re.DOTALL)
+
         # Remove any deepseek lines
         deepseek_pattern = r'.*\'deepseek-v2:7b-q4_0\'.*\n'
         content = re.sub(deepseek_pattern, '', content)
-        
+
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(content)
-        
+
         self.files_fixed.append(file_path)
         self.print_status(f"Fixed {file_path}", "success")
-    
+
     def fix_enhanced_start(self):
         """Fix enhanced_start.sh with proper 4-model setup"""
         file_path = "enhanced_start.sh"
-        
+
         if not os.path.exists(file_path):
             self.print_status(f"{file_path} not found", "warning")
             return
-            
+
         self.backup_file(file_path)
-        
+
         new_content = '''#!/bin/bash
 
 # Add Ollama to PATH (if installed in custom location)
@@ -277,26 +282,26 @@ trap cleanup SIGTERM SIGINT
 # Keep the script running
 wait
 '''
-        
+
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(new_content)
-        
+
         self.files_fixed.append(file_path)
         self.print_status(f"Fixed {file_path}", "success")
-    
+
     def fix_config_enhanced(self):
         """Fix config_enhanced.py model priorities"""
         file_path = "config_enhanced.py"
-        
+
         if not os.path.exists(file_path):
             self.print_status(f"{file_path} not found", "warning")
             return
-            
+
         self.backup_file(file_path)
-        
+
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
-        
+
         # Update MODEL_PRIORITIES
         new_priorities = '''    MODEL_PRIORITIES: Dict[str, int] = Field(
         default={
@@ -307,29 +312,30 @@ wait
         },
         description="Model priorities for 4-model system"
     )'''
-        
+
         old_priorities_pattern = r'    MODEL_PRIORITIES: Dict\[str, int\] = Field\([^)]+\)'
-        content = re.sub(old_priorities_pattern, new_priorities, content, flags=re.DOTALL)
-        
+        content = re.sub(old_priorities_pattern,
+                         new_priorities, content, flags=re.DOTALL)
+
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(content)
-        
+
         self.files_fixed.append(file_path)
         self.print_status(f"Fixed {file_path}", "success")
-    
+
     def fix_model_warmup(self):
         """Fix services/model_warmup.py"""
         file_path = "services/model_warmup.py"
-        
+
         if not os.path.exists(file_path):
             self.print_status(f"{file_path} not found", "warning")
             return
-            
+
         self.backup_file(file_path)
-        
+
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
-        
+
         # Update model priorities
         new_priorities = '''        self.model_priorities = {
             'phi:3.5': 1,                           # Highest priority (reasoning)
@@ -337,7 +343,7 @@ wait
             'gemma:7b-instruct': 2,                 # High priority (technical)
             'llama3:8b-instruct-q4_0': 3            # Medium priority (creative)
         }'''
-        
+
         # Update warmup prompts
         new_prompts = '''        # Warmup prompts for each model type - Updated for 4 models
         self.warmup_prompts = {
@@ -362,23 +368,25 @@ wait
                 "Create a creative dialogue"
             ]
         }'''
-        
+
         old_priorities_pattern = r'        self\.model_priorities = \{[^}]+\}'
-        content = re.sub(old_priorities_pattern, new_priorities, content, flags=re.DOTALL)
-        
+        content = re.sub(old_priorities_pattern,
+                         new_priorities, content, flags=re.DOTALL)
+
         old_prompts_pattern = r'        # Warmup prompts for each model type.*?        }'
-        content = re.sub(old_prompts_pattern, new_prompts, content, flags=re.DOTALL)
-        
+        content = re.sub(old_prompts_pattern, new_prompts,
+                         content, flags=re.DOTALL)
+
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(content)
-        
+
         self.files_fixed.append(file_path)
         self.print_status(f"Fixed {file_path}", "success")
-    
+
     def create_download_script(self):
         """Create download_4_models.py Python script"""
         file_path = "download_4_models.py"
-        
+
         download_script = '''#!/usr/bin/env python3
 """
 download_4_models.py - Download the correct 4 models for the LLM proxy
@@ -495,17 +503,17 @@ def main():
 if __name__ == "__main__":
     main()
 '''
-        
+
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(download_script)
-        
+
         self.files_fixed.append(file_path)
         self.print_status(f"Created {file_path}", "success")
-    
+
     def create_download_script_bash(self):
         """Create download_4_models.sh for non-Windows users"""
         file_path = "download_4_models.sh"
-        
+
         bash_script = '''#!/bin/bash
 # download_4_models.sh - Download the correct 4 models
 
@@ -568,56 +576,56 @@ echo ""
 echo "🚀 Ready to start your 4-model LLM proxy:"
 echo "   python main_master.py"
 '''
-        
+
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(bash_script)
-        
+
         # Make executable on Unix systems
         try:
             os.chmod(file_path, 0o755)
         except:
             pass  # Windows doesn't need chmod
-        
+
         self.files_fixed.append(file_path)
         self.print_status(f"Created {file_path}", "success")
-    
+
     def run_complete_fix(self):
         """Run the complete fix process"""
         print("🔧 COMPLETE MODEL UPDATE - Fixing ALL Files")
         print("============================================")
         print("")
-        
+
         try:
             # Create backup
             self.create_backup()
             print("")
-            
+
             # Fix all files
             self.print_status("🔧 Fixing main_master.py", "info")
             self.fix_main_master()
             print("")
-            
+
             self.print_status("🔧 Fixing services/optimized_router.py", "info")
             self.fix_optimized_router()
             print("")
-            
+
             self.print_status("🔧 Fixing enhanced_start.sh", "info")
             self.fix_enhanced_start()
             print("")
-            
+
             self.print_status("🔧 Fixing config_enhanced.py", "info")
             self.fix_config_enhanced()
             print("")
-            
+
             self.print_status("🔧 Fixing services/model_warmup.py", "info")
             self.fix_model_warmup()
             print("")
-            
+
             self.print_status("🔧 Creating download scripts", "info")
             self.create_download_script()
             self.create_download_script_bash()
             print("")
-            
+
             # Summary
             self.print_status("🎉 COMPLETE FIX FINISHED!", "success")
             print("=========================")
@@ -635,33 +643,37 @@ echo "   python main_master.py"
             print("")
             print("🎯 Your 4-model system now routes:")
             print("├── Math/Logic queries    → Phi-3.5")
-            print("├── Coding/Technical      → Gemma 7B") 
+            print("├── Coding/Technical      → Gemma 7B")
             print("├── Creative/Writing      → Llama3 8B")
             print("└── General/Quick facts   → Mistral 7B")
             print("")
-            self.print_status("All old models removed - system ready!", "success")
-            
+            self.print_status(
+                "All old models removed - system ready!", "success")
+
             return True
-            
+
         except Exception as e:
             self.print_status(f"Fix failed: {str(e)}", "error")
             if self.backup_dir:
-                self.print_status(f"You can restore from backups in: {self.backup_dir}", "info")
+                self.print_status(
+                    f"You can restore from backups in: {self.backup_dir}", "info")
             return False
+
 
 def main():
     """Main entry point"""
     fixer = ModelFixTool()
     success = fixer.run_complete_fix()
-    
+
     if success:
         print("\n✨ All fixes completed successfully!")
         print("Run: python download_4_models.py")
     else:
         print("\n❌ Fix failed. Check error messages above.")
-    
+
     input("\nPress Enter to exit...")
     return success
+
 
 if __name__ == "__main__":
     main()

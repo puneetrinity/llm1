@@ -6,29 +6,30 @@ from typing import Dict, Any, Optional
 import os
 import logging
 
+
 class EnhancedFeaturesConfig(BaseModel):
     """Standalone configuration for enhanced features - no dependencies on existing config"""
-    
+
     class Config:
         extra = "ignore"  # Ignore unknown env vars
         case_sensitive = False
-    
+
     # Connection Pooling (Safe - no external dependencies)
     connection_pooling_enabled: bool = Field(
-        default=True, 
+        default=True,
         description="Enable optimized connection pooling"
     )
     connection_pool_size: int = Field(
-        default=100, 
+        default=100,
         ge=10, le=500,
         description="Total connection pool size"
     )
     connection_per_host: int = Field(
-        default=20, 
+        default=20,
         ge=5, le=100,
         description="Connections per host"
     )
-    
+
     # Circuit Breaker (Safe - no external dependencies)
     circuit_breaker_enabled: bool = Field(
         default=True,
@@ -44,7 +45,7 @@ class EnhancedFeaturesConfig(BaseModel):
         ge=10, le=300,
         description="Recovery timeout in seconds"
     )
-    
+
     # Smart Caching (Safe fallbacks)
     smart_cache_enabled: bool = Field(
         default=True,
@@ -67,7 +68,7 @@ class EnhancedFeaturesConfig(BaseModel):
         ge=0.5, le=0.99,
         description="Semantic similarity threshold"
     )
-    
+
     # Memory Management
     max_memory_mb: int = Field(
         default=8192,
@@ -79,42 +80,55 @@ class EnhancedFeaturesConfig(BaseModel):
         ge=5.0, le=30.0,
         description="Percentage of memory for caching"
     )
-    
+
     # Global Settings
     debug_mode: bool = Field(
         default=False,
         description="Enable debug mode for enhanced features"
     )
-    
+
     @classmethod
     def from_env(cls) -> 'EnhancedFeaturesConfig':
         """Load configuration from environment variables"""
         return cls(
             # Connection Pooling
-            connection_pooling_enabled=_get_bool_env('ENHANCED_CONNECTION_POOLING_ENABLED', True),
-            connection_pool_size=_get_int_env('ENHANCED_CONNECTION_POOLING_TOTAL_LIMIT', 100),
-            connection_per_host=_get_int_env('ENHANCED_CONNECTION_POOLING_PER_HOST_LIMIT', 20),
-            
+            connection_pooling_enabled=_get_bool_env(
+                'ENHANCED_CONNECTION_POOLING_ENABLED', True),
+            connection_pool_size=_get_int_env(
+                'ENHANCED_CONNECTION_POOLING_TOTAL_LIMIT', 100),
+            connection_per_host=_get_int_env(
+                'ENHANCED_CONNECTION_POOLING_PER_HOST_LIMIT', 20),
+
             # Circuit Breaker
-            circuit_breaker_enabled=_get_bool_env('ENHANCED_CIRCUIT_BREAKER_ENABLED', True),
-            circuit_breaker_failure_threshold=_get_int_env('ENHANCED_CIRCUIT_BREAKER_FAILURE_THRESHOLD', 5),
-            circuit_breaker_recovery_timeout=_get_int_env('ENHANCED_CIRCUIT_BREAKER_RECOVERY_TIMEOUT', 60),
-            
+            circuit_breaker_enabled=_get_bool_env(
+                'ENHANCED_CIRCUIT_BREAKER_ENABLED', True),
+            circuit_breaker_failure_threshold=_get_int_env(
+                'ENHANCED_CIRCUIT_BREAKER_FAILURE_THRESHOLD', 5),
+            circuit_breaker_recovery_timeout=_get_int_env(
+                'ENHANCED_CIRCUIT_BREAKER_RECOVERY_TIMEOUT', 60),
+
             # Smart Caching
-            smart_cache_enabled=_get_bool_env('ENHANCED_SMART_CACHE_ENABLED', True),
-            redis_enabled=_get_bool_env('ENHANCED_SMART_CACHE_REDIS_ENABLED', True),
-            redis_url=os.getenv('ENHANCED_SMART_CACHE_REDIS_URL', 'redis://localhost:6379'),
-            semantic_similarity_enabled=_get_bool_env('ENHANCED_SMART_CACHE_SEMANTIC_ENABLED', True),
-            similarity_threshold=_get_float_env('ENHANCED_SMART_CACHE_SIMILARITY_THRESHOLD', 0.85),
-            
+            smart_cache_enabled=_get_bool_env(
+                'ENHANCED_SMART_CACHE_ENABLED', True),
+            redis_enabled=_get_bool_env(
+                'ENHANCED_SMART_CACHE_REDIS_ENABLED', True),
+            redis_url=os.getenv(
+                'ENHANCED_SMART_CACHE_REDIS_URL', 'redis://localhost:6379'),
+            semantic_similarity_enabled=_get_bool_env(
+                'ENHANCED_SMART_CACHE_SEMANTIC_ENABLED', True),
+            similarity_threshold=_get_float_env(
+                'ENHANCED_SMART_CACHE_SIMILARITY_THRESHOLD', 0.85),
+
             # Memory Management
-            max_memory_mb=_get_int_env('ENHANCED_MEMORY_MANAGEMENT_MAX_MB', 8192),
-            cache_memory_percent=_get_float_env('ENHANCED_MEMORY_CACHE_ALLOCATION_PERCENT', 15.0),
-            
+            max_memory_mb=_get_int_env(
+                'ENHANCED_MEMORY_MANAGEMENT_MAX_MB', 8192),
+            cache_memory_percent=_get_float_env(
+                'ENHANCED_MEMORY_CACHE_ALLOCATION_PERCENT', 15.0),
+
             # Global
             debug_mode=_get_bool_env('ENHANCED_DEBUG_MODE', False)
         )
-    
+
     def get_feature_summary(self) -> Dict[str, bool]:
         """Get summary of enabled features"""
         return {
@@ -125,25 +139,29 @@ class EnhancedFeaturesConfig(BaseModel):
             'semantic_similarity': self.semantic_similarity_enabled,
             'debug_mode': self.debug_mode
         }
-    
+
     def validate_configuration(self) -> Dict[str, Any]:
         """Validate configuration and return warnings/errors"""
         warnings = []
         errors = []
-        
+
         # Memory validation
-        cache_memory_mb = (self.max_memory_mb * self.cache_memory_percent / 100)
+        cache_memory_mb = (self.max_memory_mb *
+                           self.cache_memory_percent / 100)
         if cache_memory_mb < 100:
-            warnings.append(f"Cache memory allocation is very low: {cache_memory_mb:.0f}MB")
-        
+            warnings.append(
+                f"Cache memory allocation is very low: {cache_memory_mb:.0f}MB")
+
         # Connection pool validation
         if self.connection_per_host > self.connection_pool_size:
-            errors.append("connection_per_host cannot exceed connection_pool_size")
-        
+            errors.append(
+                "connection_per_host cannot exceed connection_pool_size")
+
         # Semantic similarity validation
         if self.semantic_similarity_enabled and cache_memory_mb < 300:
-            warnings.append("Semantic similarity may need at least 300MB cache memory")
-        
+            warnings.append(
+                "Semantic similarity may need at least 300MB cache memory")
+
         return {
             'valid': len(errors) == 0,
             'warnings': warnings,
@@ -152,29 +170,37 @@ class EnhancedFeaturesConfig(BaseModel):
         }
 
 # Helper functions for environment variable parsing
+
+
 def _get_bool_env(key: str, default: bool) -> bool:
     """Get boolean from environment variable"""
     value = os.getenv(key, str(default)).lower()
     return value in ('true', '1', 'yes', 'on')
+
 
 def _get_int_env(key: str, default: int) -> int:
     """Get integer from environment variable"""
     try:
         return int(os.getenv(key, str(default)))
     except ValueError:
-        logging.warning(f"Invalid integer value for {key}, using default: {default}")
+        logging.warning(
+            f"Invalid integer value for {key}, using default: {default}")
         return default
+
 
 def _get_float_env(key: str, default: float) -> float:
     """Get float from environment variable"""
     try:
         return float(os.getenv(key, str(default)))
     except ValueError:
-        logging.warning(f"Invalid float value for {key}, using default: {default}")
+        logging.warning(
+            f"Invalid float value for {key}, using default: {default}")
         return default
+
 
 # Singleton instance
 _enhanced_config: Optional[EnhancedFeaturesConfig] = None
+
 
 def get_enhanced_config() -> EnhancedFeaturesConfig:
     """Get the enhanced features configuration singleton"""
@@ -183,27 +209,31 @@ def get_enhanced_config() -> EnhancedFeaturesConfig:
         _enhanced_config = EnhancedFeaturesConfig.from_env()
     return _enhanced_config
 
+
 def validate_enhanced_config() -> bool:
     """Validate enhanced configuration and log results"""
     config = get_enhanced_config()
     validation = config.validate_configuration()
-    
+
     if validation['errors']:
         for error in validation['errors']:
             logging.error(f"❌ Enhanced config error: {error}")
         return False
-    
+
     if validation['warnings']:
         for warning in validation['warnings']:
             logging.warning(f"⚠️ Enhanced config warning: {warning}")
-    
+
     features = config.get_feature_summary()
     enabled_features = [name for name, enabled in features.items() if enabled]
-    
-    logging.info(f"✅ Enhanced features configured: {', '.join(enabled_features)}")
-    logging.info(f"💾 Estimated cache memory: {validation['estimated_cache_memory_mb']:.0f}MB")
-    
+
+    logging.info(
+        f"✅ Enhanced features configured: {', '.join(enabled_features)}")
+    logging.info(
+        f"💾 Estimated cache memory: {validation['estimated_cache_memory_mb']:.0f}MB")
+
     return True
+
 
 # Quick test function
 if __name__ == "__main__":
@@ -211,12 +241,12 @@ if __name__ == "__main__":
     config = get_enhanced_config()
     print("Enhanced Features Configuration:")
     print("=" * 40)
-    
+
     features = config.get_feature_summary()
     for feature, enabled in features.items():
         status = "✅ Enabled" if enabled else "⏸️ Disabled"
         print(f"{feature}: {status}")
-    
+
     print("\nValidation:")
     validation = config.validate_configuration()
     if validation['valid']:
@@ -225,7 +255,7 @@ if __name__ == "__main__":
         print("❌ Configuration has errors:")
         for error in validation['errors']:
             print(f"  - {error}")
-    
+
     if validation['warnings']:
         print("⚠️ Warnings:")
         for warning in validation['warnings']:

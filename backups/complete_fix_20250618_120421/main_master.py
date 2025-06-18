@@ -22,42 +22,42 @@ try:
 except ImportError:
     from pydantic_settings import BaseSettings
     import os
-    
+
     class Settings(BaseSettings):
         # Server Settings
         HOST: str = "0.0.0.0"
         PORT: int = 8001
         DEBUG: bool = False
         LOG_LEVEL: str = "INFO"
-        
+
         # Ollama Settings - Will work with local Ollama
         OLLAMA_BASE_URL: str = "http://localhost:11434"
         OLLAMA_TIMEOUT: int = 300
-        
+
         # Authentication - Made conditional and secure
         ENABLE_AUTH: bool = False  # Default to disabled for easier setup
         DEFAULT_API_KEY: str = os.getenv("DEFAULT_API_KEY", "")
         API_KEY_HEADER: str = os.getenv("API_KEY_HEADER", "X-API-Key")
-        
+
         # Features - Optimized defaults
         ENABLE_DASHBOARD: bool = True
         ENABLE_ENHANCED_FEATURES: bool = True
         ENABLE_WEBSOCKET: bool = False  # Disabled by default to avoid auth issues
         ENABLE_WEBSOCKET_DASHBOARD: bool = False
-        
+
         # CORS
         CORS_ORIGINS: List[str] = ["*"]
         CORS_ALLOW_CREDENTIALS: bool = True
-        
+
         # Memory
         MAX_MEMORY_MB: int = 8192
         CACHE_MEMORY_LIMIT_MB: int = 1024
-        
+
         class Config:
             env_file = ".env"
             case_sensitive = True
             extra = "ignore"  # Ignore extra environment variables
-    
+
     settings = Settings()
 
 # Configure logging
@@ -70,9 +70,12 @@ logging.basicConfig(
 logger = logging.getLogger("main_master")
 
 # Pydantic Models
+
+
 class Message(BaseModel):
     role: str
     content: str
+
 
 class ChatCompletionRequest(BaseModel):
     model: str
@@ -82,6 +85,7 @@ class ChatCompletionRequest(BaseModel):
     stream: Optional[bool] = False
     top_p: Optional[float] = 1.0
 
+
 class HealthResponse(BaseModel):
     status: str
     healthy: bool
@@ -89,11 +93,13 @@ class HealthResponse(BaseModel):
     version: str
     services: Dict[str, Any]
 
+
 class StatusResponse(BaseModel):
     status: str
     services: Dict[str, bool]
     features: Dict[str, bool]
     timestamp: str
+
 
 # Global service state
 services_state = {
@@ -107,9 +113,11 @@ services_state = {
 websocket_sessions = {}
 
 # Ollama Client for RunPod/Local
+
+
 class OllamaClient:
     """Ollama client for RunPod or local connection"""
-    
+
     def __init__(self, base_url: str, timeout: int = 300):
         self.base_url = base_url.rstrip('/')
         self.timeout = timeout
@@ -119,31 +127,31 @@ class OllamaClient:
             'successful_requests': 0,
             'failed_requests': 0
         }
-    
+
     async def initialize(self):
         """Initialize HTTP session"""
         timeout = aiohttp.ClientTimeout(total=self.timeout)
         self.session = aiohttp.ClientSession(timeout=timeout)
         logger.info(f"✅ Ollama client initialized for {self.base_url}")
-    
+
     async def health_check(self) -> bool:
         """Check if Ollama is accessible"""
         try:
             if not self.session:
                 await self.initialize()
-            
+
             async with self.session.get(f"{self.base_url}/api/tags") as response:
                 return response.status == 200
         except Exception as e:
             logger.error(f"Ollama health check failed: {e}")
             return False
-    
+
     async def list_models(self) -> List[Dict]:
         """List available models"""
         try:
             if not self.session:
                 await self.initialize()
-            
+
             async with self.session.get(f"{self.base_url}/api/tags") as response:
                 if response.status == 200:
                     data = await response.json()
@@ -152,18 +160,18 @@ class OllamaClient:
         except Exception as e:
             logger.error(f"Failed to list models: {e}")
             return []
-    
+
     async def generate_completion(self, model: str, messages: List[Dict], **kwargs):
         """Generate completion using Ollama"""
         start_time = asyncio.get_event_loop().time()
-        
+
         try:
             if not self.session:
                 await self.initialize()
-            
+
             # Convert messages to prompt
             prompt = self._messages_to_prompt(messages)
-            
+
             payload = {
                 "model": model,
                 "prompt": prompt,
@@ -174,22 +182,23 @@ class OllamaClient:
                     "num_predict": kwargs.get('max_tokens', 150)
                 }
             }
-            
+
             async with self.session.post(
-                f"{self.base_url}/api/generate", 
+                f"{self.base_url}/api/generate",
                 json=payload
             ) as response:
                 if response.status == 200:
                     result = await response.json()
                 else:
                     error_text = await response.text()
-                    raise Exception(f"Ollama API error {response.status}: {error_text}")
-            
+                    raise Exception(
+                        f"Ollama API error {response.status}: {error_text}")
+
             # Update stats
             processing_time = asyncio.get_event_loop().time() - start_time
             self.stats['total_requests'] += 1
             self.stats['successful_requests'] += 1
-            
+
             # Return OpenAI-compatible response
             return {
                 "id": f"chatcmpl-{int(start_time)}",
@@ -212,13 +221,13 @@ class OllamaClient:
                 "processing_time": processing_time,
                 "selected_model": model
             }
-            
+
         except Exception as e:
             self.stats['total_requests'] += 1
             self.stats['failed_requests'] += 1
             logger.error(f"Generation failed: {e}")
             raise
-    
+
     def _messages_to_prompt(self, messages: List[Dict]) -> str:
         """Convert messages to prompt format"""
         prompt = ""
@@ -233,23 +242,25 @@ class OllamaClient:
                 prompt += f"Assistant: {content}\n"
         prompt += "Assistant: "
         return prompt
-    
+
     def get_stats(self) -> Dict[str, Any]:
         """Get client statistics"""
         return self.stats.copy()
-    
+
     async def cleanup(self):
         """Cleanup resources"""
         if self.session:
             await self.session.close()
 
 # Model Router for 3 Models
+
+
 class ModelRouter:
     """Routes requests to the best model based on content"""
-    
+
     def __init__(self, ollama_client):
         self.ollama_client = ollama_client
-        
+
         # Configuration for your 4 models - Updated to match banner
         self.model_config = {
             'phi:3.5': {
@@ -284,17 +295,17 @@ class ModelRouter:
                 'description': 'Best for creative writing and conversational tasks'
             }
         }
-        
+
         self.available_models = {}
         self.default_model = 'mistral:7b-instruct-q4_0'
-    
+
     async def initialize(self):
         """Initialize router and check available models"""
         try:
             # Get models from Ollama
             models = await self.ollama_client.list_models()
             available_model_names = {model.get('name', '') for model in models}
-            
+
             # Filter to only configured models that are available
             self.available_models = {
                 name: config for name, config in self.model_config.items()

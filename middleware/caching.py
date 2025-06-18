@@ -89,16 +89,19 @@ class SmartCachingMiddleware(BaseHTTPMiddleware):
         """Invalidate cache entries matching a pattern"""
         if self.smart_cache:
             try:
-                logging.info(f"Cache invalidation requested for pattern: {pattern}")
+                logging.info(
+                    f"Cache invalidation requested for pattern: {pattern}")
                 # Implementation depends on the backend (e.g., Redis pattern delete)
             except Exception as e:
-                logging.error(f"Error invalidating cache pattern {pattern}: {e}")
+                logging.error(
+                    f"Error invalidating cache pattern {pattern}: {e}")
 
     async def _initialize_cache(self):
         """Initialize smart cache with circuit breaker protection"""
         try:
             if not check_memory_allocation('cache', 100):  # 100MB for caching
-                logging.warning("Insufficient memory for caching - disabling cache")
+                logging.warning(
+                    "Insufficient memory for caching - disabling cache")
                 self.enable_cache = False
                 return
 
@@ -160,7 +163,8 @@ class SmartCachingMiddleware(BaseHTTPMiddleware):
                 response = self._reconstruct_response(cached_data)
                 response.headers["X-Cache"] = "HIT"
                 response.headers["X-Cache-Key"] = cache_key[:16] + "..."
-                self.stats['bytes_saved'] += len(json.dumps(cached_data).encode())
+                self.stats['bytes_saved'] += len(
+                    json.dumps(cached_data).encode())
                 logging.debug(f"Cache hit for key: {cache_key[:16]}...")
                 return response
 
@@ -192,7 +196,8 @@ class SmartCachingMiddleware(BaseHTTPMiddleware):
             )
 
             self.stats['cache_sets'] += 1
-            logging.debug(f"Cached response for key: {cache_key[:16]}... (TTL: {ttl}s)")
+            logging.debug(
+                f"Cached response for key: {cache_key[:16]}... (TTL: {ttl}s)")
 
         except Exception as e:
             logging.error(f"Cache set error: {e}")
@@ -245,7 +250,8 @@ class SmartCachingMiddleware(BaseHTTPMiddleware):
         try:
             if cached_data['type'] == 'json':
                 response = JSONResponse(
-                    content=json.loads(cached_data['data']) if cached_data['data'] else {},
+                    content=json.loads(
+                        cached_data['data']) if cached_data['data'] else {},
                     status_code=cached_data.get('status_code', 200)
                 )
                 excluded_headers = {'content-length', 'transfer-encoding'}

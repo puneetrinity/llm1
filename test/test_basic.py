@@ -2,15 +2,19 @@
 import pytest
 from fastapi.testclient import TestClient
 
+
 def test_health_endpoint(client):
     response = client.get("/health")
-    assert response.status_code in [200, 503]  # May be unhealthy if Ollama not running
+    # May be unhealthy if Ollama not running
+    assert response.status_code in [200, 503]
+
 
 def test_models_endpoint(client):
     response = client.get("/models")
     assert response.status_code == 200
     data = response.json()
     assert "data" in data
+
 
 def test_basic_completion(client):
     response = client.post("/v1/chat/completions", json={

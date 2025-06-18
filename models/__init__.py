@@ -1,8 +1,8 @@
 # models/__init__.py
 from .requests import ChatCompletionRequest, CompletionRequest, ChatMessage
 from .responses import (
-    ChatCompletionResponse, 
-    CompletionResponse, 
+    ChatCompletionResponse,
+    CompletionResponse,
     HealthResponse,
     Usage,
     ChatCompletionChoice,
@@ -12,7 +12,7 @@ from .responses import (
 
 __all__ = [
     "ChatCompletionRequest",
-    "CompletionRequest", 
+    "CompletionRequest",
     "ChatMessage",
     "ChatCompletionResponse",
     "CompletionResponse",

@@ -3,68 +3,89 @@ from pydantic_settings import BaseSettings
 from pydantic import Field
 from typing import Dict, List, Any
 
+
 class EnhancedSettings(BaseSettings):
     """Enhanced application settings with proper Pydantic configuration"""
-    
+
     model_config = {
         "env_file": ".env",
-        "env_file_encoding": "utf-8", 
+        "env_file_encoding": "utf-8",
         "case_sensitive": True,
         "extra": "ignore"  # This fixes the Pydantic validation error
     }
-    
+
     # Basic application settings
     DEBUG: bool = Field(default=False, description="Enable debug mode")
     HOST: str = Field(default="0.0.0.0", description="Host address")
     PORT: int = Field(default=8000, description="Port number")
     LOG_LEVEL: str = Field(default="INFO", description="Logging level")
-    
+
     # Ollama configuration
-    OLLAMA_BASE_URL: str = Field(default="http://localhost:11434", description="Ollama base URL")
-    OLLAMA_TIMEOUT: int = Field(default=300, description="Ollama timeout in seconds")
-    
+    OLLAMA_BASE_URL: str = Field(
+        default="http://localhost:11434", description="Ollama base URL")
+    OLLAMA_TIMEOUT: int = Field(
+        default=300, description="Ollama timeout in seconds")
+
     # Basic model settings
-    DEFAULT_MODEL: str = Field(default="mistral:7b-instruct-q4_0", description="Default model")
+    DEFAULT_MODEL: str = Field(
+        default="mistral:7b-instruct-q4_0", description="Default model")
     MAX_MEMORY_MB: int = Field(default=4096, description="Max memory in MB")
-    
+
     # CORS settings
     CORS_ORIGINS: List[str] = Field(default=["*"], description="CORS origins")
-    CORS_ALLOW_CREDENTIALS: bool = Field(default=True, description="Allow CORS credentials")
-    
+    CORS_ALLOW_CREDENTIALS: bool = Field(
+        default=True, description="Allow CORS credentials")
+
     # Feature flags
-    ENABLE_AUTH: bool = Field(default=False, description="Enable authentication")
-    ENABLE_RATE_LIMITING: bool = Field(default=False, description="Enable rate limiting")
-    DEFAULT_RATE_LIMIT: str = Field(default="100/hour", description="Default rate limit")
-    
+    ENABLE_AUTH: bool = Field(
+        default=False, description="Enable authentication")
+    ENABLE_RATE_LIMITING: bool = Field(
+        default=False, description="Enable rate limiting")
+    DEFAULT_RATE_LIMIT: str = Field(
+        default="100/hour", description="Default rate limit")
+
     # Semantic Classification Settings
-    ENABLE_SEMANTIC_CLASSIFICATION: bool = Field(default=True, description="Enable semantic classification")
-    SEMANTIC_MODEL: str = Field(default="all-MiniLM-L6-v2", description="Semantic model name")
-    SEMANTIC_CONFIDENCE_THRESHOLD: float = Field(default=0.7, description="Semantic confidence threshold")
-    CLASSIFICATION_CACHE_SIZE: int = Field(default=1000, description="Classification cache size")
-    
+    ENABLE_SEMANTIC_CLASSIFICATION: bool = Field(
+        default=True, description="Enable semantic classification")
+    SEMANTIC_MODEL: str = Field(
+        default="all-MiniLM-L6-v2", description="Semantic model name")
+    SEMANTIC_CONFIDENCE_THRESHOLD: float = Field(
+        default=0.7, description="Semantic confidence threshold")
+    CLASSIFICATION_CACHE_SIZE: int = Field(
+        default=1000, description="Classification cache size")
+
     # Streaming Settings
-    ENABLE_STREAMING: bool = Field(default=True, description="Enable streaming")
-    STREAM_CHUNK_SIZE: int = Field(default=1024, description="Stream chunk size")
-    STREAM_TIMEOUT: int = Field(default=300, description="Stream timeout in seconds")
-    
+    ENABLE_STREAMING: bool = Field(
+        default=True, description="Enable streaming")
+    STREAM_CHUNK_SIZE: int = Field(
+        default=1024, description="Stream chunk size")
+    STREAM_TIMEOUT: int = Field(
+        default=300, description="Stream timeout in seconds")
+
     # Model Warmup Settings
-    ENABLE_MODEL_WARMUP: bool = Field(default=True, description="Enable model warmup")
-    WARMUP_INTERVAL_MINUTES: int = Field(default=5, description="Warmup interval in minutes")
-    WARMUP_TIMEOUT_SECONDS: int = Field(default=30, description="Warmup timeout in seconds")
-    
+    ENABLE_MODEL_WARMUP: bool = Field(
+        default=True, description="Enable model warmup")
+    WARMUP_INTERVAL_MINUTES: int = Field(
+        default=5, description="Warmup interval in minutes")
+    WARMUP_TIMEOUT_SECONDS: int = Field(
+        default=30, description="Warmup timeout in seconds")
+
     # Enhanced Model Configuration
     MODEL_PRIORITIES: Dict[str, int] = Field(
         default={
-            "phi:3.5": 1,                           # Highest priority (reasoning)
+            # Highest priority (reasoning)
+            "phi:3.5": 1,
             "mistral:7b-instruct-q4_0": 2,          # High priority (general)
-            "gemma:7b-instruct": 2,                 # High priority (technical)  
-            "llama3:8b-instruct-q4_0": 3            # Medium priority (creative)
+            "gemma:7b-instruct": 2,                 # High priority (technical)
+            # Medium priority (creative)
+            "llama3:8b-instruct-q4_0": 3
         },
         description="Model priorities for 4-model system"
     )
             "mistral:7b-instruct-q4_0": 2,          # High priority (general)
-            "gemma:7b-instruct": 2,                 # High priority (technical)  
-            "llama3:8b-instruct-q4_0": 3            # Medium priority (creative)
+            "gemma:7b-instruct": 2,                 # High priority (technical)
+            # Medium priority (creative)
+            "llama3:8b-instruct-q4_0": 3
         },
         description="Model priorities for 4-model system"
     )

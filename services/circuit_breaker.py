@@ -9,10 +9,12 @@ from dataclasses import dataclass
 from datetime import datetime
 import statistics
 
+
 class CircuitState(Enum):
     CLOSED = "closed"
     OPEN = "open"
     HALF_OPEN = "half_open"
+
 
 @dataclass
 class CircuitBreakerConfig:
@@ -22,6 +24,7 @@ class CircuitBreakerConfig:
     timeout_threshold: float = 30.0
     slow_request_threshold: float = 10.0
     max_requests_half_open: int = 5
+
 
 class CircuitBreakerStats:
     def __init__(self):
@@ -67,6 +70,7 @@ class CircuitBreakerStats:
             return 0.0
         return statistics.mean(self.recent_response_times)
 
+
 class CircuitBreaker:
     def __init__(self, name: str = "default", config: CircuitBreakerConfig = None):
         self.name = name
@@ -78,7 +82,8 @@ class CircuitBreaker:
         self._last_failure_time = None
         self._half_open_requests = 0
         self._lock = asyncio.Lock()
-        logging.info(f"Circuit breaker '{name}' initialized in {self.state.value} state")
+        logging.info(
+            f"Circuit breaker '{name}' initialized in {self.state.value} state")
 
     async def call(self, func: Callable[..., Coroutine], *args, **kwargs) -> Any:
         async with self._lock:
@@ -237,14 +242,26 @@ class CircuitBreaker:
         self._failure_count = 0
         self._success_count = 0
         self._half_open_requests = 0
-        logging.info(f"Circuit breaker '{self.name}' manually reset to CLOSED state")
+        logging.info(
+            f"Circuit breaker '{self.name}' manually reset to CLOSED state")
 
 # Custom Exceptions
-class CircuitBreakerError(Exception): pass
-class CircuitBreakerOpenError(CircuitBreakerError): pass
-class CircuitBreakerTimeoutError(CircuitBreakerError): pass
+
+
+class CircuitBreakerError(Exception):
+    pass
+
+
+class CircuitBreakerOpenError(CircuitBreakerError):
+    pass
+
+
+class CircuitBreakerTimeoutError(CircuitBreakerError):
+    pass
 
 # Manager
+
+
 class CircuitBreakerManager:
     def __init__(self):
         self.circuit_breakers: Dict[str, CircuitBreaker] = {}
@@ -253,7 +270,8 @@ class CircuitBreakerManager:
     def get_circuit_breaker(self, name: str, config: CircuitBreakerConfig = None) -> CircuitBreaker:
         if name not in self.circuit_breakers:
             effective_config = config or self.default_config
-            self.circuit_breakers[name] = CircuitBreaker(name, effective_config)
+            self.circuit_breakers[name] = CircuitBreaker(
+                name, effective_config)
         return self.circuit_breakers[name]
 
     async def call_with_circuit_breaker(self, service_name: str, func: Callable[..., Coroutine], *args, **kwargs) -> Any:
@@ -265,8 +283,10 @@ class CircuitBreakerManager:
 
     def get_health_summary(self) -> Dict[str, Any]:
         total = len(self.circuit_breakers)
-        open_count = sum(1 for cb in self.circuit_breakers.values() if cb.state == CircuitState.OPEN)
-        half_open_count = sum(1 for cb in self.circuit_breakers.values() if cb.state == CircuitState.HALF_OPEN)
+        open_count = sum(1 for cb in self.circuit_breakers.values()
+                         if cb.state == CircuitState.OPEN)
+        half_open_count = sum(1 for cb in self.circuit_breakers.values(
+        ) if cb.state == CircuitState.HALF_OPEN)
         closed_count = total - open_count - half_open_count
         overall = "healthy"
         if open_count > 0:
@@ -287,8 +307,10 @@ class CircuitBreakerManager:
             cb.reset()
         logging.info("All circuit breakers reset")
 
+
 # Global Manager Instance
 _circuit_breaker_manager: Optional[CircuitBreakerManager] = None
+
 
 def get_circuit_breaker_manager() -> CircuitBreakerManager:
     global _circuit_breaker_manager
@@ -296,11 +318,14 @@ def get_circuit_breaker_manager() -> CircuitBreakerManager:
         _circuit_breaker_manager = CircuitBreakerManager()
     return _circuit_breaker_manager
 
+
 def get_circuit_breaker(service_name: str, config: CircuitBreakerConfig = None) -> CircuitBreaker:
     return get_circuit_breaker_manager().get_circuit_breaker(service_name, config)
 
+
 async def call_with_circuit_breaker(service_name: str, func: Callable[..., Coroutine], *args, **kwargs) -> Any:
     return await get_circuit_breaker_manager().call_with_circuit_breaker(service_name, func, *args, **kwargs)
+
 
 def circuit_breaker(service_name: str, config: CircuitBreakerConfig = None):
     def decorator(func):

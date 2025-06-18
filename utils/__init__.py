@@ -22,7 +22,7 @@ try:
     MEMORY_MANAGER_AVAILABLE = True
 except ImportError as e:
     print(f"Info: Memory manager not available: {e}")
-    get_memory_manager = lambda: None
+    def get_memory_manager(): return None
     MemoryManager = None
     MEMORY_MANAGER_AVAILABLE = False
 

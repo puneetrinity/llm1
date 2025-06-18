@@ -9,8 +9,9 @@ from services.semantic_classifier import SemanticIntentClassifier
 from services.model_warmup import ModelWarmupService
 from services.streaming import StreamingService
 
+
 class TestSemanticClassifier:
-    
+
     @pytest.fixture
     async def classifier(self):
         classifier = SemanticIntentClassifier()
@@ -19,131 +20,138 @@ class TestSemanticClassifier:
         classifier.model.encode = Mock(return_value=np.random.rand(1, 384))
         await classifier.build_index()
         return classifier
-    
+
     @pytest.mark.asyncio
     async def test_intent_classification(self, classifier):
         """Test semantic intent classification"""
-        
+
         # Mock FAISS search results
         with patch.object(classifier.index, 'search') as mock_search:
             mock_search.return_value = (
                 np.array([[0.9, 0.8, 0.7]]),  # similarities
                 np.array([[0, 5, 10]])        # indices
             )
-            
+
             # Set up mock labels
             classifier.intent_labels = ['math'] * 20
-            
+
             intent, confidence = await classifier.classify_intent("What is 2+2?")
-            
+
             assert intent == 'math'
             assert confidence > 0.5
-    
+
     @pytest.mark.asyncio
     async def test_training_example_addition(self, classifier):
         """Test adding new training examples"""
-        
+
         initial_size = len(classifier.training_data.get('custom', []))
-        
+
         await classifier.add_training_example("Custom test query", "custom")
-        
+
         assert 'custom' in classifier.training_data
         assert len(classifier.training_data['custom']) == initial_size + 1
 
+
 class TestModelWarmup:
-    
+
     @pytest.fixture
     def warmup_service(self):
         ollama_client = Mock()
         router = Mock()
         return ModelWarmupService(ollama_client, router)
-    
+
     @pytest.mark.asyncio
     async def test_model_warmup(self, warmup_service):
         """Test model warmup functionality"""
-        
+
         # Mock the necessary components
         warmup_service.router.ensure_model_loaded = AsyncMock()
         warmup_service.ollama_client.session = Mock()
         warmup_service.ollama_client.session.post = AsyncMock()
         warmup_service.ollama_client.base_url = "http://localhost:11434"
-        
+
         # Mock successful response
         mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={})
-        warmup_service.ollama_client.session.post.return_value.__aenter__ = AsyncMock(return_value=mock_response)
-        warmup_service.ollama_client.session.post.return_value.__aexit__ = AsyncMock(return_value=None)
-        
+        warmup_service.ollama_client.session.post.return_value.__aenter__ = AsyncMock(
+            return_value=mock_response)
+        warmup_service.ollama_client.session.post.return_value.__aexit__ = AsyncMock(
+            return_value=None)
+
         await warmup_service.warmup_model("mistral:7b-instruct-q4_0")
-        
+
         # Verify model loading was called
-        warmup_service.router.ensure_model_loaded.assert_called_once_with("mistral:7b-instruct-q4_0")
-        
+        warmup_service.router.ensure_model_loaded.assert_called_once_with(
+            "mistral:7b-instruct-q4_0")
+
         # Verify model usage was recorded
         assert "mistral:7b-instruct-q4_0" in warmup_service.model_last_used
-    
+
     def test_models_needing_warmup(self, warmup_service):
         """Test identification of models needing warmup"""
-        
+
         # Initially, all models should need warmup
         models = warmup_service.get_models_needing_warmup()
-        
+
         assert len(models) > 0
         assert "mistral:7b-instruct-q4_0" in models
 
+
 class TestStreaming:
-    
+
     @pytest.fixture
     def streaming_service(self):
         ollama_client = Mock()
         return StreamingService(ollama_client)
-    
+
     @pytest.mark.asyncio
     async def test_streaming_response(self, streaming_service):
         """Test streaming chat completion"""
-        
+
         # Mock streaming data
         mock_chunks = [
             {"message": {"content": "Hello"}, "done": False},
             {"message": {"content": " world"}, "done": False},
             {"message": {"content": "!"}, "done": True}
         ]
-        
+
         async def mock_stream_chat(request):
             for chunk in mock_chunks:
                 yield chunk
-        
+
         streaming_service.ollama_client.stream_chat = mock_stream_chat
-        
+
         request_data = {
             "messages": [{"role": "user", "content": "Hello"}],
             "temperature": 0.7
         }
-        
+
         # Collect streaming response
         chunks = []
         async for chunk in streaming_service.stream_chat_completion(request_data, "test-model"):
             chunks.append(chunk)
-        
+
         assert len(chunks) > 0
         assert "data: " in chunks[0]
         assert "[DONE]" in chunks[-1]
 
 # Integration test
+
+
 @pytest.mark.asyncio
 async def test_full_integration():
     """Test integration of all enhanced features"""
-    
+
     # This would test the full pipeline:
     # 1. Request comes in
     # 2. Semantic classification
-    # 3. Model routing  
+    # 3. Model routing
     # 4. Model warmup check
     # 5. Response generation
     # 6. Caching
     # 7. Performance tracking
-    
+
     # Mock components would be set up here
     # Full request flow would be tested
     pass

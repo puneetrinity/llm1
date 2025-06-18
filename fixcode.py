@@ -16,6 +16,8 @@ from datetime import datetime
 import platform
 
 # Colors for Windows terminal
+
+
 class Colors:
     if platform.system() == "Windows":
         # Initialize colorama for Windows
@@ -41,29 +43,36 @@ class Colors:
         BOLD = '\033[1m'
         END = '\033[0m'
 
+
 def print_header(message):
     print(f"\n{Colors.BOLD}{Colors.HEADER}{message}{Colors.END}")
+
 
 def print_success(message):
     print(f"{Colors.SUCCESS}✅ {message}{Colors.END}")
 
+
 def print_warning(message):
     print(f"{Colors.WARNING}⚠️  {message}{Colors.END}")
+
 
 def print_error(message):
     print(f"{Colors.ERROR}❌ {message}{Colors.END}")
 
+
 def print_info(message):
     print(f"{Colors.INFO}ℹ️  {message}{Colors.END}")
+
 
 def check_python_syntax(file_path):
     """Check if a Python file has valid syntax"""
     try:
-        result = subprocess.run([sys.executable, "-m", "py_compile", str(file_path)], 
-                              capture_output=True, text=True)
+        result = subprocess.run([sys.executable, "-m", "py_compile", str(file_path)],
+                                capture_output=True, text=True)
         return result.returncode == 0
     except Exception:
         return False
+
 
 def backup_file(file_path):
     """Create a backup of a file with timestamp"""
@@ -74,6 +83,7 @@ def backup_file(file_path):
         print_info(f"Backed up {file_path} to {backup_path}")
         return backup_path
     return None
+
 
 def main():
     print_header("🚀 WINDOWS PYTHON FIX GUIDE - GET YOUR LLM PROXY RUNNING")
@@ -87,8 +97,10 @@ def main():
     print_header("📍 STEP 1: ENVIRONMENT VERIFICATION")
 
     if not (Path("README.md").exists() and Path("services").is_dir()):
-        print_error("Please run this script from your LLM Proxy repository root directory")
-        print_info("In VS Code: File > Open Folder > Select your repository folder")
+        print_error(
+            "Please run this script from your LLM Proxy repository root directory")
+        print_info(
+            "In VS Code: File > Open Folder > Select your repository folder")
         print_info("Then run: python windows_fix_guide.py")
         sys.exit(1)
 
@@ -99,7 +111,7 @@ def main():
     main_files = list(Path(".").glob("main*.py"))
     for file in main_files:
         print(f"  {file}")
-    
+
     if not main_files:
         print_warning("No main*.py files found")
 
@@ -107,11 +119,11 @@ def main():
     print_header("🐍 STEP 2: PYTHON & DEPENDENCIES CHECK")
 
     print_success(f"Python version: {sys.version}")
-    
+
     # Check if pip is available
     try:
-        result = subprocess.run([sys.executable, "-m", "pip", "--version"], 
-                              capture_output=True, text=True)
+        result = subprocess.run([sys.executable, "-m", "pip", "--version"],
+                                capture_output=True, text=True)
         if result.returncode == 0:
             print_success("pip is available")
         else:
@@ -124,14 +136,14 @@ def main():
 
     # Fix 1: Critical syntax and import issues
     print_info("Checking for and running existing fix scripts...")
-    
+
     scripts_run = 0
-    
+
     # Try to run fix_critical.py
     if Path("fix_critical.py").exists():
         try:
-            result = subprocess.run([sys.executable, "fix_critical.py"], 
-                                  capture_output=True, text=True, timeout=60)
+            result = subprocess.run([sys.executable, "fix_critical.py"],
+                                    capture_output=True, text=True, timeout=60)
             if result.returncode == 0:
                 print_success("fix_critical.py executed successfully")
                 scripts_run += 1
@@ -139,12 +151,12 @@ def main():
                 print_warning(f"fix_critical.py had issues: {result.stderr}")
         except Exception as e:
             print_warning(f"Could not run fix_critical.py: {e}")
-    
+
     # Try to run quick_fixes1.py
     if Path("quick_fixes1.py").exists():
         try:
-            result = subprocess.run([sys.executable, "quick_fixes1.py"], 
-                                  capture_output=True, text=True, timeout=60)
+            result = subprocess.run([sys.executable, "quick_fixes1.py"],
+                                    capture_output=True, text=True, timeout=60)
             if result.returncode == 0:
                 print_success("quick_fixes1.py executed successfully")
                 scripts_run += 1
@@ -154,7 +166,8 @@ def main():
             print_warning(f"Could not run quick_fixes1.py: {e}")
 
     if scripts_run == 0:
-        print_warning("No fix scripts ran successfully - applying manual fixes")
+        print_warning(
+            "No fix scripts ran successfully - applying manual fixes")
 
     # Manual fixes
     print_info("Applying manual fixes for critical issues...")
@@ -183,18 +196,21 @@ def main():
     if circuit_breaker_file.exists():
         print_info("Fixing circuit breaker...")
         try:
-            lines = circuit_breaker_file.read_text(encoding='utf-8').splitlines()
+            lines = circuit_breaker_file.read_text(
+                encoding='utf-8').splitlines()
             original_count = len(lines)
-            
+
             # Remove incomplete conditional statements
-            filtered_lines = [line for line in lines 
-                            if not re.match(r'^\s*if self\.state ==\s*$', line)]
-            
+            filtered_lines = [line for line in lines
+                              if not re.match(r'^\s*if self\.state ==\s*$', line)]
+
             if len(filtered_lines) < original_count:
                 backup_file(circuit_breaker_file)
-                circuit_breaker_file.write_text('\n'.join(filtered_lines) + '\n', encoding='utf-8')
+                circuit_breaker_file.write_text(
+                    '\n'.join(filtered_lines) + '\n', encoding='utf-8')
                 removed = original_count - len(filtered_lines)
-                print_success(f"Circuit breaker fixed - removed {removed} incomplete line(s)")
+                print_success(
+                    f"Circuit breaker fixed - removed {removed} incomplete line(s)")
             else:
                 print_success("Circuit breaker syntax already correct")
         except Exception as e:
@@ -212,7 +228,8 @@ def main():
                     "services.router.LLMRouter",
                     "services.enhanced_router.EnhancedLLMRouter"
                 )
-                enhanced_imports_file.write_text(fixed_content, encoding='utf-8')
+                enhanced_imports_file.write_text(
+                    fixed_content, encoding='utf-8')
                 print_success("Import paths fixed")
             else:
                 print_success("Import paths already correct")
@@ -223,16 +240,17 @@ def main():
     print_info("Creating missing __init__.py files...")
     package_dirs = ["services", "utils", "middleware", "models", "test"]
     created_count = 0
-    
+
     for pkg_dir in package_dirs:
         dir_path = Path(pkg_dir)
         if dir_path.is_dir():
             init_file = dir_path / "__init__.py"
             if not init_file.exists():
-                init_file.write_text("# Package initialization\n", encoding='utf-8')
+                init_file.write_text(
+                    "# Package initialization\n", encoding='utf-8')
                 print_success(f"Created {init_file}")
                 created_count += 1
-    
+
     if created_count == 0:
         print_success("All __init__.py files already exist")
 
@@ -242,7 +260,7 @@ def main():
     frontend_dir = Path("frontend")
     if frontend_dir.is_dir():
         print_info("Frontend directory found")
-        
+
         # Fix App.tsx ESLint issues
         app_tsx = frontend_dir / "src" / "App.tsx"
         if app_tsx.exists():
@@ -250,20 +268,21 @@ def main():
             try:
                 content = app_tsx.read_text(encoding='utf-8')
                 changes_made = False
-                
+
                 # Fix confirm() calls
                 if "confirm(" in content and "window.confirm(" not in content:
                     backup_file(app_tsx)
-                    content = re.sub(r'\bconfirm\(', 'window.confirm(', content)
+                    content = re.sub(
+                        r'\bconfirm\(', 'window.confirm(', content)
                     changes_made = True
-                
-                # Fix alert() calls  
+
+                # Fix alert() calls
                 if "alert(" in content and "window.alert(" not in content:
                     if not changes_made:
                         backup_file(app_tsx)
                     content = re.sub(r'\balert\(', 'window.alert(', content)
                     changes_made = True
-                
+
                 if changes_made:
                     app_tsx.write_text(content, encoding='utf-8')
                     print_success("App.tsx ESLint issues fixed")
@@ -271,10 +290,11 @@ def main():
                     print_success("App.tsx already has correct syntax")
             except Exception as e:
                 print_error(f"Could not fix App.tsx: {e}")
-        
+
         # Check Node.js availability
         try:
-            result = subprocess.run(["node", "--version"], capture_output=True, text=True)
+            result = subprocess.run(
+                ["node", "--version"], capture_output=True, text=True)
             if result.returncode == 0:
                 node_version = result.stdout.strip()
                 print_success(f"Node.js found: {node_version}")
@@ -286,7 +306,8 @@ def main():
                 print_warning("Node.js not responding properly")
         except FileNotFoundError:
             print_warning("Node.js not found")
-            print_info("Install from https://nodejs.org if you need the React dashboard")
+            print_info(
+                "Install from https://nodejs.org if you need the React dashboard")
     else:
         print_info("No frontend directory found - skipping frontend fixes")
 
@@ -294,24 +315,25 @@ def main():
     print_header("📄 STEP 5: CONSOLIDATING MAIN FILES")
 
     # Find the best main file to use based on priority
-    priority_files = ["main_master.py", "main_fixed.py", "main_with_react.py", "main.py"]
+    priority_files = ["main_master.py", "main_fixed.py",
+                      "main_with_react.py", "main.py"]
     primary_file = None
-    
+
     for candidate in priority_files:
         if Path(candidate).exists():
             primary_file = candidate
             break
-    
+
     if primary_file:
         print_success(f"Using {primary_file} as primary application file")
-        
+
         # Backup other main files
         for file in Path(".").glob("main*.py"):
             if file.name != primary_file and file.is_file():
                 backup_file(file)
                 file.unlink()  # Remove the file
                 print_info(f"Backed up and removed {file.name}")
-        
+
         # Ensure we have main.py as the canonical entry point
         if primary_file != "main.py":
             shutil.copy2(primary_file, "main.py")
@@ -323,9 +345,10 @@ def main():
     # Step 6: Test Syntax
     print_header("🧪 STEP 6: TESTING SYNTAX")
 
-    test_files = ["main.py", "middleware/caching.py", "services/circuit_breaker.py"]
+    test_files = ["main.py", "middleware/caching.py",
+                  "services/circuit_breaker.py"]
     error_count = 0
-    
+
     for file_path in test_files:
         file = Path(file_path)
         if file.exists():
@@ -372,25 +395,28 @@ ENABLE_STREAMING=true
     requirements_file = Path("requirements.txt")
     if requirements_file.exists():
         print_success("requirements.txt found")
-        
+
         # Ask user if they want to install dependencies
         while True:
-            install_deps = input("\nInstall Python dependencies now? (y/n): ").lower().strip()
+            install_deps = input(
+                "\nInstall Python dependencies now? (y/n): ").lower().strip()
             if install_deps in ['y', 'yes']:
                 print_info("Installing dependencies...")
                 try:
                     result = subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"],
-                                          capture_output=True, text=True)
+                                            capture_output=True, text=True)
                     if result.returncode == 0:
                         print_success("Dependencies installed successfully")
                     else:
-                        print_error(f"Failed to install dependencies: {result.stderr}")
+                        print_error(
+                            f"Failed to install dependencies: {result.stderr}")
                 except Exception as e:
                     print_error(f"Error installing dependencies: {e}")
                 break
             elif install_deps in ['n', 'no']:
                 print_warning("Skipping dependency installation")
-                print_info("Install later with: pip install -r requirements.txt")
+                print_info(
+                    "Install later with: pip install -r requirements.txt")
                 break
             else:
                 print("Please enter 'y' or 'n'")
@@ -404,15 +430,16 @@ ENABLE_STREAMING=true
 
     print("\nFix Summary:")
     print("=" * 50)
-    
+
     if error_count == 0:
         print_success("✅ All syntax tests passed")
-        print_success("✅ Main file consolidated" + (f" ({primary_file})" if primary_file else ""))
+        print_success("✅ Main file consolidated" +
+                      (f" ({primary_file})" if primary_file else ""))
         print_success("✅ Environment configured")
-        
+
         if frontend_dir.is_dir():
             print_success("✅ Frontend issues addressed")
-        
+
         print("\n" + "🎉 READY TO START!" + "\n")
         print_info("Your LLM Proxy is now ready to run!")
         print("\nNext steps:")
@@ -423,13 +450,13 @@ ENABLE_STREAMING=true
         print("   # Or use: python -c \"import requests; print(requests.get('http://localhost:8001/health').json())\"")
         print("\n3. View API documentation:")
         print("   Open: http://localhost:8001/docs")
-        
+
         if frontend_dir.is_dir():
             print("\n4. React dashboard (if built):")
             print("   Open: http://localhost:8001/app")
-        
+
         print_success("\n🚀 Application is ready for deployment!")
-        
+
     else:
         print_error(f"❌ {error_count} file(s) still have syntax errors")
         print("\nManual fixes needed for:")
@@ -443,7 +470,7 @@ ENABLE_STREAMING=true
     print_header("💡 VS CODE TIPS")
     print("\nUseful VS Code commands:")
     print("• Ctrl+Shift+` : Open terminal")
-    print("• Ctrl+Shift+P : Command palette")  
+    print("• Ctrl+Shift+P : Command palette")
     print("• F5 : Run/Debug Python file")
     print("• Ctrl+Shift+E : Explorer panel")
     print("\nRecommended VS Code extensions:")
@@ -466,6 +493,7 @@ ENABLE_STREAMING=true
     else:
         print("Status: ⚠️  PARTIAL - Manual fixes needed")
         return 1
+
 
 if __name__ == "__main__":
     try:

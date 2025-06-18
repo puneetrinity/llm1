@@ -21,7 +21,7 @@ from .security import (
 __all__ = [
     "SecurityMiddleware",
     "SecurityHeadersMiddleware",
-    "RateLimiter", 
+    "RateLimiter",
     "RateLimitingMiddleware",
     "RequestLoggingMiddleware",
     "CORSConfig"

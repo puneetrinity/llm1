@@ -3,10 +3,12 @@ import pytest
 import asyncio
 from fastapi.testclient import TestClient
 
+
 @pytest.fixture
 def client():
     from main_enhanced import app
     return TestClient(app)
+
 
 @pytest.fixture
 def event_loop():

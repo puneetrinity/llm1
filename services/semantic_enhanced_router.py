@@ -5,16 +5,17 @@ import logging
 from typing import Optional, Dict, Any, Tuple, List
 from datetime import datetime
 
+
 class EnhancedLLMRouter:
     """Enhanced LLM Router with semantic intent classification for optimal model selection"""
-    
+
     def __init__(self, ollama_client=None, base_router=None):
         self.ollama_client = ollama_client
         self.base_router = base_router
         self.semantic_classifier = None
         self.classification_cache = {}
         self.cache_max_size = 1000  # Memory limit for cache
-        
+
         # Enhanced model configuration optimized for 4-model system
         self.model_config = {
             'phi:3.5': {
@@ -67,7 +68,7 @@ class EnhancedLLMRouter:
                 'specialties': ['hr_tasks', 'interviews', 'writing', 'evaluation']
             }
         }
-        
+
         # Intent to model mapping - optimized for 4-model system
         self.intent_model_mapping = {
             # Math and reasoning → Phi-4 (specialized for complex reasoning)
@@ -76,26 +77,26 @@ class EnhancedLLMRouter:
             'analysis': 'phi:3.5',
             'logic': 'phi:3.5',
             'scientific': 'phi:3.5',
-            
+
             # Coding and technical → Gemma (technical specialist)
             'coding': 'gemma:7b-instruct',
             'technical': 'gemma:7b-instruct',
             'programming': 'gemma:7b-instruct',
             'documentation': 'gemma:7b-instruct',
-            
+
             # Creative tasks → Llama3 (creative specialist)
             'creative': 'llama3:8b-instruct-q4_0',
             'storytelling': 'llama3:8b-instruct-q4_0',
             'writing': 'llama3:8b-instruct-q4_0',
             'interview': 'llama3:8b-instruct-q4_0',
             'resume': 'llama3:8b-instruct-q4_0',
-            
+
             # Quick facts and general → Mistral (efficient responses)
             'factual': 'mistral:7b-instruct-q4_0',
             'general': 'mistral:7b-instruct-q4_0',
             'summary': 'mistral:7b-instruct-q4_0'
         }
-        
+
         # Enhanced rule-based patterns for immediate classification
         self.intent_patterns = {
             'coding': r'\b(?:code|debug|function|algorithm|script|program|bug|syntax|review|refactor|optimize|programming|javascript|python|java|sql|api|github|git)\b',
@@ -106,7 +107,7 @@ class EnhancedLLMRouter:
             'math': r'\b(?:calculate|solve|math|equation|compute|formula|percentage|statistics|algebra|geometry)\b',
             'factual': r'\b(?:what is|define|explain|who is|when|where|how does|tell me about|meaning of)\b'
         }
-        
+
         self.available_models = {}
         self.routing_stats = {
             'total_requests': 0,
@@ -114,24 +115,26 @@ class EnhancedLLMRouter:
             'model_usage': {},
             'cache_hits': 0
         }
-        
+
     async def initialize(self):
         """Initialize enhanced router with semantic classifier"""
-        logging.info("Initializing Enhanced LLM Router with semantic classification...")
-        
+        logging.info(
+            "Initializing Enhanced LLM Router with semantic classification...")
+
         # Initialize base router functionality first
         if self.base_router and hasattr(self.base_router, 'initialize'):
             try:
                 await self.base_router.initialize()
-                self.available_models = getattr(self.base_router, 'available_models', {})
+                self.available_models = getattr(
+                    self.base_router, 'available_models', {})
                 logging.info("✅ Base router initialized")
             except Exception as e:
                 logging.warning(f"Base router initialization failed: {e}")
-        
+
         # Check available models if no base router
         if not self.available_models:
             await self._detect_available_models()
-        
+
         # Initialize semantic classifier
         try:
             from semantic_classifier import SemanticIntentClassifier
@@ -140,25 +143,29 @@ class EnhancedLLMRouter:
             logging.info("✅ Semantic classifier initialized successfully")
         except ImportError as e:
             logging.warning(f"Semantic classifier import failed: {e}")
-            logging.info("✅ Enhanced router will use rule-based classification only")
+            logging.info(
+                "✅ Enhanced router will use rule-based classification only")
         except Exception as e:
             logging.warning(f"Semantic classifier initialization failed: {e}")
-            logging.info("✅ Enhanced router will use rule-based classification only")
-        
+            logging.info(
+                "✅ Enhanced router will use rule-based classification only")
+
         # Log final setup
         available_model_names = list(self.available_models.keys())
-        logging.info(f"Enhanced router initialized with models: {available_model_names}")
-        
+        logging.info(
+            f"Enhanced router initialized with models: {available_model_names}")
+
         # Validate intent mappings
         self._validate_intent_mappings()
-        
+
     async def _detect_available_models(self):
         """Detect available models from Ollama"""
         try:
             if self.ollama_client:
                 available_models = await self.ollama_client.list_models()
-                available_model_names = {model.get('name', '') for model in available_models}
-                
+                available_model_names = {
+                    model.get('name', '') for model in available_models}
+
                 # Filter configured models by availability
                 self.available_models = {
                     name: config for name, config in self.model_config.items()

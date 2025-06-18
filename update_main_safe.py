@@ -6,16 +6,18 @@ import sys
 import os
 from datetime import datetime
 
+
 def backup_main():
     """Create timestamped backup of main.py"""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_name = f"main.py.backup_{timestamp}"
-    
+
     with open('main.py', 'r') as src, open(backup_name, 'w') as dst:
         dst.write(src.read())
-    
+
     print(f"✅ Backup created: {backup_name}")
     return backup_name
+
 
 def check_existing_dashboard_code(content):
     """Check if dashboard code already exists to prevent duplicates"""
@@ -25,13 +27,14 @@ def check_existing_dashboard_code(content):
         '@app.websocket.*dashboard': 'Dashboard WebSocket route',
         'serve_react_app': 'React app serving route'
     }
-    
+
     found = []
     for pattern, description in checks.items():
         if re.search(pattern, content, re.IGNORECASE):
             found.append(description)
-    
+
     return found
+
 
 def add_imports_safely(content):
     """Add required imports without duplicating"""
@@ -40,27 +43,28 @@ def add_imports_safely(content):
         'from fastapi.responses import FileResponse',
         'from pathlib import Path'
     ]
-    
+
     # Check which imports are missing
     missing_imports = []
     for imp in imports_to_add:
         if imp not in content:
             missing_imports.append(imp)
-    
+
     # Add missing imports after the last import line
     if missing_imports:
         import_pattern = r'(from .* import .*\n)'
         matches = list(re.finditer(import_pattern, content))
-        
+
         if matches:
             last_import_end = matches[-1].end()
             # Insert missing imports
             imports_text = '\n'.join(missing_imports) + '\n'
-            content = content[:last_import_end] + imports_text + content[last_import_end:]
+            content = content[:last_import_end] + \
+                imports_text + content[last_import_end:]
             print(f"✅ Added {len(missing_imports)} missing imports")
         else:
             print("⚠️  Could not find import section. Please add imports manually.")
-    
+
     # Ensure WebSocket is in FastAPI imports
     if 'WebSocket' not in content:
         content = re.sub(
@@ -69,8 +73,9 @@ def add_imports_safely(content):
             content
         )
         print("✅ Added WebSocket imports to FastAPI")
-    
+
     return content
+
 
 def create_dashboard_code():
     """Create the dashboard integration code"""
@@ -249,66 +254,69 @@ async def serve_react_app(path: str):
 # ============================================================================
 '''.format(timestamp=datetime.now().isoformat())
 
+
 def add_dashboard_code_safely(content):
     """Add dashboard code without creating duplicates"""
-    
+
     # Find where to insert the dashboard code
     # Look for the main app creation or before if __name__ == "__main__"
-    
+
     if 'if __name__ == "__main__":' in content:
         # Insert before the main block
         insert_point = content.find('if __name__ == "__main__":')
         dashboard_code = create_dashboard_code()
-        content = content[:insert_point] + dashboard_code + '\n' + content[insert_point:]
+        content = content[:insert_point] + \
+            dashboard_code + '\n' + content[insert_point:]
     else:
         # Append to the end
         dashboard_code = create_dashboard_code()
         content += '\n' + dashboard_code
-    
+
     print("✅ Dashboard code added successfully")
     return content
 
+
 def main():
     """Main function to safely update main.py"""
-    
+
     print("🔧 Safe main.py Update Script")
     print("=============================")
-    
+
     # Check if main.py exists
     if not os.path.exists('main.py'):
         print("❌ main.py not found in current directory")
         sys.exit(1)
-    
+
     # Read current content
     with open('main.py', 'r') as f:
         content = f.read()
-    
+
     # Check if dashboard code already exists
     existing_code = check_existing_dashboard_code(content)
     if existing_code:
         print("⚠️  Dashboard code already exists:")
         for code in existing_code:
             print(f"   - {{code}}")
-        
+
         response = input("Continue anyway? This may create duplicates (y/N): ")
         if response.lower() != 'y':
             print("❌ Update cancelled")
             sys.exit(0)
-    
+
     # Create backup
     backup_file = backup_main()
-    
+
     try:
         # Add imports safely
         content = add_imports_safely(content)
-        
+
         # Add dashboard code safely
         content = add_dashboard_code_safely(content)
-        
+
         # Write updated content
         with open('main.py', 'w') as f:
             f.write(content)
-        
+
         print("✅ main.py updated successfully")
         print(f"💾 Backup available at: {{backup_file}}")
         print("")
@@ -316,17 +324,18 @@ def main():
         print("1. Run: ./build_dashboard_safe.sh")
         print("2. Restart your FastAPI service")
         print("3. Access dashboard at your server URL")
-        
+
     except Exception as e:
         print(f"❌ Update failed: {{e}}")
         print(f"🔄 Restoring from backup: {{backup_file}}")
-        
+
         # Restore from backup
         with open(backup_file, 'r') as src, open('main.py', 'w') as dst:
             dst.write(src.read())
-        
+
         print("✅ main.py restored from backup")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

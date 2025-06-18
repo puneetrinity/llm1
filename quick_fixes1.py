@@ -3,30 +3,32 @@ import os
 import sys
 from pathlib import Path
 
+
 def fix_critical_issues():
     """Fix the most critical issues preventing the app from running"""
     print("🔧 Applying critical fixes...")
-    
+
     # Fix 1: Create missing __init__.py files
     create_missing_init_files()
-    
+
     # Fix 2: Fix common import issues
     fix_import_issues()
-    
+
     # Fix 3: Create a minimal working main.py if needed
     ensure_working_main()
-    
+
     # Fix 4: Fix encoding issues
     fix_encoding_issues()
-    
+
     print("✅ Critical fixes applied!")
+
 
 def create_missing_init_files():
     """Create missing __init__.py files"""
     print("📁 Creating missing __init__.py files...")
-    
+
     package_dirs = ['services', 'utils', 'middleware', 'models', 'test']
-    
+
     for pkg_dir in package_dirs:
         if Path(pkg_dir).exists() and Path(pkg_dir).is_dir():
             init_file = Path(pkg_dir) / '__init__.py'
@@ -34,10 +36,11 @@ def create_missing_init_files():
                 init_file.write_text('# Package initialization\n')
                 print(f"  ✅ Created {init_file}")
 
+
 def fix_import_issues():
     """Fix common import issues"""
     print("📦 Fixing import issues...")
-    
+
     # Fix services/__init__.py to avoid circular imports
     services_init = Path('services/__init__.py')
     if services_init.exists():
@@ -87,7 +90,7 @@ if CIRCUIT_BREAKER_AVAILABLE:
 '''
         services_init.write_text(content)
         print("  ✅ Fixed services/__init__.py")
-    
+
     # Fix utils/__init__.py
     utils_init = Path('utils/__init__.py')
     if utils_init.exists():
@@ -131,37 +134,39 @@ if MEMORY_MANAGER_AVAILABLE:
         utils_init.write_text(content)
         print("  ✅ Fixed utils/__init__.py")
 
+
 def ensure_working_main():
     """Ensure there's a working main.py"""
     print("🚀 Ensuring working main.py...")
-    
+
     if not Path('main.py').exists():
         print("  ⚠️  Creating minimal main.py...")
         create_minimal_main()
         return
-    
+
     # Check if main.py has critical issues
     try:
         with open('main.py', 'r', encoding='utf-8') as f:
             content = f.read()
-        
+
         # Check for common issues
         issues = []
         if 'app = FastAPI' not in content:
             issues.append("Missing FastAPI app creation")
-        
+
         if 'if __name__ == "__main__"' not in content:
             issues.append("Missing main guard")
-        
+
         if issues:
             print(f"  ⚠️  Issues found in main.py: {', '.join(issues)}")
             backup_and_create_minimal_main()
         else:
             print("  ✅ main.py looks good")
-            
+
     except Exception as e:
         print(f"  ❌ Could not read main.py: {e}")
         backup_and_create_minimal_main()
+
 
 def create_minimal_main():
     """Create a minimal working main.py"""
@@ -309,11 +314,12 @@ if __name__ == "__main__":
         log_level="info"
     )
 '''
-    
+
     with open('main.py', 'w', encoding='utf-8') as f:
         f.write(content)
-    
+
     print("  ✅ Created minimal working main.py")
+
 
 def backup_and_create_minimal_main():
     """Backup existing main.py and create minimal version"""
@@ -321,20 +327,21 @@ def backup_and_create_minimal_main():
         backup_name = f'main.py.backup.{int(datetime.now().timestamp())}'
         Path('main.py').rename(backup_name)
         print(f"  📦 Backed up existing main.py to {backup_name}")
-    
+
     create_minimal_main()
+
 
 def fix_encoding_issues():
     """Fix encoding issues in Python files"""
     print("🔤 Fixing encoding issues...")
-    
+
     python_files = list(Path('.').rglob('*.py'))
     fixed_count = 0
-    
+
     for file_path in python_files:
         if any(skip in str(file_path) for skip in ['__pycache__', '.git', 'venv']):
             continue
-        
+
         try:
             # Try UTF-8 first
             with open(file_path, 'r', encoding='utf-8') as f:
@@ -346,11 +353,11 @@ def fix_encoding_issues():
                     try:
                         with open(file_path, 'r', encoding=encoding) as f:
                             content = f.read()
-                        
+
                         # Re-save as UTF-8
                         with open(file_path, 'w', encoding='utf-8') as f:
                             f.write(content)
-                        
+
                         fixed_count += 1
                         print(f"  🔧 Fixed encoding for {file_path}")
                         break
@@ -358,17 +365,18 @@ def fix_encoding_issues():
                         continue
             except Exception as e:
                 print(f"  ❌ Could not fix encoding for {file_path}: {e}")
-    
+
     if fixed_count > 0:
         print(f"  ✅ Fixed encoding for {fixed_count} files")
     else:
         print("  ✅ No encoding issues found")
 
+
 def create_basic_requirements():
     """Create basic requirements.txt if missing"""
     if not Path('requirements.txt').exists():
         print("📋 Creating basic requirements.txt...")
-        
+
         requirements = '''# Basic requirements for LLM Proxy
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
@@ -382,18 +390,19 @@ redis>=4.5.0
 sentence-transformers>=2.2.0
 sse-starlette>=1.6.5
 '''
-        
+
         with open('requirements.txt', 'w') as f:
             f.write(requirements)
-        
+
         print("  ✅ Created basic requirements.txt")
+
 
 if __name__ == "__main__":
     print("🚀 Running critical fixes...")
-    
+
     fix_critical_issues()
     create_basic_requirements()
-    
+
     print("\n✅ Critical fixes complete!")
     print("\nNext steps:")
     print("1. Install dependencies: pip install -r requirements.txt")

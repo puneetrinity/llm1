@@ -22,42 +22,42 @@ try:
 except ImportError:
     from pydantic_settings import BaseSettings
     import os
-    
+
     class Settings(BaseSettings):
         # Server Settings
         HOST: str = "0.0.0.0"
         PORT: int = 8001
         DEBUG: bool = False
         LOG_LEVEL: str = "INFO"
-        
+
         # Ollama Settings - Will work with local Ollama
         OLLAMA_BASE_URL: str = "http://localhost:11434"
         OLLAMA_TIMEOUT: int = 300
-        
+
         # Authentication - Made conditional and secure
         ENABLE_AUTH: bool = False  # Default to disabled for easier setup
         DEFAULT_API_KEY: str = os.getenv("DEFAULT_API_KEY", "")
         API_KEY_HEADER: str = os.getenv("API_KEY_HEADER", "X-API-Key")
-        
+
         # Features - Optimized defaults
         ENABLE_DASHBOARD: bool = True
         ENABLE_ENHANCED_FEATURES: bool = True
         ENABLE_WEBSOCKET: bool = False  # Disabled by default to avoid auth issues
         ENABLE_WEBSOCKET_DASHBOARD: bool = False
-        
+
         # CORS
         CORS_ORIGINS: List[str] = ["*"]
         CORS_ALLOW_CREDENTIALS: bool = True
-        
+
         # Memory
         MAX_MEMORY_MB: int = 8192
         CACHE_MEMORY_LIMIT_MB: int = 1024
-        
+
         class Config:
             env_file = ".env"
             case_sensitive = True
             extra = "ignore"  # Ignore extra environment variables
-    
+
     settings = Settings()
 
 # Configure logging
@@ -70,9 +70,12 @@ logging.basicConfig(
 logger = logging.getLogger("main_master")
 
 # Pydantic Models
+
+
 class Message(BaseModel):
     role: str
     content: str
+
 
 class ChatCompletionRequest(BaseModel):
     model: str
@@ -82,6 +85,7 @@ class ChatCompletionRequest(BaseModel):
     stream: Optional[bool] = False
     top_p: Optional[float] = 1.0
 
+
 class HealthResponse(BaseModel):
     status: str
     healthy: bool
@@ -89,11 +93,13 @@ class HealthResponse(BaseModel):
     version: str
     services: Dict[str, Any]
 
+
 class StatusResponse(BaseModel):
     status: str
     services: Dict[str, bool]
     features: Dict[str, bool]
     timestamp: str
+
 
 # Global service state
 services_state = {
@@ -107,9 +113,11 @@ services_state = {
 websocket_sessions = {}
 
 # Ollama Client for RunPod/Local
+
+
 class OllamaClient:
     """Ollama client for RunPod or local connection"""
-    
+
     def __init__(self, base_url: str, timeout: int = 300):
         self.base_url = base_url.rstrip('/')
         self.timeout = timeout
@@ -119,31 +127,31 @@ class OllamaClient:
             'successful_requests': 0,
             'failed_requests': 0
         }
-    
+
     async def initialize(self):
         """Initialize HTTP session"""
         timeout = aiohttp.ClientTimeout(total=self.timeout)
         self.session = aiohttp.ClientSession(timeout=timeout)
         logger.info(f"✅ Ollama client initialized for {self.base_url}")
-    
+
     async def health_check(self) -> bool:
         """Check if Ollama is accessible"""
         try:
             if not self.session:
                 await self.initialize()
-            
+
             async with self.session.get(f"{self.base_url}/api/tags") as response:
                 return response.status == 200
         except Exception as e:
             logger.error(f"Ollama health check failed: {e}")
             return False
-    
+
     async def list_models(self) -> List[Dict]:
         """List available models"""
         try:
             if not self.session:
                 await self.initialize()
-            
+
             async with self.session.get(f"{self.base_url}/api/tags") as response:
                 if response.status == 200:
                     data = await response.json()
@@ -152,18 +160,18 @@ class OllamaClient:
         except Exception as e:
             logger.error(f"Failed to list models: {e}")
             return []
-    
+
     async def generate_completion(self, model: str, messages: List[Dict], **kwargs):
         """Generate completion using Ollama"""
         start_time = asyncio.get_event_loop().time()
-        
+
         try:
             if not self.session:
                 await self.initialize()
-            
+
             # Convert messages to prompt
             prompt = self._messages_to_prompt(messages)
-            
+
             payload = {
                 "model": model,
                 "prompt": prompt,
@@ -174,22 +182,23 @@ class OllamaClient:
                     "num_predict": kwargs.get('max_tokens', 150)
                 }
             }
-            
+
             async with self.session.post(
-                f"{self.base_url}/api/generate", 
+                f"{self.base_url}/api/generate",
                 json=payload
             ) as response:
                 if response.status == 200:
                     result = await response.json()
                 else:
                     error_text = await response.text()
-                    raise Exception(f"Ollama API error {response.status}: {error_text}")
-            
+                    raise Exception(
+                        f"Ollama API error {response.status}: {error_text}")
+
             # Update stats
             processing_time = asyncio.get_event_loop().time() - start_time
             self.stats['total_requests'] += 1
             self.stats['successful_requests'] += 1
-            
+
             # Return OpenAI-compatible response
             return {
                 "id": f"chatcmpl-{int(start_time)}",
@@ -212,13 +221,13 @@ class OllamaClient:
                 "processing_time": processing_time,
                 "selected_model": model
             }
-            
+
         except Exception as e:
             self.stats['total_requests'] += 1
             self.stats['failed_requests'] += 1
             logger.error(f"Generation failed: {e}")
             raise
-    
+
     def _messages_to_prompt(self, messages: List[Dict]) -> str:
         """Convert messages to prompt format"""
         prompt = ""
@@ -233,23 +242,25 @@ class OllamaClient:
                 prompt += f"Assistant: {content}\n"
         prompt += "Assistant: "
         return prompt
-    
+
     def get_stats(self) -> Dict[str, Any]:
         """Get client statistics"""
         return self.stats.copy()
-    
+
     async def cleanup(self):
         """Cleanup resources"""
         if self.session:
             await self.session.close()
 
 # Model Router for 3 Models
+
+
 class ModelRouter:
     """Routes requests to the best model based on content"""
-    
+
     def __init__(self, ollama_client):
         self.ollama_client = ollama_client
-        
+
         # Configuration for your 3 models
         self.model_config = {
             'mistral:7b-instruct-q4_0': {
@@ -268,23 +279,23 @@ class ModelRouter:
                 'description': 'Best for creative writing and conversational tasks'
             }
         }
-        
+
         self.available_models = {}
         self.default_model = 'mistral:7b-instruct-q4_0'
-    
+
     async def initialize(self):
         """Initialize router and check available models"""
         try:
             # Get models from Ollama
             models = await self.ollama_client.list_models()
             available_model_names = {model.get('name', '') for model in models}
-            
+
             # Filter to only configured models that are available
             self.available_models = {
                 name: config for name, config in self.model_config.items()
                 if name in available_model_names
             }
-            
+
             if not self.available_models:
                 # Fallback: use any available model
                 if models:
@@ -296,52 +307,57 @@ class ModelRouter:
                     }
                 else:
                     # Emergency fallback
-                    self.available_models = {self.default_model: self.model_config[self.default_model]}
-            
-            logger.info(f"✅ Router initialized with models: {list(self.available_models.keys())}")
-            services_state["available_models"] = list(self.available_models.keys())
-            
+                    self.available_models = {
+                        self.default_model: self.model_config[self.default_model]}
+
+            logger.info(
+                f"✅ Router initialized with models: {list(self.available_models.keys())}")
+            services_state["available_models"] = list(
+                self.available_models.keys())
+
         except Exception as e:
             logger.error(f"Router initialization failed: {e}")
             # Emergency fallback
-            self.available_models = {self.default_model: self.model_config[self.default_model]}
-    
+            self.available_models = {
+                self.default_model: self.model_config[self.default_model]}
+
     def select_model(self, request: ChatCompletionRequest) -> str:
         """Select the best model for the request"""
         # If specific model requested and available, use it
         if request.model in self.available_models:
             return request.model
-        
+
         # Analyze content to choose best model
         text_content = " ".join([msg.content for msg in request.messages])
         text_lower = text_content.lower()
-        
+
         # Model selection logic
         if any(word in text_lower for word in ['code', 'function', 'program', 'debug', 'script']):
             # Prefer DeepSeek for coding
             if 'deepseek-v2:7b-q4_0' in self.available_models:
                 return 'deepseek-v2:7b-q4_0'
-        
+
         elif any(word in text_lower for word in ['story', 'creative', 'write', 'poem', 'chat']):
             # Prefer Llama3 for creative tasks
             if 'llama3:8b-instruct-q4_0' in self.available_models:
                 return 'llama3:8b-instruct-q4_0'
-        
+
         # Default to Mistral for factual/general queries
         if 'mistral:7b-instruct-q4_0' in self.available_models:
             return 'mistral:7b-instruct-q4_0'
-        
+
         # Fallback to first available model
         return list(self.available_models.keys())[0]
-    
+
     async def process_completion(self, request: ChatCompletionRequest):
         """Process completion request"""
         # Select model
         selected_model = self.select_model(request)
-        
+
         # Convert messages
-        messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
-        
+        messages = [{"role": msg.role, "content": msg.content}
+                    for msg in request.messages]
+
         # Generate completion
         result = await self.ollama_client.generate_completion(
             model=selected_model,
@@ -350,9 +366,9 @@ class ModelRouter:
             max_tokens=request.max_tokens,
             top_p=request.top_p
         )
-        
+
         return result
-    
+
     async def get_available_models(self):
         """Get available models with metadata"""
         models = []
@@ -367,58 +383,62 @@ class ModelRouter:
             })
         return models
 
+
 # Global instances
 ollama_client = None
 model_router = None
 
+
 async def initialize_services():
     """Initialize all services"""
     global services_state, ollama_client, model_router
-    
+
     try:
         logger.info("🚀 Initializing services...")
-        
+
         # Initialize Ollama client
-        ollama_client = OllamaClient(settings.OLLAMA_BASE_URL, settings.OLLAMA_TIMEOUT)
+        ollama_client = OllamaClient(
+            settings.OLLAMA_BASE_URL, settings.OLLAMA_TIMEOUT)
         await ollama_client.initialize()
-        
+
         # Check Ollama connection
         services_state["ollama_connected"] = await ollama_client.health_check()
-        
+
         # Initialize model router
         model_router = ModelRouter(ollama_client)
         await model_router.initialize()
-        
+
         # Check dashboard - Try React build first, then static
         react_build_dir = Path(__file__).parent / "frontend" / "build"
         static_dir = Path(__file__).parent / "static"
-        
+
         services_state["dashboard_available"] = (
-            react_build_dir.exists() and 
+            react_build_dir.exists() and
             (react_build_dir / "index.html").exists()
         )
-        
+
         # If no React dashboard, check for static dashboard
         if not services_state["dashboard_available"]:
             static_dashboard_dir = static_dir / "dashboard"
             services_state["dashboard_available"] = (
-                static_dashboard_dir.exists() and 
+                static_dashboard_dir.exists() and
                 (static_dashboard_dir / "index.html").exists()
             )
-        
+
         # Last fallback - check for any index.html in static
         if not services_state["dashboard_available"]:
             services_state["dashboard_available"] = (
-                static_dir.exists() and 
+                static_dir.exists() and
                 (static_dir / "index.html").exists()
             )
-        
+
         services_state["initialization_complete"] = True
         logger.info("✅ All services initialized successfully")
-        
+
     except Exception as e:
         logger.error(f"❌ Service initialization failed: {e}")
         services_state["initialization_complete"] = False
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -426,7 +446,7 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("🌟 Starting Complete LLM Proxy...")
     await initialize_services()
-    
+
     # Log startup summary
     logger.info("=" * 60)
     logger.info(f"🎯 Server: {settings.HOST}:{settings.PORT}")
@@ -434,11 +454,12 @@ async def lifespan(app: FastAPI):
     logger.info(f"📊 Services: {services_state}")
     logger.info(f"🤖 Models: {services_state.get('available_models', [])}")
     logger.info(f"🔐 Auth: {'Enabled' if settings.ENABLE_AUTH else 'Disabled'}")
-    logger.info(f"🔌 WebSocket: {'Enabled' if settings.ENABLE_WEBSOCKET else 'Disabled'}")
+    logger.info(
+        f"🔌 WebSocket: {'Enabled' if settings.ENABLE_WEBSOCKET else 'Disabled'}")
     logger.info("=" * 60)
-    
+
     yield
-    
+
     # Shutdown
     logger.info("🛑 Shutting down...")
     if ollama_client:
@@ -469,7 +490,7 @@ if settings.ENABLE_DASHBOARD:
     # Try React dashboard first
     react_build_dir = Path(__file__).parent / "frontend" / "build"
     static_dir = Path(__file__).parent / "static"
-    
+
     # Determine which directory to use for dashboard
     if react_build_dir.exists() and (react_build_dir / "index.html").exists():
         dashboard_dir = react_build_dir
@@ -480,10 +501,10 @@ if settings.ENABLE_DASHBOARD:
     else:
         dashboard_dir = None
         logger.warning("⚠️ No dashboard directory found")
-    
+
     if dashboard_dir and dashboard_dir.exists():
         app.mount("/static", StaticFiles(directory=dashboard_dir), name="static")
-        
+
         @app.get("/app/{path:path}")
         async def serve_dashboard(path: str = ""):
             """Serve dashboard files"""
@@ -491,25 +512,27 @@ if settings.ENABLE_DASHBOARD:
                 file_path = dashboard_dir / path
                 if file_path.exists():
                     return FileResponse(file_path)
-            
+
             # Serve index.html for all other paths
             index_path = dashboard_dir / "index.html"
             if index_path.exists():
                 return FileResponse(index_path)
             else:
                 return JSONResponse(
-                    {"error": "Dashboard not found"}, 
+                    {"error": "Dashboard not found"},
                     status_code=404
                 )
-        
+
         logger.info("✅ Dashboard mounted at /app")
 
 # Authentication
+
+
 async def get_current_user(request: Request) -> Optional[Dict[str, Any]]:
     """Authentication dependency"""
     if not settings.ENABLE_AUTH:
         return {"user_id": "anonymous", "permissions": ["read", "write"]}
-    
+
     api_key = request.headers.get(settings.API_KEY_HEADER)
     if not api_key:
         raise HTTPException(
@@ -519,7 +542,7 @@ async def get_current_user(request: Request) -> Optional[Dict[str, Any]]:
                 "message": f"Please provide API key in {settings.API_KEY_HEADER} header"
             }
         )
-    
+
     if api_key != settings.DEFAULT_API_KEY:
         raise HTTPException(
             status_code=403,
@@ -528,10 +551,12 @@ async def get_current_user(request: Request) -> Optional[Dict[str, Any]]:
                 "message": "The provided API key is not valid"
             }
         )
-    
+
     return {"user_id": "authenticated", "permissions": ["read", "write"]}
 
 # FIXED WebSocket session management - No longer always requires auth
+
+
 @app.post("/auth/websocket-session")
 async def create_websocket_session(request: Request):
     """Create a session token for WebSocket authentication"""
@@ -548,28 +573,30 @@ async def create_websocket_session(request: Request):
                         "message": f"Please provide API key in {settings.API_KEY_HEADER} header"
                     }
                 )
-            
+
             if api_key != settings.DEFAULT_API_KEY:
                 raise HTTPException(
                     status_code=403,
                     detail={
-                        "error": "Invalid API key", 
+                        "error": "Invalid API key",
                         "message": "The provided API key is not valid"
                     }
                 )
-            
-            current_user = {"user_id": "authenticated", "permissions": ["read", "write"]}
+
+            current_user = {"user_id": "authenticated",
+                            "permissions": ["read", "write"]}
         else:
             # Auth disabled - allow anonymous access
-            current_user = {"user_id": "anonymous", "permissions": ["read", "write"]}
-        
+            current_user = {"user_id": "anonymous",
+                            "permissions": ["read", "write"]}
+
         session_token = secrets.token_urlsafe(32)
         websocket_sessions[session_token] = {
             "user_id": current_user["user_id"],
             "created_at": datetime.now(),
             "expires_at": datetime.now() + timedelta(hours=24)
         }
-        
+
         return {
             "session_token": session_token,
             "expires_in": 24 * 3600,
@@ -582,16 +609,18 @@ async def create_websocket_session(request: Request):
         raise HTTPException(status_code=500, detail="Failed to create session")
 
 # FIXED WebSocket endpoint - Handles auth disabled
+
+
 @app.websocket("/ws/dashboard")
 async def websocket_dashboard(websocket: WebSocket, session: str = Query(None)):
     """WebSocket endpoint for dashboard"""
-    
+
     # Authentication - only if enabled
     if settings.ENABLE_AUTH and settings.ENABLE_WEBSOCKET_DASHBOARD:
         if not session or session not in websocket_sessions:
             await websocket.close(code=1008, reason="Invalid session")
             return
-        
+
         session_data = websocket_sessions[session]
         if session_data["expires_at"] < datetime.now():
             del websocket_sessions[session]
@@ -599,19 +628,20 @@ async def websocket_dashboard(websocket: WebSocket, session: str = Query(None)):
             return
     elif not settings.ENABLE_AUTH:
         # Auth disabled - allow connection without session
-        logger.info("🔌 WebSocket connecting without authentication (auth disabled)")
-    
+        logger.info(
+            "🔌 WebSocket connecting without authentication (auth disabled)")
+
     await websocket.accept()
     logger.info("🔌 WebSocket connected")
-    
+
     try:
         while True:
             data = await websocket.receive_text()
             message = json.loads(data)
-            
+
             if message.get("type") == "ping":
                 await websocket.send_text(json.dumps({"type": "pong"}))
-            
+
             elif message.get("type") == "request_update":
                 # Send system status
                 status_data = {
@@ -624,20 +654,22 @@ async def websocket_dashboard(websocket: WebSocket, session: str = Query(None)):
                     "type": "dashboard_update",
                     "data": status_data
                 }))
-            
+
             elif message.get("type") == "chat":
                 # Handle chat message
                 if model_router:
                     try:
                         # Create chat completion request
                         chat_request = ChatCompletionRequest(
-                            model=message.get("model", "mistral:7b-instruct-q4_0"),
-                            messages=[Message(role="user", content=message.get("content", ""))]
+                            model=message.get(
+                                "model", "mistral:7b-instruct-q4_0"),
+                            messages=[
+                                Message(role="user", content=message.get("content", ""))]
                         )
-                        
+
                         # Get response
                         result = await model_router.process_completion(chat_request)
-                        
+
                         await websocket.send_text(json.dumps({
                             "type": "chat_response",
                             "data": result
@@ -647,7 +679,7 @@ async def websocket_dashboard(websocket: WebSocket, session: str = Query(None)):
                             "type": "error",
                             "message": str(e)
                         }))
-                        
+
     except WebSocketDisconnect:
         logger.info("🔌 WebSocket disconnected")
     except Exception as e:
@@ -655,6 +687,7 @@ async def websocket_dashboard(websocket: WebSocket, session: str = Query(None)):
         await websocket.close(code=1011, reason="Internal error")
 
 # API Endpoints
+
 
 @app.get("/")
 async def root():
@@ -675,6 +708,7 @@ async def root():
         "authentication": "enabled" if settings.ENABLE_AUTH else "disabled"
     }
 
+
 @app.get("/health", response_model=HealthResponse)
 async def health():
     """Health check"""
@@ -686,19 +720,22 @@ async def health():
         services=services_state
     )
 
+
 @app.get("/v1/models")
 async def list_models(current_user: Dict[str, Any] = Depends(get_current_user)):
     """List available models (OpenAI-compatible)"""
     try:
         if not model_router:
-            raise HTTPException(status_code=503, detail="Model router not available")
-        
+            raise HTTPException(
+                status_code=503, detail="Model router not available")
+
         models = await model_router.get_available_models()
         return {"object": "list", "data": models}
-        
+
     except Exception as e:
         logger.error(f"Error listing models: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/v1/chat/completions")
 async def chat_completions(
@@ -706,24 +743,27 @@ async def chat_completions(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """OpenAI-compatible chat completions endpoint"""
-    
+
     try:
         if not model_router:
-            raise HTTPException(status_code=503, detail="Model router not available")
-        
+            raise HTTPException(
+                status_code=503, detail="Model router not available")
+
         if not ollama_client:
-            raise HTTPException(status_code=503, detail="Ollama client not available")
-        
+            raise HTTPException(
+                status_code=503, detail="Ollama client not available")
+
         # Process the completion
         result = await model_router.process_completion(request)
-        
+
         return result
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error in chat completions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/status")
 async def api_status():
@@ -738,6 +778,7 @@ async def api_status():
         },
         timestamp=datetime.now().isoformat()
     )
+
 
 @app.get("/metrics")
 async def get_metrics():
@@ -756,6 +797,8 @@ async def get_metrics():
     return metrics
 
 # Error handlers
+
+
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(
@@ -769,6 +812,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
             }
         }
     )
+
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
@@ -789,9 +833,11 @@ if __name__ == "__main__":
     logger.info(f"🚀 Starting Complete LLM Proxy")
     logger.info(f"📍 Server: http://{settings.HOST}:{settings.PORT}")
     logger.info(f"📊 Dashboard: http://{settings.HOST}:{settings.PORT}/app")
-    logger.info(f"🔌 WebSocket: ws://{settings.HOST}:{settings.PORT}/ws/dashboard")
-    logger.info(f"🔐 Authentication: {'Enabled' if settings.ENABLE_AUTH else 'Disabled'}")
-    
+    logger.info(
+        f"🔌 WebSocket: ws://{settings.HOST}:{settings.PORT}/ws/dashboard")
+    logger.info(
+        f"🔐 Authentication: {'Enabled' if settings.ENABLE_AUTH else 'Disabled'}")
+
     uvicorn.run(
         "main_master:app",
         host=settings.HOST,

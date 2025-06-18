@@ -8,17 +8,18 @@ from fastapi.responses import StreamingResponse
 from sse_starlette.sse import EventSourceResponse
 import logging
 
+
 class StreamingService:
     def __init__(self, ollama_client):
         self.ollama_client = ollama_client
-        
+
     async def stream_chat_completion(
-        self, 
-        request_data: Dict[str, Any], 
+        self,
+        request_data: Dict[str, Any],
         model: str
     ) -> AsyncGenerator[str, None]:
         """Stream chat completion responses"""
-        
+
         try:
             # Prepare streaming request to Ollama
             ollama_request = {
@@ -31,10 +32,10 @@ class StreamingService:
                     "num_predict": request_data.get("max_tokens", -1)
                 }
             }
-            
+
             completion_id = f"chatcmpl-{uuid.uuid4().hex[:8]}"
             created_timestamp = int(asyncio.get_event_loop().time())
-            
+
             # Send initial response
             initial_chunk = {
                 "id": completion_id,
@@ -47,16 +48,16 @@ class StreamingService:
                     "finish_reason": None
                 }]
             }
-            
+
             yield f"data: {json.dumps(initial_chunk)}\n\n"
-            
+
             # Stream from Ollama
             async for chunk in self.ollama_client.stream_chat(ollama_request):
                 if chunk:
                     # Parse Ollama response
                     content = chunk.get("message", {}).get("content", "")
                     done = chunk.get("done", False)
-                    
+
                     # Format as OpenAI-compatible chunk
                     response_chunk = {
                         "id": completion_id,
@@ -69,12 +70,12 @@ class StreamingService:
                             "finish_reason": "stop" if done else None
                         }]
                     }
-                    
+
                     yield f"data: {json.dumps(response_chunk)}\n\n"
-                    
+
                     if done:
                         break
-            
+
             # Send final chunk
             final_chunk = {
                 "id": completion_id,
@@ -87,13 +88,13 @@ class StreamingService:
                     "finish_reason": "stop"
                 }]
             }
-            
+
             yield f"data: {json.dumps(final_chunk)}\n\n"
             yield "data: [DONE]\n\n"
-            
+
         except Exception as e:
             logging.error(f"Error in streaming: {str(e)}")
-            
+
             error_chunk = {
                 "error": {
                     "message": str(e),

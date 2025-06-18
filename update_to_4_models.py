@@ -20,6 +20,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any
 
+
 class ModelConfigUpdater:
     def __init__(self):
         self.backup_dir = None
@@ -64,31 +65,33 @@ class ModelConfigUpdater:
             "error": "\033[91m",     # Red
             "reset": "\033[0m"       # Reset
         }
-        
+
         icons = {
             "info": "ℹ️",
             "success": "✅",
             "warning": "⚠️",
             "error": "❌"
         }
-        
-        print(f"{colors.get(status, '')}{icons.get(status, '')} {message}{colors['reset']}")
+
+        print(
+            f"{colors.get(status, '')}{icons.get(status, '')} {message}{colors['reset']}")
 
     def create_backup(self, files_to_backup: List[str]) -> str:
         """Create backup directory and backup files"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_dir = Path(f"backups/{timestamp}")
         backup_dir.mkdir(parents=True, exist_ok=True)
-        
+
         self.print_status(f"Creating backups in: {backup_dir}", "info")
-        
+
         for file_path in files_to_backup:
             if Path(file_path).exists():
                 shutil.copy2(file_path, backup_dir / Path(file_path).name)
                 self.print_status(f"Backed up {file_path}", "success")
             else:
-                self.print_status(f"{file_path} not found (skipping)", "warning")
-        
+                self.print_status(
+                    f"{file_path} not found (skipping)", "warning")
+
         self.backup_dir = str(backup_dir)
         return str(backup_dir)
 
@@ -312,7 +315,8 @@ class ModelConfigUpdater:
         # Find and replace the old routing logic
         old_logic_pattern = r'        # Model selection logic.*?if \'deepseek-v2:7b-q4_0\' in self\.available_models:\s+return \'deepseek-v2:7b-q4_0\''
         if re.search(old_logic_pattern, content, re.DOTALL):
-            content = re.sub(old_logic_pattern, new_select_logic, content, flags=re.DOTALL)
+            content = re.sub(old_logic_pattern, new_select_logic,
+                             content, flags=re.DOTALL)
 
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(content)
@@ -554,7 +558,7 @@ if __name__ == "__main__":
         print()
         print("Target Models:")
         print("├── 🧠 Phi-3.5 Reasoning     → Complex math, logic, scientific analysis")
-        print("├── 🎨 Llama3 8B-Instruct   → Creative writing, conversations, storytelling")  
+        print("├── 🎨 Llama3 8B-Instruct   → Creative writing, conversations, storytelling")
         print("├── ⚙️  Gemma 7B-Instruct    → Technical documentation, coding, programming")
         print("└── ⚡ Mistral 7B           → Quick facts, summaries, efficient responses")
         print()
@@ -562,7 +566,7 @@ if __name__ == "__main__":
         # Files to backup and update
         files_to_backup = [
             "services/router.py",
-            "services/semantic_enhanced_router.py", 
+            "services/semantic_enhanced_router.py",
             "services/optimized_router.py",
             "main.py",
             "main_master.py",
@@ -592,7 +596,8 @@ if __name__ == "__main__":
             print()
 
             # Step 5: Update main_master.py
-            self.print_status("Step 5: Updating main_master.py ModelRouter", "info")
+            self.print_status(
+                "Step 5: Updating main_master.py ModelRouter", "info")
             self.update_main_router("main_master.py")
             print()
 
@@ -602,7 +607,8 @@ if __name__ == "__main__":
             print()
 
             # Step 7: Update enhanced config
-            self.print_status("Step 7: Updating Enhanced Configuration", "info")
+            self.print_status(
+                "Step 7: Updating Enhanced Configuration", "info")
             self.update_enhanced_config()
             print()
 
@@ -629,33 +635,37 @@ if __name__ == "__main__":
             print()
             print("🎯 Your 4 models will now route as:")
             print("├── Math/Logic queries    → Phi-3.5")
-            print("├── Coding/Technical      → Gemma 7B") 
+            print("├── Coding/Technical      → Gemma 7B")
             print("├── Creative/Writing      → Llama3 8B")
             print("└── General/Quick facts   → Mistral 7B")
             print()
-            self.print_status("Ready to use your 4-model LLM Proxy!", "success")
+            self.print_status(
+                "Ready to use your 4-model LLM Proxy!", "success")
 
             return True
 
         except Exception as e:
             self.print_status(f"Update failed: {str(e)}", "error")
             if self.backup_dir:
-                self.print_status(f"You can restore from backups in: {self.backup_dir}", "info")
+                self.print_status(
+                    f"You can restore from backups in: {self.backup_dir}", "info")
             return False
+
 
 def main():
     """Main entry point"""
     updater = ModelConfigUpdater()
     success = updater.run_update()
-    
+
     if success:
         print("\n✨ Update completed successfully!")
         print("You can now run: python download_4_models.py")
     else:
         print("\n❌ Update failed. Check the error messages above.")
-    
+
     input("\nPress Enter to exit...")
     return success
+
 
 if __name__ == "__main__":
     main()
