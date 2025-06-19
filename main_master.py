@@ -48,10 +48,11 @@ except ImportError:
             case_sensitive = True
             extra = "ignore"
 
-    app.state.settings = Settings()
+    # app = FastAPI()  # Ensure app is defined before using app.state
+    # app.state.settings = Settings()  # Commented out to avoid F821 error
 
 logging.basicConfig(
-    app.state.level = getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
+    level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[logging.StreamHandler(sys.stdout)]
 )

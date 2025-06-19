@@ -1,7 +1,9 @@
 # FILE 2: utils/error_decorator.py - NEW FILE
 # Add this file to automatically handle errors in your endpoints
 
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from utils.error_decorator import handle_errors
 from utils.exceptions import LLMProxyError
 import logging
@@ -13,6 +15,7 @@ from .exceptions import (
     ModelNotAvailableError,
     ErrorCategory,
 )
+from models.requests import ChatCompletionRequest, CompletionRequest
 
 
 def handle_errors(func):
@@ -69,48 +72,32 @@ def handle_errors(func):
     )
 
 
-# NOW UPDATE YOUR EXISTING main.py - ADD THESE IMPORTS AND HANDLERS
-
-
-# At the top of main.py, add:
-
-# Add these error handlers to your existing FastAPI app:
-
-
-@app.exception_handler(LLMProxyError)
-async def llm_proxy_error_handler(request, exc: LLMProxyError):
-    return JSONResponse(
-        status_code=exc.status_code, content=exc.to_http_exception().detail
-    )
-
-
-@app.exception_handler(RequestValidationError)
-async def validation_error_handler(request, exc: RequestValidationError):
-    first_error = exc.errors()[0] if exc.errors() else {}
-    field = " -> ".join(str(loc) for loc in first_error.get("loc", []))
-    message = first_error.get("msg", "Validation error")
-
-    from utils.exceptions import InvalidRequestError
-
-    error = InvalidRequestError(field, message)
-
-    return JSONResponse(
-        status_code=error.status_code, content=error.to_http_exception().detail
-    )
-
-
-# Add the decorator to your main endpoints:
-
-
-@app.post("/v1/chat/completions")
-@handle_errors  # <-- ADD THIS LINE
-async def chat_completions(request: ChatCompletionRequest, http_request: Request):
-    # Your existing code - errors will be handled automatically
-    pass
-
-
-@app.post("/v1/completions")
-@handle_errors  # <-- ADD THIS LINE
-async def completions(request: CompletionRequest, http_request: Request):
-    # Your existing code - errors will be handled automatically
-    pass
+# The following are example usages for FastAPI app integration.
+# Uncomment and use in your main app file, not here.
+#
+# @app.exception_handler(LLMProxyError)
+# async def llm_proxy_error_handler(request, exc: LLMProxyError):
+#     return JSONResponse(
+#         status_code=exc.status_code, content=exc.to_http_exception().detail
+#     )
+#
+# @app.exception_handler(RequestValidationError)
+# async def validation_error_handler(request, exc: RequestValidationError):
+#     first_error = exc.errors()[0] if exc.errors() else {}
+#     field = " -> ".join(str(loc) for loc in first_error.get("loc", []))
+#     message = first_error.get("msg", "Validation error")
+#     from utils.exceptions import InvalidRequestError
+#     error = InvalidRequestError(field, message)
+#     return JSONResponse(
+#         status_code=error.status_code, content=error.to_http_exception().detail
+#     )
+#
+# @app.post("/v1/chat/completions")
+# @handle_errors  # <-- ADD THIS LINE
+# async def chat_completions(request: ChatCompletionRequest, http_request: Request):
+#     pass
+#
+# @app.post("/v1/completions")
+# @handle_errors  # <-- ADD THIS LINE
+# async def completions(request: CompletionRequest, http_request: Request):
+#     pass

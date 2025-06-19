@@ -84,7 +84,6 @@ RUN echo "# Enhanced LLM Proxy Configuration" > .env \
     && echo "LLAMA_MODEL=llama3:8b-instruct-q4_0" >> .env \
     && echo "" >> .env \
     && echo "# CORS" >> .env \
-    && echo "CORS_ORIGINS=*" >> .env \
     && echo "CORS_ALLOW_CREDENTIALS=true" >> .env
 
 # Copy setup script

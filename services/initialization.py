@@ -5,6 +5,11 @@ import aiohttp
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta
 
+from config import settings
+from services.ollama_client import OllamaClient
+from services.router import LLMRouter
+from services.model_warmup import ModelWarmupService
+
 logger = logging.getLogger(__name__)
 
 
@@ -171,6 +176,10 @@ async def initialize_services_with_retry():
     """Enhanced initialization with retry logic"""
     init_service = InitializationService(settings.OLLAMA_BASE_URL)
 
+    ollama_client = OllamaClient()
+    model_router = LLMRouter(ollama_client=ollama_client)
+    warmup_service = ModelWarmupService(ollama_client, model_router)
+
     services = {
         "ollama_client": ollama_client,
         "router": model_router,
@@ -179,7 +188,8 @@ async def initialize_services_with_retry():
 
     success = await init_service.initialize_with_retry(services)
 
-    # Update global state
+    global services_state
+    services_state = {}
     services_state.update(init_service.get_status())
 
     return success

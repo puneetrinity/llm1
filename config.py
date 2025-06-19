@@ -1,8 +1,9 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
+from pydantic import Field, field_validator
 from typing import List, Optional, Literal
 import secrets
 import logging
+import json
 
 
 class Settings(BaseSettings):
@@ -87,6 +88,15 @@ class Settings(BaseSettings):
     ENABLE_DETAILED_LOGGING: bool = Field(
         default=False, description="Enable detailed request/response logging"
     )
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    def parse_cors_origins(cls, v):
+        if isinstance(v, str):
+            v = v.strip()
+            if v.startswith("[") and v.endswith("]"):
+                return json.loads(v)
+            return [i.strip() for i in v.split(",") if i.strip()]
+        return v
 
 
 # Validation and middleware helpers (from security/config.py)

@@ -3,10 +3,11 @@
 import numpy as np
 import pickle
 import gzip
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Any
 import hashlib
 from datetime import datetime, timedelta
 import asyncio
+import logging
 
 
 class SemanticCache:
