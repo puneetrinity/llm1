@@ -18,46 +18,8 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 from pydantic import BaseModel
 
-# Configuration - Create a simple config if config.py doesn't exist
-try:
-    from config import settings
-except ImportError:
-    from pydantic_settings import BaseSettings
-
-    class Settings(BaseSettings):
-        # Server Settings
-        HOST: str = "0.0.0.0"
-        PORT: int = 8001
-        DEBUG: bool = False
-        LOG_LEVEL: str = "INFO"
-
-        # Ollama Settings - FIXED: Use local Ollama
-        OLLAMA_BASE_URL: str = "http://localhost:11434"
-        OLLAMA_TIMEOUT: int = 300
-
-        # Authentication
-        ENABLE_AUTH: bool = False  # Disabled for easier testing
-        DEFAULT_API_KEY: str = "sk-your-secure-api-key-here"
-        API_KEY_HEADER: str = "X-API-Key"
-
-        # Features
-        ENABLE_DASHBOARD: bool = True
-        ENABLE_ENHANCED_FEATURES: bool = True
-        ENABLE_WEBSOCKET: bool = True
-
-        # CORS
-        CORS_ORIGINS: List[str] = ["*"]
-        CORS_ALLOW_CREDENTIALS: bool = True
-
-        # Memory
-        MAX_MEMORY_MB: int = 8192
-        CACHE_MEMORY_LIMIT_MB: int = 1024
-
-        class Config:
-            env_file = ".env"
-            case_sensitive = True
-
-    settings = Settings()
+# Import configuration from your config.py
+from config import settings
 
 # Configure logging
 logging.basicConfig(
