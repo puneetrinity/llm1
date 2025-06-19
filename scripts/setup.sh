@@ -2,6 +2,7 @@
 set -e
 
 log() {
+    mkdir -p /app/data/logs
     echo "[$(date)] $1" | tee -a /app/data/logs/setup_debug.log
 }
 
