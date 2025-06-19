@@ -1,125 +1,177 @@
-# models/responses.py - Response Data Models
+# models/responses.py
+from typing import List, Dict, Optional, Any, Union
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
 from datetime import datetime
+import time
+
+
+class Choice(BaseModel):
+    """Single choice in a completion response"""
+    index: int
+    message: Optional[Dict[str, str]] = None
+    text: Optional[str] = None
+    logprobs: Optional[Any] = None
+    finish_reason: Optional[str] = None
+    delta: Optional[Dict[str, Any]] = None
 
 
 class Usage(BaseModel):
-    prompt_tokens: int = Field(...,
-                               description="Number of tokens in the prompt")
-    completion_tokens: int = Field(...,
-                                   description="Number of tokens in the completion")
-    total_tokens: int = Field(..., description="Total number of tokens used")
-
-
-class ChatCompletionChoice(BaseModel):
-    index: int = Field(..., description="Index of the choice")
-    message: Dict[str, Any] = Field(..., description="The generated message")
-    finish_reason: Optional[str] = Field(
-        None, description="Reason the generation finished")
+    """Token usage information"""
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
 
 
 class ChatCompletionResponse(BaseModel):
-    id: str = Field(..., description="Unique identifier for the completion")
-    object: str = Field("chat.completion", description="Object type")
-    created: int = Field(..., description="Unix timestamp of creation")
-    model: str = Field(..., description="Model used for the completion")
-    choices: List[ChatCompletionChoice] = Field(
-        ..., description="List of completion choices")
-    usage: Usage = Field(..., description="Token usage information")
-
-    # Enhanced metadata
-    cache_hit: Optional[bool] = Field(
-        False, description="Whether response came from cache")
-    processing_time: Optional[float] = Field(
-        None, description="Processing time in seconds")
-    selected_model: Optional[str] = Field(
-        None, description="Actually selected model (for routing)")
-    routing_reason: Optional[str] = Field(
-        None, description="Reason for model selection")
+    """OpenAI-compatible chat completion response"""
+    id: str = Field(default_factory=lambda: f"chatcmpl-{int(time.time() * 1000)}")
+    object: str = "chat.completion"
+    created: int = Field(default_factory=lambda: int(time.time()))
+    model: str
+    choices: List[Choice]
+    usage: Optional[Usage] = None
+    system_fingerprint: Optional[str] = None
 
 
-class CompletionChoice(BaseModel):
-    text: str = Field(..., description="The generated text")
-    index: int = Field(..., description="Index of the choice")
-    finish_reason: Optional[str] = Field(
-        None, description="Reason the generation finished")
+class ChatCompletionStreamResponse(BaseModel):
+    """OpenAI-compatible streaming chat completion response"""
+    id: str = Field(default_factory=lambda: f"chatcmpl-{int(time.time() * 1000)}")
+    object: str = "chat.completion.chunk"
+    created: int = Field(default_factory=lambda: int(time.time()))
+    model: str
+    choices: List[Choice]
+    system_fingerprint: Optional[str] = None
 
 
 class CompletionResponse(BaseModel):
-    id: str = Field(..., description="Unique identifier for the completion")
-    object: str = Field("text_completion", description="Object type")
-    created: int = Field(..., description="Unix timestamp of creation")
-    model: str = Field(..., description="Model used for the completion")
-    choices: List[CompletionChoice] = Field(...,
-                                            description="List of completion choices")
-    usage: Usage = Field(..., description="Token usage information")
+    """OpenAI-compatible text completion response (legacy)"""
+    id: str = Field(default_factory=lambda: f"cmpl-{int(time.time() * 1000)}")
+    object: str = "text_completion"
+    created: int = Field(default_factory=lambda: int(time.time()))
+    model: str
+    choices: List[Choice]
+    usage: Optional[Usage] = None
 
 
-class ModelInfo(BaseModel):
-    id: str = Field(..., description="Model identifier")
-    object: str = Field("model", description="Object type")
-    created: Optional[int] = Field(None, description="Creation timestamp")
-    owned_by: str = Field("ollama", description="Model owner")
-
-    # Enhanced model metadata
-    size_gb: Optional[float] = Field(None, description="Model size in GB")
-    parameter_count: Optional[str] = Field(
-        None, description="Number of parameters")
-    quantization: Optional[str] = Field(None, description="Quantization level")
-    context_length: Optional[int] = Field(
-        None, description="Maximum context length")
-    capabilities: Optional[List[str]] = Field(
-        None, description="Model capabilities")
-    cost_per_token: Optional[float] = Field(
-        None, description="Estimated cost per token")
+class ModelResponse(BaseModel):
+    """Single model information"""
+    id: str
+    object: str = "model"
+    created: int = Field(default_factory=lambda: int(time.time()))
+    owned_by: str = "ollama"
+    permission: Optional[List[Dict[str, Any]]] = None
+    root: Optional[str] = None
+    parent: Optional[str] = None
 
 
-class ModelsResponse(BaseModel):
-    object: str = Field("list", description="Object type")
-    data: List[ModelInfo] = Field(..., description="List of available models")
-
-
-class HealthStatus(BaseModel):
-    status: str = Field(..., description="Overall health status")
-    timestamp: datetime = Field(..., description="Health check timestamp")
-    version: str = Field(..., description="Service version")
-
-
-class ServiceStatus(BaseModel):
-    name: str = Field(..., description="Service name")
-    status: str = Field(...,
-                        description="Service status (healthy, unhealthy, unknown)")
-    last_check: datetime = Field(..., description="Last health check time")
-    details: Optional[Dict[str, Any]] = Field(
-        None, description="Additional status details")
-
-
-class HealthResponse(BaseModel):
-    healthy: bool = Field(..., description="Overall health status")
-    timestamp: datetime = Field(..., description="Health check timestamp")
-    version: str = Field(..., description="Service version")
-    uptime_seconds: Optional[float] = Field(
-        None, description="Service uptime in seconds")
-
-    # Service statuses
-    services: List[ServiceStatus] = Field(
-        default_factory=list, description="Individual service statuses")
-
-    # System metrics
-    system: Optional[Dict[str, Any]] = Field(
-        None, description="System resource metrics")
-
-    # Model availability
-    models: Optional[Dict[str, Any]] = Field(
-        None, description="Available models status")
+class ModelListResponse(BaseModel):
+    """List of available models"""
+    object: str = "list"
+    data: List[ModelResponse]
 
 
 class ErrorResponse(BaseModel):
-    error: str = Field(..., description="Error message")
-    error_type: Optional[str] = Field(None, description="Error type")
-    details: Optional[Dict[str, Any]] = Field(
-        None, description="Additional error details")
-    request_id: Optional[str] = Field(None, description="Request identifier")
-    timestamp: datetime = Field(
-        default_factory=datetime.now, description="Error timestamp")
+    """Error response format"""
+    error: Dict[str, Any]
+
+
+class EmbeddingResponse(BaseModel):
+    """Embedding response (for future implementation)"""
+    object: str = "list"
+    data: List[Dict[str, Any]]
+    model: str
+    usage: Usage
+
+
+class ImageGenerationResponse(BaseModel):
+    """Image generation response (for future implementation)"""
+    created: int = Field(default_factory=lambda: int(time.time()))
+    data: List[Dict[str, str]]
+
+
+# Helper functions for response formatting
+def format_chat_completion_response(
+    content: str,
+    model: str,
+    finish_reason: str = "stop",
+    usage: Optional[Dict[str, int]] = None
+) -> ChatCompletionResponse:
+    """Format a chat completion response"""
+    return ChatCompletionResponse(
+        model=model,
+        choices=[
+            Choice(
+                index=0,
+                message={"role": "assistant", "content": content},
+                finish_reason=finish_reason
+            )
+        ],
+        usage=Usage(**usage) if usage else None
+    )
+
+
+def format_streaming_chunk(
+    content: str,
+    model: str,
+    finish_reason: Optional[str] = None,
+    is_first: bool = False
+) -> str:
+    """Format a streaming chunk for SSE"""
+    chunk = ChatCompletionStreamResponse(
+        model=model,
+        choices=[
+            Choice(
+                index=0,
+                delta={
+                    "role": "assistant" if is_first else None,
+                    "content": content
+                },
+                finish_reason=finish_reason
+            )
+        ]
+    )
+    
+    if finish_reason:
+        return f"data: {chunk.model_dump_json()}\n\ndata: [DONE]\n\n"
+    else:
+        return f"data: {chunk.model_dump_json()}\n\n"
+
+
+def format_completion_response(
+    text: str,
+    model: str,
+    finish_reason: str = "stop",
+    usage: Optional[Dict[str, int]] = None
+) -> CompletionResponse:
+    """Format a legacy completion response"""
+    return CompletionResponse(
+        model=model,
+        choices=[
+            Choice(
+                index=0,
+                text=text,
+                finish_reason=finish_reason
+            )
+        ],
+        usage=Usage(**usage) if usage else None
+    )
+
+
+def format_error_response(
+    message: str,
+    error_type: str = "invalid_request_error",
+    param: Optional[str] = None,
+    code: Optional[str] = None
+) -> ErrorResponse:
+    """Format an error response"""
+    error_dict = {
+        "message": message,
+        "type": error_type,
+    }
+    
+    if param:
+        error_dict["param"] = param
+    if code:
+        error_dict["code"] = code
+        
+    return ErrorResponse(error=error_dict)
