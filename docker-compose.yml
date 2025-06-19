@@ -8,6 +8,7 @@ services:
     image: enhanced-llm-proxy:latest
     container_name: llm-proxy
     restart: unless-stopped
+    entrypoint: ["/app/setup.sh"]
     
     # GPU support (for NVIDIA GPUs)
     deploy:
