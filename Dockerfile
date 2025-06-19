@@ -6,89 +6,81 @@ FROM python:3.11-slim
 # Set working directory
 WORKDIR /app
 
-# Copy all source code and subfolders
-COPY . .
-
-# Install system dependencies
-RUN rm -rf /var/lib/apt/lists/* \
-    && apt-get clean \
-    && apt-get update --fix-missing \
+# Install system dependencies first
+RUN apt-get update --fix-missing \
     && apt-get install -y \
-    curl \
-    wget \
-    gnupg2 \
-    software-properties-common \
-    procps \
+        curl \
+        wget \
+        gnupg2 \
+        software-properties-common \
+        procps \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Ollama
 RUN curl -fsSL https://ollama.com/install.sh | sh
 
-# Copy requirements and install Python dependencies
+# Copy and install Python dependencies FIRST
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Enhanced dependencies for full functionality
+# Install ML dependencies for full functionality
 RUN pip install --no-cache-dir \
-    sentence-transformers \
+    sentence-transformers==2.2.2 \
+    transformers==4.35.2 \
+    torch \
+    numpy \
     scikit-learn \
+    faiss-cpu \
     sse-starlette \
     python-multipart \
     aiofiles
 
-# Copy application files (ONLY the working ones)
-COPY main.py .
-COPY config.py .
-COPY config_enhanced.py .
+# Create directories before copying files
+RUN mkdir -p logs data cache models static services middleware utils
 
-# Copy working services
+# Copy application files in correct order
+COPY config.py .
+COPY main.py .
+
+# Copy service directories
 COPY services/ ./services/
-COPY utils/ ./utils/
 COPY middleware/ ./middleware/
+COPY utils/ ./utils/
 COPY models/ ./models/
 
-# Create directories
-RUN mkdir -p logs data cache models static
+# Copy optional files if they exist
+COPY config_enhanced.py .
 
-# Create optimized environment file
-RUN echo "# Enhanced LLM Proxy Configuration" > .env \
+# Create a production .env file with proper escaping
+RUN echo "# Production Configuration" > .env \
     && echo "HOST=0.0.0.0" >> .env \
     && echo "PORT=8001" >> .env \
     && echo "DEBUG=false" >> .env \
     && echo "LOG_LEVEL=INFO" >> .env \
-    && echo "" >> .env \
-    && echo "# Ollama Configuration" >> .env \
     && echo "OLLAMA_BASE_URL=http://localhost:11434" >> .env \
     && echo "OLLAMA_TIMEOUT=300" >> .env \
-    && echo "OLLAMA_MAX_LOADED_MODELS=4" >> .env \
-    && echo "" >> .env \
-    && echo "# Enhanced Features (ALL ENABLED)" >> .env \
+    && echo "CORS_ORIGINS=[\"*\"]" >> .env \
+    && echo "CORS_ALLOW_CREDENTIALS=true" >> .env \
     && echo "ENABLE_AUTH=false" >> .env \
     && echo "ENABLE_DASHBOARD=true" >> .env \
     && echo "ENABLE_ENHANCED_FEATURES=true" >> .env \
     && echo "ENABLE_WEBSOCKET=false" >> .env \
-    && echo "ENABLE_SEMANTIC_CLASSIFICATION=true" >> .env \
-    && echo "ENABLE_MODEL_ROUTING=true" >> .env \
-    && echo "ENABLE_4_MODEL_ROUTING=true" >> .env \
-    && echo "" >> .env \
-    && echo "# Memory Management" >> .env \
     && echo "MAX_MEMORY_MB=16384" >> .env \
     && echo "CACHE_MEMORY_LIMIT_MB=2048" >> .env \
-    && echo "MODEL_MEMORY_LIMIT_MB=8192" >> .env \
-    && echo "" >> .env \
-    && echo "# Model Configuration" >> .env \
-    && echo "PHI_MODEL=phi3.5" >> .env \
-    && echo "MISTRAL_MODEL=mistral:7b-instruct-q4_0" >> .env \
-    && echo "GEMMA_MODEL=gemma:7b-instruct" >> .env \
-    && echo "LLAMA_MODEL=llama3:8b-instruct-q4_0" >> .env \
-    && echo "" >> .env \
-    && echo "# CORS" >> .env \
-    && echo "CORS_ALLOW_CREDENTIALS=true" >> .env
+    && echo "ENVIRONMENT=production" >> .env
 
-# Copy setup script
-COPY scripts/setup.sh /app/setup.sh
-RUN chmod +x /app/setup.sh
+# Create startup script
+RUN echo '#!/bin/bash' > /app/start.sh \
+    && echo 'set -e' >> /app/start.sh \
+    && echo 'echo "🚀 Starting Enhanced LLM Proxy..."' >> /app/start.sh \
+    && echo 'echo "📋 Configuration check:"' >> /app/start.sh \
+    && echo 'python -c "from config import settings; print(f\"✅ Config loaded: {settings.HOST}:{settings.PORT}\")"' >> /app/start.sh \
+    && echo 'echo "🔧 Testing imports..."' >> /app/start.sh \
+    && echo 'python -c "import main; print(\"✅ Main imports successful\")"' >> /app/start.sh \
+    && echo 'echo "🎯 Starting application..."' >> /app/start.sh \
+    && echo 'python main.py' >> /app/start.sh \
+    && chmod +x /app/start.sh
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=30s --start-period=120s --retries=3 \
@@ -97,5 +89,5 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=120s --retries=3 \
 # Expose port
 EXPOSE 8001
 
-# Start the full application using setup.sh (production)
-CMD ["/app/setup.sh"]
+# Use the startup script
+CMD ["/app/start.sh"]
