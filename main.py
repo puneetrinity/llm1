@@ -178,7 +178,7 @@ class OllamaClient:
         """Initialize HTTP session"""
         timeout = aiohttp.ClientTimeout(total=self.timeout)
         self.session = aiohttp.ClientSession(timeout=timeout)
-        logger.info(f"✅ Ollama client initialized for {self.base_url}")
+        logger.info(f"? Ollama client initialized for {self.base_url}")
 
     async def health_check(self) -> bool:
         """Check if Ollama is accessible"""
@@ -371,7 +371,7 @@ class ModelRouter:
                     # Emergency fallback
                     self.available_models = {self.default_model: self.model_config[self.default_model]}
             
-            logger.info(f"✅ Router initialized with models: {list(self.available_models.keys())}")
+            logger.info(f"? Router initialized with models: {list(self.available_models.keys())}")
             services_state["available_models"] = list(self.available_models.keys())
             
         except Exception as e:
@@ -391,7 +391,7 @@ class ModelRouter:
         
         # Model selection logic - Updated for 4 models matching banner
         
-        # Math, logic, scientific analysis → Phi-4
+        # Math, logic, scientific analysis ? Phi-4
         if any(word in text_lower for word in [
             'calculate', 'solve', 'equation', 'math', 'formula', 'logic', 
             'analyze', 'scientific', 'reasoning', 'proof', 'theorem'
@@ -399,7 +399,7 @@ class ModelRouter:
             if 'phi3.5' in self.available_models:
                 return 'phi3.5'
         
-        # Coding, technical, programming → Gemma
+        # Coding, technical, programming ? Gemma
         elif any(word in text_lower for word in [
             'code', 'function', 'program', 'debug', 'script', 'api', 
             'technical', 'documentation', 'programming', 'development'
@@ -407,7 +407,7 @@ class ModelRouter:
             if 'gemma:7b-instruct' in self.available_models:
                 return 'gemma:7b-instruct'
         
-        # Creative writing, storytelling → Llama3
+        # Creative writing, storytelling ? Llama3
         elif any(word in text_lower for word in [
             'story', 'creative', 'write', 'poem', 'chat', 'narrative', 
             'storytelling', 'conversation', 'dialogue'
@@ -471,7 +471,7 @@ async def initialize_services():
     global services_state, ollama_client, model_router
     
     try:
-        logger.info("🚀 Initializing services...")
+        logger.info("? Initializing services...")
         
         # Initialize Ollama client
         ollama_client = OllamaClient(settings.OLLAMA_BASE_URL, settings.OLLAMA_TIMEOUT)
@@ -500,32 +500,32 @@ async def initialize_services():
             )
         
         services_state["initialization_complete"] = True
-        logger.info("✅ All services initialized successfully")
+        logger.info("? All services initialized successfully")
         
     except Exception as e:
-        logger.error(f"❌ Service initialization failed: {e}")
+        logger.error(f"? Service initialization failed: {e}")
         services_state["initialization_complete"] = False
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan management"""
     # Startup
-    logger.info("🌟 Starting Enhanced LLM Proxy...")
+    logger.info("? Starting Enhanced LLM Proxy...")
     await initialize_services()
     
     # Log startup summary
     logger.info("=" * 60)
-    logger.info(f"🎯 Server: {settings.HOST}:{settings.PORT}")
-    logger.info(f"🔗 Ollama: {settings.OLLAMA_BASE_URL}")
-    logger.info(f"🐛 Debug Mode: {settings.DEBUG}")
-    logger.info(f"📊 Services: {services_state}")
-    logger.info(f"🤖 Models: {services_state.get('available_models', [])}")
+    logger.info(f"? Server: {settings.HOST}:{settings.PORT}")
+    logger.info(f"? Ollama: {settings.OLLAMA_BASE_URL}")
+    logger.info(f"? Debug Mode: {settings.DEBUG}")
+    logger.info(f"? Services: {services_state}")
+    logger.info(f"? Models: {services_state.get('available_models', [])}")
     logger.info("=" * 60)
     
     yield
     
     # Shutdown
-    logger.info("🛑 Shutting down...")
+    logger.info("? Shutting down...")
     if ollama_client:
         await ollama_client.cleanup()
 
@@ -562,10 +562,10 @@ if settings.ENABLE_DASHBOARD:
     
     if react_build_dir.exists() and (react_build_dir / "index.html").exists():
         dashboard_dir = react_build_dir
-        logger.info(f"📊 Using React dashboard from {dashboard_dir}")
+        logger.info(f"? Using React dashboard from {dashboard_dir}")
     elif static_dir.exists() and (static_dir / "index.html").exists():
         dashboard_dir = static_dir
-        logger.info(f"📊 Using static dashboard from {dashboard_dir}")
+        logger.info(f"? Using static dashboard from {dashboard_dir}")
     
     if dashboard_dir:
         # Mount static files
@@ -651,7 +651,7 @@ async def websocket_dashboard(websocket: WebSocket, session: str = Query(None)):
             return
     
     await websocket.accept()
-    logger.info("🔌 WebSocket connected")
+    logger.info("? WebSocket connected")
     
     try:
         while True:
@@ -699,7 +699,7 @@ async def websocket_dashboard(websocket: WebSocket, session: str = Query(None)):
                         }))
                         
     except WebSocketDisconnect:
-        logger.info("🔌 WebSocket disconnected")
+        logger.info("? WebSocket disconnected")
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
 
@@ -1004,18 +1004,18 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 if __name__ == "__main__":
-    logger.info(f"🚀 Starting Enhanced LLM Proxy")
-    logger.info(f"📍 Server: http://{settings.HOST}:{settings.PORT}")
-    logger.info(f"📊 Dashboard: http://{settings.HOST}:{settings.PORT}/app")
-    logger.info(f"🔌 WebSocket: ws://{settings.HOST}:{settings.PORT}/ws/dashboard")
-    logger.info(f"📈 Metrics: http://{settings.HOST}:{settings.PORT}/metrics")
-    logger.info(f"🐛 Debug Mode: {settings.DEBUG}")
+    logger.info(f"? Starting Enhanced LLM Proxy")
+    logger.info(f"? Server: http://{settings.HOST}:{settings.PORT}")
+    logger.info(f"? Dashboard: http://{settings.HOST}:{settings.PORT}/app")
+    logger.info(f"? WebSocket: ws://{settings.HOST}:{settings.PORT}/ws/dashboard")
+    logger.info(f"? Metrics: http://{settings.HOST}:{settings.PORT}/metrics")
+    logger.info(f"? Debug Mode: {settings.DEBUG}")
     
     if settings.DEBUG:
-        logger.info(f"📚 API Docs: http://{settings.HOST}:{settings.PORT}/docs")
-        logger.info(f"📖 ReDoc: http://{settings.HOST}:{settings.PORT}/redoc")
+        logger.info(f"? API Docs: http://{settings.HOST}:{settings.PORT}/docs")
+        logger.info(f"? ReDoc: http://{settings.HOST}:{settings.PORT}/redoc")
     else:
-        logger.info("🔒 API documentation disabled in production mode")
+        logger.info("? API documentation disabled in production mode")
     
     uvicorn.run(
         "main:app",
