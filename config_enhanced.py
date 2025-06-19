@@ -1,5 +1,5 @@
 # config_enhanced.py - Fixed Enhanced Configuration
-from pydantic_settings import BaseSettings
+from pydantic import BaseSettings
 from pydantic import Field
 from typing import Dict, List, Any
 
