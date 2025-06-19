@@ -120,7 +120,10 @@ RUN echo "#!/bin/bash" > start_clean.sh \
     && echo 'wait' >> start_clean.sh \
     && echo "echo '[DEBUG] All models ready'" >> start_clean.sh \
     && echo "echo '[DEBUG] Starting Enhanced LLM Proxy...'" >> start_clean.sh \
-    && echo "python main.py || (echo '[ERROR] Python app failed, tailing logs:' && tail -n 100 /tmp/ollama.log && sleep 3600)" >> start_clean.sh
+    && echo "echo '[DEBUG] About to run python main.py'" >> start_clean.sh \
+    && echo "python main.py || (echo '[ERROR] Python app failed, tailing logs:' && tail -n 100 /tmp/ollama.log && sleep 3600)" >> start_clean.sh \
+    && echo "echo '[DEBUG] If you see this, python main.py did not exit the container.'" >> start_clean.sh \
+    && echo "python -c \"print('Python is working!')\"" >> start_clean.sh
 RUN sed -i 's/\r$//' start_clean.sh && chmod +x start_clean.sh
 
 # Ensure start_clean.sh uses Unix line endings and is executable
