@@ -19,10 +19,12 @@ class TestSemanticClassifier:
         # Mock the sentence transformer for testing
         classifier.model = Mock()
         classifier.model.encode = Mock(return_value=np.random.rand(1, 384))
+
         # Mock the FAISS index with a search method
         class MockIndex:
             def search(self, *args, **kwargs):
                 return (np.array([[0.9, 0.8, 0.7]]), np.array([[0, 5, 10]]))
+
         classifier.index = MockIndex()
         return classifier
 
@@ -30,7 +32,7 @@ class TestSemanticClassifier:
     async def test_intent_classification(self, classifier):
         """Test semantic intent classification"""
         # Set up mock labels
-        classifier.intent_labels = ['math'] * 20
+        classifier.intent_labels = ["math"] * 20
         intent, confidence = await classifier.classify_intent("What is 2+2?")
         # Accept any valid intent label since the classifier is mocked
         assert intent in classifier.intent_labels
@@ -58,15 +60,19 @@ class TestModelWarmup:
         mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={})
-        warmup_service.ollama_client.session.post.return_value.__aenter__ = AsyncMock(return_value=mock_response)
+        warmup_service.ollama_client.session.post.return_value.__aenter__ = AsyncMock(
+            return_value=mock_response
+        )
         warmup_service.ollama_client.session.post.return_value.__aexit__ = AsyncMock(
-            return_value=None)
+            return_value=None
+        )
 
         await warmup_service.warmup_model("mistral:7b-instruct-q4_0")
 
         # Verify model loading was called
         warmup_service.router.ensure_model_loaded.assert_called_once_with(
-            "mistral:7b-instruct-q4_0")
+            "mistral:7b-instruct-q4_0"
+        )
 
         # Directly set model_last_used to simulate warmup
         warmup_service.model_last_used["mistral:7b-instruct-q4_0"] = datetime.now()
@@ -97,7 +103,7 @@ class TestStreaming:
         mock_chunks = [
             {"message": {"content": "Hello"}, "done": False},
             {"message": {"content": " world"}, "done": False},
-            {"message": {"content": "!"}, "done": True}
+            {"message": {"content": "!"}, "done": True},
         ]
 
         async def mock_stream_chat(request):
@@ -108,17 +114,20 @@ class TestStreaming:
 
         request_data = {
             "messages": [{"role": "user", "content": "Hello"}],
-            "temperature": 0.7
+            "temperature": 0.7,
         }
 
         # Collect streaming response
         chunks = []
-        async for chunk in streaming_service.stream_chat_completion(request_data, "test-model"):
+        async for chunk in streaming_service.stream_chat_completion(
+            request_data, "test-model"
+        ):
             chunks.append(chunk)
 
         assert len(chunks) > 0
         assert "data: " in chunks[0]
         assert "[DONE]" in chunks[-1]
+
 
 # Integration test
 
@@ -139,6 +148,7 @@ async def test_full_integration():
     # Mock components would be set up here
     # Full request flow would be tested
     pass
+
 
 # Example usage and deployment guide
 """

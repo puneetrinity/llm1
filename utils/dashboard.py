@@ -8,7 +8,14 @@ import logging
 
 
 class EnhancedDashboard:
-    def __init__(self, metrics_collector, performance_monitor, cache_service, warmup_service, semantic_classifier):
+    def __init__(
+        self,
+        metrics_collector,
+        performance_monitor,
+        cache_service,
+        warmup_service,
+        semantic_classifier,
+    ):
         self.metrics = metrics_collector
         self.performance = performance_monitor
         self.cache = cache_service
@@ -30,7 +37,8 @@ class EnhancedDashboard:
             cost_efficiency = self._calculate_cost_efficiency(basic_metrics)
             system_health = self._assess_system_health(performance_data)
             optimization_suggestions = self._get_optimization_suggestions(
-                performance_data, basic_metrics)
+                performance_data, basic_metrics
+            )
 
             dashboard = {
                 "timestamp": datetime.now().isoformat(),
@@ -42,75 +50,85 @@ class EnhancedDashboard:
                     "avg_response_time": performance_data["response_time_p50"],
                     "error_rate": performance_data["error_rate"],
                     "cost_per_request": cost_efficiency["cost_per_request"],
-                    "estimated_monthly_cost": cost_efficiency["monthly_estimate"]
+                    "estimated_monthly_cost": cost_efficiency["monthly_estimate"],
                 },
-
                 "performance_metrics": {
                     "response_times": {
                         "p50": performance_data["response_time_p50"],
                         "p95": performance_data["response_time_p95"],
-                        "p99": performance_data["response_time_p99"]
+                        "p99": performance_data["response_time_p99"],
                     },
                     "throughput": {
                         "requests_per_minute": self._calculate_rpm(),
-                        "tokens_per_second": self._calculate_tps(basic_metrics)
+                        "tokens_per_second": self._calculate_tps(basic_metrics),
                     },
                     "system_resources": {
                         "cpu_usage": self._get_latest_cpu(),
                         "memory_usage": self._get_latest_memory(),
-                        "gpu_usage": self._get_latest_gpu()
-                    }
+                        "gpu_usage": self._get_latest_gpu(),
+                    },
                 },
-
                 "model_analytics": {
-                    "usage_distribution": self._calculate_model_distribution(basic_metrics),
+                    "usage_distribution": self._calculate_model_distribution(
+                        basic_metrics
+                    ),
                     "performance_by_model": performance_data["models_performance"],
                     "cost_by_model": basic_metrics["cost_analysis"]["cost_by_model"],
-                    "warmup_status": warmup_stats
+                    "warmup_status": warmup_stats,
                 },
-
                 "intelligent_features": {
                     "semantic_classification": {
                         "enabled": classification_stats["model_loaded"],
-                        "total_examples": classification_stats["total_training_examples"],
+                        "total_examples": classification_stats[
+                            "total_training_examples"
+                        ],
                         "classification_accuracy": self._estimate_classification_accuracy(),
-                        "fallback_rate": self._calculate_fallback_rate()
+                        "fallback_rate": self._calculate_fallback_rate(),
                     },
                     "caching_performance": {
                         "hit_rate": cache_stats["hit_rate"],
                         "cache_size": cache_stats["cache_size"],
                         "memory_usage_mb": cache_stats["memory_usage_mb"],
-                        "estimated_cost_savings": self._calculate_cache_savings(cache_stats, basic_metrics)
+                        "estimated_cost_savings": self._calculate_cache_savings(
+                            cache_stats, basic_metrics
+                        ),
                     },
                     "streaming_stats": {
                         "streaming_requests": self._count_streaming_requests(),
                         "avg_stream_duration": self._calculate_avg_stream_duration(),
-                        "stream_completion_rate": self._calculate_stream_completion_rate()
-                    }
+                        "stream_completion_rate": self._calculate_stream_completion_rate(),
+                    },
                 },
-
                 "cost_optimization": {
-                    "total_estimated_cost": basic_metrics["cost_analysis"]["total_estimated_cost"],
+                    "total_estimated_cost": basic_metrics["cost_analysis"][
+                        "total_estimated_cost"
+                    ],
                     "cost_breakdown": basic_metrics["cost_analysis"]["cost_by_model"],
-                    "routing_efficiency": self._calculate_routing_efficiency(basic_metrics),
+                    "routing_efficiency": self._calculate_routing_efficiency(
+                        basic_metrics
+                    ),
                     # Estimate 30% savings per cache hit
                     "cache_savings_percent": (cache_stats["hit_rate"] * 30),
-                    "optimization_score": self._calculate_optimization_score(basic_metrics, performance_data)
+                    "optimization_score": self._calculate_optimization_score(
+                        basic_metrics, performance_data
+                    ),
                 },
-
                 "alerts_and_recommendations": {
                     "active_alerts": performance_data["active_alerts"],
-                    "recent_alerts": self.performance.alerts[-5:] if self.performance.alerts else [],
+                    "recent_alerts": (
+                        self.performance.alerts[-5:] if self.performance.alerts else []
+                    ),
                     "optimization_recommendations": optimization_suggestions,
-                    "next_suggested_action": self._get_next_action(optimization_suggestions)
+                    "next_suggested_action": self._get_next_action(
+                        optimization_suggestions
+                    ),
                 },
-
                 "trends": {
                     "hourly_request_trend": basic_metrics.get("hourly_trends", []),
                     "model_usage_trend": self._calculate_model_usage_trend(),
                     "performance_trend": self._calculate_performance_trend(),
-                    "cost_trend": self._calculate_cost_trend()
-                }
+                    "cost_trend": self._calculate_cost_trend(),
+                },
             }
 
             return dashboard
@@ -135,7 +153,7 @@ class EnhancedDashboard:
         return {
             "cost_per_request": cost_per_request,
             "monthly_estimate": monthly_estimate,
-            "efficiency_score": self._calculate_efficiency_score(cost_per_request)
+            "efficiency_score": self._calculate_efficiency_score(cost_per_request),
         }
 
     def _assess_system_health(self, performance: Dict[str, Any]) -> Dict[str, Any]:
@@ -174,7 +192,9 @@ class EnhancedDashboard:
 
         return {"status": status, "score": score}
 
-    def _get_optimization_suggestions(self, performance: Dict[str, Any], metrics: Dict[str, Any]) -> List[str]:
+    def _get_optimization_suggestions(
+        self, performance: Dict[str, Any], metrics: Dict[str, Any]
+    ) -> List[str]:
         """Generate intelligent optimization suggestions"""
 
         suggestions = []
@@ -182,32 +202,39 @@ class EnhancedDashboard:
         # Performance suggestions
         if performance["response_time_p95"] > 5:
             suggestions.append(
-                "Consider enabling more aggressive caching to reduce response times")
+                "Consider enabling more aggressive caching to reduce response times"
+            )
 
         if performance["error_rate"] > 2:
             suggestions.append(
-                "High error rate detected - check model availability and warmup settings")
+                "High error rate detected - check model availability and warmup settings"
+            )
 
         # Cost optimization suggestions
         model_costs = metrics["cost_analysis"]["cost_by_model"]
         if model_costs:
-            most_expensive = max(model_costs.items(),
-                                 key=lambda x: x[1]["cost"])
+            most_expensive = max(model_costs.items(), key=lambda x: x[1]["cost"])
             if most_expensive[1]["percentage"] > 60:
                 suggestions.append(
-                    f"Consider routing more queries away from {most_expensive[0]} to reduce costs")
+                    f"Consider routing more queries away from {most_expensive[0]} to reduce costs"
+                )
 
         # Resource suggestions
-        cache_stats = self.cache.get_stats() if hasattr(self.cache, 'get_stats') else {}
+        cache_stats = self.cache.get_stats() if hasattr(self.cache, "get_stats") else {}
         if cache_stats.get("hit_rate", 0) < 0.3:
             suggestions.append(
-                "Low cache hit rate - consider tuning semantic similarity threshold")
+                "Low cache hit rate - consider tuning semantic similarity threshold"
+            )
 
         # Warmup suggestions
         warmup_stats = self.warmup.get_warmup_stats()
-        if any(time > 600 for time in warmup_stats.get("time_since_last_warmup", {}).values()):
+        if any(
+            time > 600
+            for time in warmup_stats.get("time_since_last_warmup", {}).values()
+        ):
             suggestions.append(
-                "Some models haven't been warmed up recently - consider reducing warmup interval")
+                "Some models haven't been warmed up recently - consider reducing warmup interval"
+            )
 
         return suggestions[:5]  # Limit to top 5 suggestions
 
@@ -247,21 +274,24 @@ class EnhancedDashboard:
 
     def _get_latest_gpu(self) -> Dict[str, float]:
         """Get latest GPU usage"""
-        if self.performance.system_metrics and self.performance.system_metrics[-1].get("gpu_metrics"):
+        if self.performance.system_metrics and self.performance.system_metrics[-1].get(
+            "gpu_metrics"
+        ):
             gpu = self.performance.system_metrics[-1]["gpu_metrics"]
             return {
                 "utilization": gpu.get("gpu_utilization", 0),
                 "memory_percent": gpu.get("gpu_memory_percent", 0),
-                "temperature": gpu.get("gpu_temperature", 0)
+                "temperature": gpu.get("gpu_temperature", 0),
             }
         return {"utilization": 0, "memory_percent": 0, "temperature": 0}
 
-    def _calculate_model_distribution(self, metrics: Dict[str, Any]) -> Dict[str, float]:
+    def _calculate_model_distribution(
+        self, metrics: Dict[str, Any]
+    ) -> Dict[str, float]:
         """Calculate model usage distribution"""
 
         total_requests = sum(
-            model_data.get("requests", 0)
-            for model_data in metrics["models"].values()
+            model_data.get("requests", 0) for model_data in metrics["models"].values()
         )
 
         if total_requests == 0:
@@ -282,15 +312,18 @@ class EnhancedDashboard:
         # Rate at which semantic classification falls back to rule-based
         return 15.0  # Placeholder
 
-    def _calculate_cache_savings(self, cache_stats: Dict[str, Any], metrics: Dict[str, Any]) -> float:
+    def _calculate_cache_savings(
+        self, cache_stats: Dict[str, Any], metrics: Dict[str, Any]
+    ) -> float:
         """Calculate estimated cost savings from caching"""
 
         hit_rate = cache_stats.get("hit_rate", 0)
         total_cost = metrics["cost_analysis"]["total_estimated_cost"]
 
         # Estimate savings (cache hits avoid model inference costs)
-        estimated_savings = total_cost * hit_rate * \
-            0.3  # 30% cost reduction per cache hit
+        estimated_savings = (
+            total_cost * hit_rate * 0.3
+        )  # 30% cost reduction per cache hit
 
         return estimated_savings
 
@@ -330,14 +363,17 @@ class EnhancedDashboard:
 
         return efficiency_score
 
-    def _calculate_optimization_score(self, metrics: Dict[str, Any], performance: Dict[str, Any]) -> float:
+    def _calculate_optimization_score(
+        self, metrics: Dict[str, Any], performance: Dict[str, Any]
+    ) -> float:
         """Calculate overall optimization score"""
 
         score = 100
 
         # Cost efficiency (30% weight)
         cost_per_request = metrics["cost_analysis"]["total_estimated_cost"] / max(
-            1, metrics["overview"]["total_requests"])
+            1, metrics["overview"]["total_requests"]
+        )
         if cost_per_request > 0.01:  # More than 1 cent per request
             score -= 30
         elif cost_per_request > 0.005:
@@ -350,7 +386,7 @@ class EnhancedDashboard:
             score -= 20
 
         # Resource efficiency (30% weight)
-        cache_hit_rate = getattr(self.cache, 'hit_rate', 0.5)  # Default 50%
+        cache_hit_rate = getattr(self.cache, "hit_rate", 0.5)  # Default 50%
         if cache_hit_rate < 0.3:
             score -= 15
 
@@ -401,7 +437,9 @@ class EnhancedDashboard:
             return 100.0
         else:
             # Score decreases as cost increases
-            return max(0, 100 - ((cost_per_request - benchmark_cost) / benchmark_cost) * 100)
+            return max(
+                0, 100 - ((cost_per_request - benchmark_cost) / benchmark_cost) * 100
+            )
 
     def _get_error_dashboard(self, error_message: str) -> Dict[str, Any]:
         """Return error dashboard when main dashboard fails"""
@@ -413,6 +451,6 @@ class EnhancedDashboard:
             "system_overview": {
                 "status": "unknown",
                 "health_score": 0,
-                "message": "Dashboard data collection failed"
-            }
+                "message": "Dashboard data collection failed",
+            },
         }

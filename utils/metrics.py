@@ -22,12 +22,9 @@ class MetricsCollector:
         self.cache_misses = 0
 
         # Model usage metrics
-        self.model_usage = defaultdict(lambda: {
-            'requests': 0,
-            'tokens': 0,
-            'errors': 0,
-            'total_time': 0.0
-        })
+        self.model_usage = defaultdict(
+            lambda: {"requests": 0, "tokens": 0, "errors": 0, "total_time": 0.0}
+        )
 
         # User metrics
         self.user_requests = defaultdict(int)
@@ -61,18 +58,24 @@ class MetricsCollector:
         with self._lock:
             self.cache_misses += 1
 
-    def track_model_usage(self, model: str, prompt_tokens: int, completion_tokens: int, processing_time: float = 0.0):
+    def track_model_usage(
+        self,
+        model: str,
+        prompt_tokens: int,
+        completion_tokens: int,
+        processing_time: float = 0.0,
+    ):
         """Track model usage"""
         with self._lock:
             usage = self.model_usage[model]
-            usage['requests'] += 1
-            usage['tokens'] += prompt_tokens + completion_tokens
-            usage['total_time'] += processing_time
+            usage["requests"] += 1
+            usage["tokens"] += prompt_tokens + completion_tokens
+            usage["total_time"] += processing_time
 
     def track_model_error(self, model: str):
         """Track model error"""
         with self._lock:
-            self.model_usage[model]['errors'] += 1
+            self.model_usage[model]["errors"] += 1
 
     async def get_all_metrics(self) -> Dict[str, Any]:
         """Get comprehensive metrics"""
@@ -82,8 +85,9 @@ class MetricsCollector:
             cache_hit_rate = self.cache_hits / max(1, total_cache_requests)
 
             # Calculate average response time
-            avg_response_time = sum(self.response_times) / \
-                max(1, len(self.response_times))
+            avg_response_time = sum(self.response_times) / max(
+                1, len(self.response_times)
+            )
 
             # Calculate uptime
             uptime = datetime.now() - self.start_time
@@ -95,17 +99,20 @@ class MetricsCollector:
                 "overview": {
                     "total_requests": total_requests,
                     "total_errors": sum(self.error_counts.values()),
-                    "error_rate": (sum(self.error_counts.values()) / max(1, total_requests)) * 100,
+                    "error_rate": (
+                        sum(self.error_counts.values()) / max(1, total_requests)
+                    )
+                    * 100,
                     "avg_response_time": avg_response_time,
                     "uptime_seconds": uptime.total_seconds(),
-                    "cache_hit_rate": cache_hit_rate
+                    "cache_hit_rate": cache_hit_rate,
                 },
                 "requests": dict(self.request_counts),
                 "errors": dict(self.error_counts),
                 "cache": {
                     "hits": self.cache_hits,
                     "misses": self.cache_misses,
-                    "hit_rate": cache_hit_rate
+                    "hit_rate": cache_hit_rate,
                 },
                 "models": dict(self.model_usage),
                 "users": dict(self.user_requests),
@@ -113,8 +120,8 @@ class MetricsCollector:
                 "response_times": {
                     # Last 10 response times
                     "recent": list(self.response_times)[-10:],
-                    "count": len(self.response_times)
-                }
+                    "count": len(self.response_times),
+                },
             }
 
     def _calculate_cost_analysis(self) -> Dict[str, Any]:
@@ -122,9 +129,9 @@ class MetricsCollector:
 
         # Model cost estimates (per 1K tokens)
         model_costs = {
-            'mistral:7b-instruct-q4_0': 0.0001,
-            'deepseek-v2:7b-q4_0': 0.00015,
-            'llama3:8b-instruct-q4_0': 0.00012
+            "mistral:7b-instruct-q4_0": 0.0001,
+            "deepseek-v2:7b-q4_0": 0.00015,
+            "llama3:8b-instruct-q4_0": 0.00012,
         }
 
         total_cost = 0.0
@@ -132,13 +139,13 @@ class MetricsCollector:
 
         for model, usage in self.model_usage.items():
             cost_per_1k = model_costs.get(model, 0.0001)  # Default cost
-            model_cost = (usage['tokens'] / 1000) * cost_per_1k
+            model_cost = (usage["tokens"] / 1000) * cost_per_1k
             total_cost += model_cost
 
             cost_by_model[model] = {
                 "cost": model_cost,
-                "tokens": usage['tokens'],
-                "requests": usage['requests']
+                "tokens": usage["tokens"],
+                "requests": usage["requests"],
             }
 
         # Calculate percentages
@@ -148,20 +155,30 @@ class MetricsCollector:
         return {
             "total_estimated_cost": total_cost,
             "cost_by_model": cost_by_model,
-            "avg_cost_per_request": total_cost / max(1, sum(self.request_counts.values()))
+            "avg_cost_per_request": total_cost
+            / max(1, sum(self.request_counts.values())),
         }
 
     def get_realtime_stats(self) -> Dict[str, Any]:
         """Get real-time statistics for dashboard"""
         with self._lock:
-            recent_errors = sum(1 for _ in range(
-                min(10, len(self.response_times))))
+            recent_errors = sum(1 for _ in range(min(10, len(self.response_times))))
 
             return {
-                "requests_last_minute": len([t for t in self.response_times if time.time() - t < 60]),
-                "avg_response_time_last_10": sum(list(self.response_times)[-10:]) / max(1, min(10, len(self.response_times))),
-                "cache_hit_rate": self.cache_hits / max(1, self.cache_hits + self.cache_misses),
-                "active_models": len([m for m, usage in self.model_usage.items() if usage['requests'] > 0])
+                "requests_last_minute": len(
+                    [t for t in self.response_times if time.time() - t < 60]
+                ),
+                "avg_response_time_last_10": sum(list(self.response_times)[-10:])
+                / max(1, min(10, len(self.response_times))),
+                "cache_hit_rate": self.cache_hits
+                / max(1, self.cache_hits + self.cache_misses),
+                "active_models": len(
+                    [
+                        m
+                        for m, usage in self.model_usage.items()
+                        if usage["requests"] > 0
+                    ]
+                ),
             }
 
     def reset_metrics(self):

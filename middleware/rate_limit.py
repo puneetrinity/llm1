@@ -40,9 +40,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 content={
                     "error": "Rate limit exceeded",
                     "message": f"Maximum {rate_limit} requests per minute exceeded",
-                    "retry_after": 60
+                    "retry_after": 60,
                 },
-                headers={"Retry-After": "60"}
+                headers={"Retry-After": "60"},
             )
 
         # Record this request
@@ -84,8 +84,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         """Get rate limit for this request"""
 
         # Check if user has custom rate limit
-        if hasattr(request.state, 'user') and request.state.user:
-            user_limit = request.state.user.get('rate_limit')
+        if hasattr(request.state, "user") and request.state.user:
+            user_limit = request.state.user.get("rate_limit")
             if user_limit:
                 return user_limit
 
@@ -118,8 +118,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if len(self.requests[identifier]) > 1000:
             # Keep only recent requests
             self.requests[identifier] = deque(
-                list(self.requests[identifier])[-500:],
-                maxlen=1000
+                list(self.requests[identifier])[-500:], maxlen=1000
             )
 
     async def start_cleanup_task(self):
@@ -154,8 +153,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             del self.requests[identifier]
 
         if identifiers_to_remove:
-            logging.info(
-                f"Cleaned up {len(identifiers_to_remove)} rate limit records")
+            logging.info(f"Cleaned up {len(identifiers_to_remove)} rate limit records")
 
     def set_user_rate_limit(self, api_key: str, limit: int):
         """Set custom rate limit for a specific API key"""
@@ -165,14 +163,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         """Get rate limiting statistics"""
 
         total_identifiers = len(self.requests)
-        total_requests = sum(len(requests)
-                             for requests in self.requests.values())
+        total_requests = sum(len(requests) for requests in self.requests.values())
 
         # Calculate top requesters
         top_requesters = sorted(
             [(id, len(reqs)) for id, reqs in self.requests.items()],
             key=lambda x: x[1],
-            reverse=True
+            reverse=True,
         )[:10]
 
         return {
@@ -180,5 +177,5 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             "total_requests_last_hour": total_requests,
             "default_limit": self.default_limit,
             "custom_limits": len(self.user_limits),
-            "top_requesters": top_requesters
+            "top_requesters": top_requesters,
         }

@@ -15,7 +15,7 @@ from .security import (
     RateLimiter,
     RateLimitingMiddleware,
     RequestLoggingMiddleware,
-    CORSConfig
+    CORSConfig,
 )
 
 __all__ = [
@@ -24,7 +24,7 @@ __all__ = [
     "RateLimiter",
     "RateLimitingMiddleware",
     "RequestLoggingMiddleware",
-    "CORSConfig"
+    "CORSConfig",
 ]
 
 __version__ = "1.0.0"

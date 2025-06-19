@@ -17,9 +17,12 @@ def test_models_endpoint(client):
 
 
 def test_basic_completion(client):
-    response = client.post("/v1/chat/completions", json={
-        "model": "gpt-3.5-turbo",
-        "messages": [{"role": "user", "content": "Hello"}]
-    })
+    response = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "gpt-3.5-turbo",
+            "messages": [{"role": "user", "content": "Hello"}],
+        },
+    )
     # May fail if no models available, but should not crash
     assert response.status_code in [200, 500, 503]

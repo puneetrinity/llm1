@@ -10,6 +10,7 @@ from dataclasses import dataclass
 try:
     from models.responses import ServiceStatus
 except ImportError:
+
     @dataclass
     class ServiceStatus:
         name: str
@@ -28,18 +29,14 @@ class HealthChecker:
         # Health thresholds
         self.thresholds = {
             "response_time_p95": 10.0,  # seconds
-            "cpu_usage": 80.0,          # percentage
-            "memory_usage": 85.0,       # percentage
-            "disk_usage": 90.0,         # percentage
-            "error_rate": 5.0           # percentage
+            "cpu_usage": 80.0,  # percentage
+            "memory_usage": 85.0,  # percentage
+            "disk_usage": 90.0,  # percentage
+            "error_rate": 5.0,  # percentage
         }
 
         self.alerts = []
-        self.stats = {
-            'total_checks': 0,
-            'failed_checks': 0,
-            'alerts_triggered': 0
-        }
+        self.stats = {"total_checks": 0, "failed_checks": 0, "alerts_triggered": 0}
 
     async def start_monitoring(self):
         """Start health monitoring background task"""
@@ -75,7 +72,7 @@ class HealthChecker:
     async def _perform_health_checks(self):
         """Perform all health checks"""
         self.last_check_time = datetime.now()
-        self.stats['total_checks'] += 1
+        self.stats["total_checks"] += 1
 
         try:
             # System resource checks
@@ -86,7 +83,7 @@ class HealthChecker:
 
         except Exception as e:
             logging.error(f"Error performing health checks: {str(e)}")
-            self.stats['failed_checks'] += 1
+            self.stats["failed_checks"] += 1
 
     async def _check_system_resources(self):
         """Check system resource usage"""
@@ -101,7 +98,7 @@ class HealthChecker:
 
             # Disk usage
             try:
-                disk = psutil.disk_usage('/')
+                disk = psutil.disk_usage("/")
                 disk_healthy = disk.percent < self.thresholds["disk_usage"]
             except Exception:
                 disk_healthy = True
@@ -115,8 +112,8 @@ class HealthChecker:
                 details={
                     "usage_percent": cpu_percent,
                     "threshold": self.thresholds["cpu_usage"],
-                    "healthy": cpu_healthy
-                }
+                    "healthy": cpu_healthy,
+                },
             )
 
             self.health_checks["memory"] = ServiceStatus(
@@ -128,8 +125,8 @@ class HealthChecker:
                     "available_gb": round(memory.available / (1024**3), 2),
                     "total_gb": round(memory.total / (1024**3), 2),
                     "threshold": self.thresholds["memory_usage"],
-                    "healthy": memory_healthy
-                }
+                    "healthy": memory_healthy,
+                },
             )
 
             if disk:
@@ -142,19 +139,17 @@ class HealthChecker:
                         "free_gb": round(disk.free / (1024**3), 2),
                         "total_gb": round(disk.total / (1024**3), 2),
                         "threshold": self.thresholds["disk_usage"],
-                        "healthy": disk_healthy
-                    }
+                        "healthy": disk_healthy,
+                    },
                 )
 
             # Check for alerts
             if not cpu_healthy:
                 self._trigger_alert("cpu", f"High CPU usage: {cpu_percent}%")
             if not memory_healthy:
-                self._trigger_alert(
-                    "memory", f"High memory usage: {memory.percent}%")
+                self._trigger_alert("memory", f"High memory usage: {memory.percent}%")
             if disk and not disk_healthy:
-                self._trigger_alert(
-                    "disk", f"High disk usage: {disk.percent}%")
+                self._trigger_alert("disk", f"High disk usage: {disk.percent}%")
 
         except Exception as e:
             logging.error(f"Error checking system resources: {str(e)}")
@@ -162,7 +157,7 @@ class HealthChecker:
                 name="system",
                 status="unknown",
                 last_check=datetime.now().isoformat(),
-                details={"error": str(e)}
+                details={"error": str(e)},
             )
 
     async def _check_services(self):
@@ -176,9 +171,11 @@ class HealthChecker:
                 status="healthy" if service_healthy else "unhealthy",
                 last_check=datetime.now().isoformat(),
                 details={
-                    "uptime_seconds": (datetime.now() - self.start_time).total_seconds(),
-                    "healthy": service_healthy
-                }
+                    "uptime_seconds": (
+                        datetime.now() - self.start_time
+                    ).total_seconds(),
+                    "healthy": service_healthy,
+                },
             )
 
         except Exception as e:
@@ -190,11 +187,11 @@ class HealthChecker:
             "component": component,
             "message": message,
             "timestamp": datetime.now().isoformat(),
-            "severity": "warning"
+            "severity": "warning",
         }
 
         self.alerts.append(alert)
-        self.stats['alerts_triggered'] += 1
+        self.stats["alerts_triggered"] += 1
 
         # Keep only recent alerts (last 100)
         if len(self.alerts) > 100:
@@ -202,7 +199,9 @@ class HealthChecker:
 
         logging.warning(f"Health alert: {component} - {message}")
 
-    async def check_service_health(self, service_name: str, check_function) -> ServiceStatus:
+    async def check_service_health(
+        self, service_name: str, check_function
+    ) -> ServiceStatus:
         """Check health of a specific service"""
         try:
             start_time = datetime.now()
@@ -220,8 +219,8 @@ class HealthChecker:
                 details={
                     "response_time": response_time,
                     "healthy": is_healthy,
-                    "threshold": self.thresholds.get("response_time_p95", 10.0)
-                }
+                    "threshold": self.thresholds.get("response_time_p95", 10.0),
+                },
             )
 
         except Exception as e:
@@ -230,7 +229,7 @@ class HealthChecker:
                 name=service_name,
                 status="unhealthy",
                 last_check=datetime.now().isoformat(),
-                details={"error": str(e)}
+                details={"error": str(e)},
             )
 
     def add_external_service_check(self, service_name: str, status: ServiceStatus):
@@ -266,7 +265,11 @@ class HealthChecker:
                 system_metrics = {
                     "cpu_percent": psutil.cpu_percent(),
                     "memory_percent": psutil.virtual_memory().percent,
-                    "load_average": list(psutil.getloadavg()) if hasattr(psutil, 'getloadavg') else None
+                    "load_average": (
+                        list(psutil.getloadavg())
+                        if hasattr(psutil, "getloadavg")
+                        else None
+                    ),
                 }
             except Exception:
                 system_metrics = {"error": "Could not collect system metrics"}
@@ -281,7 +284,7 @@ class HealthChecker:
                         "name": status.name,
                         "status": status.status,
                         "last_check": status.last_check,
-                        "details": status.details
+                        "details": status.details,
                     }
                     for status in self.health_checks.values()
                 ],
@@ -289,7 +292,7 @@ class HealthChecker:
                 "unhealthy_services": unhealthy_services,
                 "last_check": self.last_check_time.isoformat(),
                 "stats": self.stats,
-                "recent_alerts": self.alerts[-5:] if self.alerts else []
+                "recent_alerts": self.alerts[-5:] if self.alerts else [],
             }
 
         except Exception as e:
@@ -299,30 +302,31 @@ class HealthChecker:
                 "timestamp": datetime.now().isoformat(),
                 "version": "2.0.0",
                 "error": str(e),
-                "uptime_seconds": (datetime.now() - self.start_time).total_seconds()
+                "uptime_seconds": (datetime.now() - self.start_time).total_seconds(),
             }
 
     def get_health_summary(self) -> Dict[str, Any]:
         """Get a brief health summary"""
         try:
             healthy_count = sum(
-                1 for s in self.health_checks.values() if s.status == "healthy")
+                1 for s in self.health_checks.values() if s.status == "healthy"
+            )
             total_count = len(self.health_checks)
 
             return {
-                "overall_status": "healthy" if healthy_count == total_count else "degraded",
+                "overall_status": (
+                    "healthy" if healthy_count == total_count else "degraded"
+                ),
                 "healthy_services": healthy_count,
                 "total_services": total_count,
-                "uptime_hours": (datetime.now() - self.start_time).total_seconds() / 3600,
+                "uptime_hours": (datetime.now() - self.start_time).total_seconds()
+                / 3600,
                 "recent_alerts": len(self.alerts),
-                "monitoring_active": self.monitoring_task is not None
+                "monitoring_active": self.monitoring_task is not None,
             }
 
         except Exception as e:
-            return {
-                "overall_status": "unknown",
-                "error": str(e)
-            }
+            return {"overall_status": "unknown", "error": str(e)}
 
     def get_thresholds(self) -> Dict[str, float]:
         """Get current health thresholds"""
@@ -349,8 +353,10 @@ class HealthChecker:
                 "physical_cores": psutil.cpu_count(logical=False),
                 "total_cores": psutil.cpu_count(logical=True),
                 "max_frequency": psutil.cpu_freq().max if psutil.cpu_freq() else 0,
-                "current_frequency": psutil.cpu_freq().current if psutil.cpu_freq() else 0,
-                "cpu_usage": psutil.cpu_percent(interval=1)
+                "current_frequency": (
+                    psutil.cpu_freq().current if psutil.cpu_freq() else 0
+                ),
+                "cpu_usage": psutil.cpu_percent(interval=1),
             }
 
             memory_info = psutil.virtual_memory()
@@ -358,22 +364,22 @@ class HealthChecker:
                 "total": round(memory_info.total / (1024**3), 2),
                 "available": round(memory_info.available / (1024**3), 2),
                 "used": round(memory_info.used / (1024**3), 2),
-                "percentage": memory_info.percent
+                "percentage": memory_info.percent,
             }
 
-            disk_info = psutil.disk_usage('/')
+            disk_info = psutil.disk_usage("/")
             disk = {
                 "total": round(disk_info.total / (1024**3), 2),
                 "used": round(disk_info.used / (1024**3), 2),
                 "free": round(disk_info.free / (1024**3), 2),
-                "percentage": round((disk_info.used / disk_info.total) * 100, 2)
+                "percentage": round((disk_info.used / disk_info.total) * 100, 2),
             }
 
             return {
                 "cpu": cpu_info,
                 "memory": memory,
                 "disk": disk,
-                "uptime": (datetime.now() - self.start_time).total_seconds()
+                "uptime": (datetime.now() - self.start_time).total_seconds(),
             }
 
         except Exception as e:

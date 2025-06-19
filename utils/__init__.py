@@ -19,18 +19,18 @@ except ImportError as e:
 # Memory manager (important for enhanced features)
 try:
     from .memory_manager import get_memory_manager, MemoryManager
+
     MEMORY_MANAGER_AVAILABLE = True
 except ImportError as e:
     print(f"Info: Memory manager not available: {e}")
-    def get_memory_manager(): return None
+
+    def get_memory_manager():
+        return None
+
     MemoryManager = None
     MEMORY_MANAGER_AVAILABLE = False
 
-__all__ = [
-    "MetricsCollector",
-    "HealthChecker",
-    "MEMORY_MANAGER_AVAILABLE"
-]
+__all__ = ["MetricsCollector", "HealthChecker", "MEMORY_MANAGER_AVAILABLE"]
 
 if MEMORY_MANAGER_AVAILABLE:
     __all__.extend(["get_memory_manager", "MemoryManager"])

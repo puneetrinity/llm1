@@ -16,38 +16,38 @@ class LLMRouter:
 
         # Model configuration with memory limits
         self.model_config = {
-            'mistral:7b-instruct-q4_0': {
-                'priority': 1,
-                'cost_per_token': 0.0001,
-                'max_context': 8192,
-                'memory_mb': 4500,
-                'good_for': ['factual', 'math', 'general']
+            "mistral:7b-instruct-q4_0": {
+                "priority": 1,
+                "cost_per_token": 0.0001,
+                "max_context": 8192,
+                "memory_mb": 4500,
+                "good_for": ["factual", "math", "general"],
             },
-            'deepseek-v2:7b-q4_0': {
-                'priority': 2,
-                'cost_per_token': 0.00015,
-                'max_context': 4096,
-                'memory_mb': 4200,
-                'good_for': ['analysis', 'coding', 'resume']
+            "deepseek-v2:7b-q4_0": {
+                "priority": 2,
+                "cost_per_token": 0.00015,
+                "max_context": 4096,
+                "memory_mb": 4200,
+                "good_for": ["analysis", "coding", "resume"],
             },
-            'llama3:8b-instruct-q4_0': {
-                'priority': 2,
-                'cost_per_token': 0.00012,
-                'max_context': 8192,
-                'memory_mb': 5000,
-                'good_for': ['creative', 'interview', 'storytelling']
-            }
+            "llama3:8b-instruct-q4_0": {
+                "priority": 2,
+                "cost_per_token": 0.00012,
+                "max_context": 8192,
+                "memory_mb": 5000,
+                "good_for": ["creative", "interview", "storytelling"],
+            },
         }
 
         # Intent patterns for rule-based classification
         self.intent_patterns = {
-            'math': r'\b(?:calculate|compute|solve|equation|math|arithmetic|\d+\s*[\+\-\*\/\%]\s*\d+)\b',
-            'factual': r'\b(?:what is|who is|when did|where is|define|explain|fact)\b',
-            'creative': r'\b(?:write|create|compose|story|poem|creative|imagine|generate)\b',
-            'coding': r'\b(?:code|function|algorithm|debug|program|script|python|javascript)\b',
-            'resume': r'\b(?:resume|cv|experience|skills|qualifications|work history)\b',
-            'interview': r'\b(?:interview|job|career|hiring|prepare)\b',
-            'analysis': r'\b(?:analyze|review|evaluate|assess|compare|examine)\b'
+            "math": r"\b(?:calculate|compute|solve|equation|math|arithmetic|\d+\s*[\+\-\*\/\%]\s*\d+)\b",
+            "factual": r"\b(?:what is|who is|when did|where is|define|explain|fact)\b",
+            "creative": r"\b(?:write|create|compose|story|poem|creative|imagine|generate)\b",
+            "coding": r"\b(?:code|function|algorithm|debug|program|script|python|javascript)\b",
+            "resume": r"\b(?:resume|cv|experience|skills|qualifications|work history)\b",
+            "interview": r"\b(?:interview|job|career|hiring|prepare)\b",
+            "analysis": r"\b(?:analyze|review|evaluate|assess|compare|examine)\b",
         }
 
         self.loaded_models = set()
@@ -59,11 +59,12 @@ class LLMRouter:
 
         # Check which models are available
         available_models = await self.ollama_client.list_models()
-        available_model_names = {model['name'] for model in available_models}
+        available_model_names = {model["name"] for model in available_models}
 
         # Update model config to only include available models
         self.available_models = {
-            name: config for name, config in self.model_config.items()
+            name: config
+            for name, config in self.model_config.items()
             if name in available_model_names
         }
 
@@ -71,18 +72,19 @@ class LLMRouter:
             logging.warning("No configured models are available in Ollama")
             # Fallback to any available model
             if available_models:
-                fallback_model = available_models[0]['name']
+                fallback_model = available_models[0]["name"]
                 self.available_models[fallback_model] = {
-                    'priority': 1,
-                    'cost_per_token': 0.0001,
-                    'max_context': 4096,
-                    'memory_mb': 4000,
-                    'good_for': ['general']
+                    "priority": 1,
+                    "cost_per_token": 0.0001,
+                    "max_context": 4096,
+                    "memory_mb": 4000,
+                    "good_for": ["general"],
                 }
                 logging.info(f"Using fallback model: {fallback_model}")
 
         logging.info(
-            f"Router initialized with models: {list(self.available_models.keys())}")
+            f"Router initialized with models: {list(self.available_models.keys())}"
+        )
 
     async def route_request(self, request: ChatCompletionRequest) -> str:
         """Route request to appropriate model based on content and intent"""
@@ -100,8 +102,7 @@ class LLMRouter:
         # Select model based on intent and other factors
         selected_model = self._select_model(intent, text_content, request)
 
-        logging.info(
-            f"Routed request (intent: {intent}) to model: {selected_model}")
+        logging.info(f"Routed request (intent: {intent}) to model: {selected_model}")
         return selected_model
 
     def classify_intent(self, text: str, explicit_intent: Optional[str] = None) -> str:
@@ -121,23 +122,27 @@ class LLMRouter:
         word_count = len(text.split())
 
         if word_count < 10:
-            return 'factual'  # Short queries are usually factual
+            return "factual"  # Short queries are usually factual
         elif word_count > 100:
-            return 'creative'  # Long queries are often creative
+            return "creative"  # Long queries are often creative
         else:
-            return 'general'
+            return "general"
 
     def _extract_text_content(self, messages: List[Dict[str, Any]]) -> str:
         """Extract text content from messages"""
-        return ' '.join(msg.get('content', '') for msg in messages if msg.get('role') == 'user')
+        return " ".join(
+            msg.get("content", "") for msg in messages if msg.get("role") == "user"
+        )
 
-    def _select_model(self, intent: str, text: str, request: ChatCompletionRequest) -> str:
+    def _select_model(
+        self, intent: str, text: str, request: ChatCompletionRequest
+    ) -> str:
         """Select the best model for the given intent and requirements"""
 
         # Filter models by capability
         suitable_models = {}
         for model_name, config in self.available_models.items():
-            if intent in config['good_for'] or 'general' in config['good_for']:
+            if intent in config["good_for"] or "general" in config["good_for"]:
                 suitable_models[model_name] = config
 
         if not suitable_models:
@@ -149,8 +154,9 @@ class LLMRouter:
 
         # Filter by context length
         suitable_models = {
-            name: config for name, config in suitable_models.items()
-            if config['max_context'] >= max_tokens
+            name: config
+            for name, config in suitable_models.items()
+            if config["max_context"] >= max_tokens
         }
 
         if not suitable_models:
@@ -158,8 +164,7 @@ class LLMRouter:
             suitable_models = self.available_models
 
         # Select by priority (lower number = higher priority)
-        best_model = min(suitable_models.items(),
-                         key=lambda x: x[1]['priority'])
+        best_model = min(suitable_models.items(), key=lambda x: x[1]["priority"])
         return best_model[0]
 
     async def ensure_model_loaded(self, model: str) -> bool:
@@ -190,9 +195,7 @@ class LLMRouter:
             return False
 
     async def process_chat_completion(
-        self,
-        request: ChatCompletionRequest,
-        model: str
+        self, request: ChatCompletionRequest, model: str
     ) -> ChatCompletionResponse:
         """Process chat completion with the selected model"""
 
@@ -203,12 +206,11 @@ class LLMRouter:
         # Prepare request for Ollama
         ollama_request = {
             "model": model,
-            "messages": [{"role": msg.role, "content": msg.content} for msg in request.messages],
+            "messages": [
+                {"role": msg.role, "content": msg.content} for msg in request.messages
+            ],
             "stream": False,
-            "options": {
-                "temperature": request.temperature,
-                "top_p": request.top_p
-            }
+            "options": {"temperature": request.temperature, "top_p": request.top_p},
         }
 
         if request.max_tokens:
@@ -221,39 +223,33 @@ class LLMRouter:
 
         # Convert to OpenAI format
         response = self._convert_ollama_response(
-            ollama_response, model, processing_time)
+            ollama_response, model, processing_time
+        )
 
         return response
 
     def _convert_ollama_response(
-        self,
-        ollama_response: Dict[str, Any],
-        model: str,
-        processing_time: float
+        self, ollama_response: Dict[str, Any], model: str, processing_time: float
     ) -> ChatCompletionResponse:
         """Convert Ollama response to OpenAI format"""
 
-        message = ollama_response.get('message', {})
-        content = message.get('content', '')
+        message = ollama_response.get("message", {})
+        content = message.get("content", "")
 
         # Calculate token usage (rough estimation)
-        prompt_tokens = self._estimate_tokens(
-            ollama_response.get('prompt', ''))
+        prompt_tokens = self._estimate_tokens(ollama_response.get("prompt", ""))
         completion_tokens = self._estimate_tokens(content)
 
         usage = Usage(
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
-            total_tokens=prompt_tokens + completion_tokens
+            total_tokens=prompt_tokens + completion_tokens,
         )
 
         choice = ChatCompletionChoice(
             index=0,
-            message={
-                "role": "assistant",
-                "content": content
-            },
-            finish_reason="stop"
+            message={"role": "assistant", "content": content},
+            finish_reason="stop",
         )
 
         return ChatCompletionResponse(
@@ -263,7 +259,7 @@ class LLMRouter:
             model=model,
             choices=[choice],
             usage=usage,
-            processing_time=processing_time
+            processing_time=processing_time,
         )
 
     def _estimate_tokens(self, text: str) -> int:
@@ -280,13 +276,15 @@ class LLMRouter:
             model_info = {
                 "id": model_name,
                 "object": "model",
-                "created": int(self.model_load_times.get(model_name, datetime.now()).timestamp()),
+                "created": int(
+                    self.model_load_times.get(model_name, datetime.now()).timestamp()
+                ),
                 "owned_by": "ollama",
-                "cost_per_token": config.get('cost_per_token', 0.0001),
-                "max_context": config.get('max_context', 4096),
-                "capabilities": config.get('good_for', []),
-                "memory_mb": config.get('memory_mb', 4000),
-                "loaded": model_name in self.loaded_models
+                "cost_per_token": config.get("cost_per_token", 0.0001),
+                "max_context": config.get("max_context", 4096),
+                "capabilities": config.get("good_for", []),
+                "memory_mb": config.get("memory_mb", 4000),
+                "loaded": model_name in self.loaded_models,
             }
             models.append(model_info)
 

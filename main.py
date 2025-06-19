@@ -1,343 +1,216 @@
-from middleware.rate_limiter import RateLimiter
-from services.circuit_breaker import CircuitBreaker
-from services.cache_service import CacheService
-from services.ollama_client import OllamaClient
 #!/usr/bin/env python3
 """
-Enhanced LLM Proxy - Production-Ready Main Application
-Version: 4.0.0
-Features: 4-Model Routing, Semantic Classification, Caching, Streaming, WebSockets
+Enhanced LLM Proxy - Main Application (Auto-Generated)
 """
-
-import os
-import sys
-import asyncio
 import logging
-import json
-import time
-import psutil
-import aiohttp
-import uvicorn
-from pathlib import Path
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Union
-from contextlib import asynccontextmanager
-from collections import deque
-
-from fastapi import FastAPI, HTTPException, Request, Depends, WebSocket, WebSocketDisconnect
+import asyncio
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from fastapi.responses import JSONResponse
+from fastapi.requests import Request
+from fastapi import status
+import traceback
 
-# Import configuration
-try:
-    from config_enhanced import Settings
-except ImportError:
-    from config import Settings
-
-# Import models
+from config import Settings
 from models.requests import ChatCompletionRequest, CompletionRequest
 from models.responses import (
     ChatCompletionResponse,
     ChatCompletionStreamResponse,
     CompletionResponse,
     ModelResponse,
-    ModelListResponse
+    ModelListResponse,
 )
-
-# Import services
-from services.request.app.state.ollama_client import OllamaClient
-from services.request.app.state.cache_service import CacheService
-from services.request.app.state.circuit_breaker import CircuitBreaker
+from services.ollama_client import OllamaClient
+from services.router import LLMRouter
+from services.smart_cache import SmartCache
 from middleware.auth import AuthMiddleware
-from middleware.request.app.state.rate_limiter import RateLimiter
-from utils.helpers import format_openai_response, handle_streaming_response
+from middleware.rate_limit import RateLimitMiddleware
 
-# Optional enhanced services
-try:
-    from services.optimized_router import EnhancedLLMRouter
-    ROUTER_AVAILABLE = True
-except ImportError:
-    ROUTER_AVAILABLE = False
-    EnhancedLLMRouter = None
-
-try:
-    from services.model_warmup import ModelWarmupService
-    WARMUP_AVAILABLE = True
-except ImportError:
-    WARMUP_AVAILABLE = False
-    ModelWarmupService = None
-
-try:
-    from services.semantic_classifier import SemanticIntentClassifier
-    SEMANTIC_AVAILABLE = True
-except ImportError:
-    SEMANTIC_AVAILABLE = False
-    SemanticIntentClassifier = None
+# Initialize settings
+settings = Settings()
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler('data/logs/app.log', mode='a')
-    ]
-)
-logger = logging.getLogger(__name__)
-
-# Load settings
-app.state.settings = Settings()
-
-# App state
-def create_initial_app_state():
-    return {
-        "initialized": False,
-        "start_time": datetime.now(),
-        "services": {
-            "ollama": False,
-            "cache": False,
-            "request.app.state.router": False,
-            "warmup": False,
-            "auth": False,
-            "request.app.state.rate_limiter": False
-        },
-        "models": {
-            "available": [],
-            "loaded": [],
-            "downloading": []
-        },
-        "metrics": {
-            "total_requests": 0,
-            "successful_requests": 0,
-            "failed_requests": 0,
-            "cache_hits": 0,
-            "cache_misses": 0,
-            "model_usage": {},
-            "response_times": deque(maxlen=1000)
-        }
-    }
-
-# WebSocket connections
-websocket_connections: Dict[str, WebSocket] = {}
-
-# Response models
-class HealthResponse(BaseModel):
-    status: str
-    healthy: bool
-    timestamp: str
-    version: str
-    services: Dict[str, Any]
-    uptime_seconds: int
-
-class MetricsResponse(BaseModel):
-    timestamp: str
-    uptime_seconds: int
-    performance: Dict[str, Any]
-    system: Dict[str, Any]
-    models: Dict[str, Any]
-    cache: Optional[Dict[str, Any]]
-    services: Dict[str, Any]
-
-# Initialization service with retry logic
-class InitializationService:
-    def __init__(self):
-        self.max_retries = 60
-        self.retry_delay = 1.0
-
-    async def wait_for_ollama(self) -> bool:
-        logger.info(f"Waiting for Ollama at {settings.OLLAMA_BASE_URL}...")
-        for attempt in range(self.max_retries):
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(
-                        f"{settings.OLLAMA_BASE_URL}/api/tags",
-                        timeout=aiohttp.ClientTimeout(total=5)
-                    ) as response:
-                        if response.status == 200:
-                            data = await response.json()
-                            models = data.get('models', [])
-                            logger.info(f"✅ Ollama ready with {len(models)} models")
-                            return True
-            except Exception as e:
-                if attempt % 10 == 0:
-                    logger.debug(f"Ollama not ready (attempt {attempt + 1}/{self.max_retries})")
-            await asyncio.sleep(self.retry_delay)
-        logger.error("❌ Ollama failed to start")
-        return False
-
-# Modular service initialization
-async def initialize_ollama_client(app):
-    app.state.request.app.state.app.state.ollama_client = OllamaClient(
-        base_url=settings.OLLAMA_BASE_URL,
-        timeout=settings.OLLAMA_TIMEOUT
-    )
-    await app.state.request.app.state.ollama_client.initialize()
-    app.state.app_state["services"]["ollama"] = True
-
-async def initialize_cache_service(app):
-    app.state.request.app.state.app.state.cache_service = CacheService(
-        ttl=settings.CACHE_TTL,
-        max_size=settings.CACHE_MAX_SIZE
-    )
-    app.state.app_state["services"]["cache"] = True
-    logger.info("✅ Cache service initialized")
-
-async def initialize_circuit_breaker(app):
-    app.state.request.app.state.app.state.circuit_breaker = CircuitBreaker(
-        failure_threshold=5,
-        recovery_timeout=30,
-        expected_exception=Exception
-    )
-    logger.info("✅ Circuit breaker initialized")
-
-async def initialize_router(app):
-    if ROUTER_AVAILABLE and settings.ENABLE_MODEL_ROUTING:
-        app.state.request.app.state.app.state.router = EnhancedLLMRouter(app.state.request.app.state.ollama_client)
-        await app.state.request.app.state.router.initialize()
-        app.state.app_state["services"]["request.app.state.router"] = True
-        logger.info("✅ Enhanced request.app.state.router initialized")
-    else:
-        app.state.request.app.state.router = None
-
-async def initialize_model_warmup(app):
-    if WARMUP_AVAILABLE and settings.ENABLE_MODEL_WARMUP and app.state.        app.state.request.app.state.app.state.warmup_service = ModelWarmupService(app.state.request.app.state.ollama_client, app.state.request.app.state.router)
-        asyncio.create_task(app.state.request.app.state.warmup_service.start_warmup_service())
-        app.state.app_state["services"]["warmup"] = True
-        logger.info("✅ Model warmup service started")
-    else:
-        app.state.request.app.state.warmup_service = None
-
-async def initialize_auth_middleware(app):
-    if settings.ENABLE_AUTH:
-        app.state.request.app.state.app.state.auth_middleware = AuthMiddleware(
-            api_keys=settings.API_KEYS,
-            enable_auth=True
-        )
-        app.state.app_state["services"]["auth"] = True
-        logger.info("✅ Authentication enabled")
-    else:
-        app.state.request.app.state.auth_middleware = None
-
-async def initialize_rate_limiter(app):
-    if settings.ENABLE_RATE_LIMITING:
-        app.state.request.app.state.app.state.rate_limiter = RateLimiter(
-            requests_per_minute=settings.RATE_LIMIT_PER_MINUTE
-        )
-        app.state.app_state["services"]["request.app.state.rate_limiter"] = True
-        logger.info("✅ Rate limiting enabled")
-    else:
-        app.state.request.app.state.rate_limiter = None
-
-async def initialize_services(app):
-    app.state.app.state.app_state = create_initial_app_state()
-    app.state.init_service = InitializationService()
-    try:
-        # Step 1: Wait for Ollama
-        if not await init_service.wait_for_ollama():
-            raise Exception("Ollama service not available")
-        # Step 2: Ollama client
-        await initialize_ollama_client(app)
-        # Step 3: Get available models
-        models = await app.state.request.app.state.ollama_client.list_models()
-        app.state.app_state["models"]["available"] = [m.get('name', '') for m in models]
-        logger.info(f"Available models: {app.state.app_state['models']['available']}")
-        # Step 4: Cache
-        if settings.ENABLE_CACHE:
-            await initialize_cache_service(app)
-        else:
-            app.state.request.app.state.cache_service = None
-        # Step 5: Circuit breaker
-        await initialize_circuit_breaker(app)
-        # Step 6: Router
-        await initialize_router(app)
-        # Step 7: Model warmup
-        await initialize_model_warmup(app)
-        # Step 8: Auth
-        await initialize_auth_middleware(app)
-        # Step 9: Rate limiter
-        await initialize_rate_limiter(app)
-        app.state.app_state["initialized"] = True
-        logger.info("🎉 All services initialized successfully!")
-    except Exception as e:
-        logger.error(f"Service initialization failed: {str(e)}")
-        app.state.app_state["initialized"] = False
-        raise
-
-# Lifespan manager
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    logger.info("="*60)
-    logger.info("🚀 Starting Enhanced LLM Proxy v4.0.0")
-    logger.info(f"🔧 Environment: {settings.ENVIRONMENT}")
-    logger.info(f"🌐 Host: {settings.HOST}:{settings.PORT}")
-    logger.info(f"🔗 Ollama: {settings.OLLAMA_BASE_URL}")
-    logger.info("="*60)
-    await initialize_services(app)
-    # Log enabled features
-    features = []
-    if settings.ENABLE_AUTH: features.append("Authentication")
-    if settings.ENABLE_CACHE: features.append("Caching")
-    if settings.ENABLE_MODEL_ROUTING: features.append("Smart Routing")
-    if settings.ENABLE_STREAMING: features.append("Streaming")
-    if settings.ENABLE_WEBSOCKET: features.append("WebSocket")
-    if settings.ENABLE_SEMANTIC_CLASSIFICATION: features.append("Semantic AI")
-    logger.info(f"✨ Enabled features: {', '.join(features)}")
-    logger.info("="*60)
-    yield
-    logger.info("🛑 Shutting down Enhanced LLM Proxy...")
-    if getattr(app.state, "request.app.state.warmup_service", None):
-        await app.state.request.app.state.warmup_service.stop_warmup_service()
-    if getattr(app.state, "request.app.state.router", None) and hasattr(app.state.request.app.state.router, "cleanup"):
-        await app.state.request.app.state.router.cleanup()
-    if getattr(app.state, "request.app.state.ollama_client", None):
-        await app.state.request.app.state.ollama_client.cleanup()
-    logger.info("👋 Shutdown complete")
+logging.basicConfig(level=settings.LOG_LEVEL)
+logger = logging.getLogger("llm-proxy")
 
 # Create FastAPI app
-app.state.app = FastAPI(
-    title="Enhanced LLM Proxy",
-    description="Production-ready OpenAI-compatible API with 4-model routing, caching, and AI features",
-    version="4.0.0",
-    lifespan=lifespan,
+app = FastAPI(title="Enhanced LLM Proxy", version="4.0.0")
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# Example endpoint using app.state
-@app.get("/")
-async def root(request: Request):
-    app_state = request.app.state.app_state
-    return {
-        "service": "Enhanced LLM Proxy",
-        "version": "4.0.0",
-        "status": "operational" if app_state["initialized"] else "initializing",
-        "endpoints": {
-            "health": "/health",
-            "metrics": "/metrics",
-            "models": "/v1/models",
-            "chat": "/v1/chat/completions",
-            "completions": "/v1/completions",
-            "docs": "/docs" if settings.DEBUG else None,
-            "dashboard": "/dashboard" if getattr(settings, "ENABLE_DASHBOARD", False) else None
-        },
-        "features": {
-            "authentication": settings.ENABLE_AUTH,
-            "caching": settings.ENABLE_CACHE,
-            "streaming": settings.ENABLE_STREAMING,
-            "websocket": settings.ENABLE_WEBSOCKET,
-            "model_routing": settings.ENABLE_MODEL_ROUTING,
-            "semantic_classification": getattr(settings, "ENABLE_SEMANTIC_CLASSIFICATION", False)
-        }
-    }
+# Auth middleware (if enabled)
+try:
+    from services.auth import AuthService
 
-# You should update all other endpoints in main.py to use `request.app.state` for services
-# For example:
-#   request.app.state.request.app.state.ollama_client
-#   request.app.state.request.app.state.cache_service
-#   request.app.state.request.app.state.circuit_breaker
-#   request.app.state.request.app.state.router
-#   request.app.state.request.app.state.warmup_service
-#   request.app.state.request.app.state.auth_middleware
-#   request.app.state.request.app.state.rate_limiter
+    auth_service = AuthService(settings)
+    if settings.ENABLE_AUTH:
+        app.add_middleware(AuthMiddleware, auth_service=auth_service)
+except ImportError:
+    logger.warning("AuthService not available; skipping auth middleware.")
 
-# See above for the root endpoint style. Repeat for /v1/models, /v1/chat/completions, etc.
+# Rate limiting middleware
+app.add_middleware(RateLimitMiddleware, default_limit=60)
+
+# Initialize router and cache
+ollama_client = OllamaClient()
+router = LLMRouter(ollama_client=ollama_client)
+model_router = router
+cache = SmartCache()
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
+@app.post("/v1/chat/completions", response_model=ChatCompletionResponse)
+def chat_completions(request: ChatCompletionRequest):
+    # Example: route request, use cache, etc.
+    # This is a stub; implement your logic here
+    return JSONResponse(content={"message": "Chat completion endpoint stub."})
+
+
+@app.post("/v1/completions", response_model=CompletionResponse)
+def completions(request: CompletionRequest):
+    return JSONResponse(content={"message": "Completion endpoint stub."})
+
+
+@app.get("/v1/models", response_model=ModelListResponse)
+def list_models():
+    # Use the model_router to get available models
+    import asyncio
+
+    models = []
+    try:
+        # If get_available_models is async, run it in the event loop
+        if hasattr(model_router, "get_available_models"):
+            coro = model_router.get_available_models()
+            if asyncio.iscoroutine(coro):
+                models = asyncio.get_event_loop().run_until_complete(coro)
+            else:
+                models = coro
+    except Exception as e:
+        logger.error(f"Error fetching models: {e}")
+    return {"data": models}
+
+
+# --- Enhanced Features Activation ---
+
+# Enhanced Router (semantic classification)
+if getattr(settings, "ENABLE_ENHANCED_FEATURES", False) or getattr(
+    settings, "ENABLE_SEMANTIC_CLASSIFICATION", False
+):
+    try:
+        from services.enhanced_router import EnhancedLLMRouter
+
+        router = EnhancedLLMRouter(ollama_client=ollama_client)
+        logger.info("EnhancedLLMRouter enabled.")
+    except ImportError as e:
+        logger.warning(f"Could not import EnhancedLLMRouter: {e}")
+
+# Streaming Support
+if getattr(settings, "ENABLE_STREAMING", False):
+    try:
+        from services.streaming import StreamingService
+
+        streaming_service = StreamingService(ollama_client)
+
+        @app.post("/v1/chat/completions/stream")
+        async def chat_completions_stream(request: Request):
+            req_data = await request.json()
+            model = req_data.get("model", settings.DEFAULT_MODEL)
+            return await streaming_service.stream_chat_completion(req_data, model)
+
+        logger.info("Streaming endpoint enabled.")
+    except ImportError as e:
+        logger.warning(f"Could not import StreamingService: {e}")
+
+# Dashboard (React or Enhanced)
+if getattr(settings, "ENABLE_DASHBOARD", False) or getattr(
+    settings, "ENABLE_REACT_DASHBOARD", False
+):
+    try:
+        from utils.dashboard import EnhancedDashboard
+        from utils.metrics import MetricsCollector
+        from utils.performance_monitor import PerformanceMonitor
+
+        dashboard = EnhancedDashboard(
+            metrics_collector=MetricsCollector(),
+            performance_monitor=PerformanceMonitor(),
+            cache_service=cache,
+            warmup_service=None,
+            semantic_classifier=None,
+        )
+
+        @app.get("/dashboard")
+        async def dashboard_endpoint():
+            return await dashboard.get_comprehensive_dashboard()
+
+        logger.info("Dashboard endpoint enabled.")
+    except ImportError as e:
+        logger.warning(f"Could not import EnhancedDashboard: {e}")
+
+# WebSocket Dashboard
+if getattr(settings, "ENABLE_WEBSOCKET_DASHBOARD", False) or getattr(
+    settings, "ENABLE_WEBSOCKET", False
+):
+    try:
+        from utils.websocket_dashboard import WebSocketDashboard
+        from fastapi import WebSocket
+
+        ws_dashboard = WebSocketDashboard(dashboard)
+
+        @app.websocket("/ws/dashboard")
+        async def websocket_dashboard_endpoint(websocket: WebSocket):
+            await ws_dashboard.connect(websocket)
+
+        logger.info("WebSocket dashboard endpoint enabled.")
+    except ImportError as e:
+        logger.warning(f"Could not import WebSocketDashboard: {e}")
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled exception: {exc}\n{traceback.format_exc()}")
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "Internal server error.", "error": str(exc)},
+    )
+
+
+@app.on_event("startup")
+async def wait_for_ollama():
+    max_attempts = 30  # e.g., wait up to 30 x 2s = 60 seconds
+    delay = 2
+    for attempt in range(1, max_attempts + 1):
+        try:
+            healthy = await ollama_client.health_check()
+            if healthy:
+                logger.info(f"Ollama is ready at {ollama_client.base_url}")
+                return
+            else:
+                logger.warning(f"Ollama not ready (attempt {attempt}/{max_attempts})")
+        except Exception as e:
+            logger.warning(
+                f"Ollama health check failed: {e} (attempt {attempt}/{max_attempts})"
+            )
+        await asyncio.sleep(delay)
+    logger.error(
+        f"Ollama did not become ready after {max_attempts * delay} seconds. Exiting."
+    )
+    import sys
+
+    sys.exit(1)
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(app, host=settings.HOST, port=settings.PORT)

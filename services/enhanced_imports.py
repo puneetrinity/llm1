@@ -31,19 +31,16 @@ class EnhancedImportManager:
         feature_name: str,
         import_path: str,
         fallback_class: Optional[Type] = None,
-        critical: bool = False
+        critical: bool = False,
     ) -> ImportResult:
         """Import with explicit fallback handling - NO SILENT FAILURES"""
 
         try:
-            module_path, class_name = import_path.rsplit('.', 1)
+            module_path, class_name = import_path.rsplit(".", 1)
             module = __import__(module_path, fromlist=[class_name])
             imported_class = getattr(module, class_name)
 
-            result = ImportResult(
-                status=FeatureStatus.AVAILABLE,
-                module=imported_class
-            )
+            result = ImportResult(status=FeatureStatus.AVAILABLE, module=imported_class)
             logging.info(f"✅ {feature_name} loaded successfully")
 
         except ImportError as e:
@@ -52,26 +49,21 @@ class EnhancedImportManager:
             if critical:
                 logging.error(f"❌ CRITICAL: {error_msg}")
                 self.failed_critical.append(error_msg)
-                result = ImportResult(
-                    status=FeatureStatus.DISABLED, error=error_msg)
+                result = ImportResult(status=FeatureStatus.DISABLED, error=error_msg)
             elif fallback_class:
                 result = ImportResult(
                     status=FeatureStatus.FALLBACK,
                     module=fallback_class,
-                    error=error_msg
+                    error=error_msg,
                 )
-                logging.warning(
-                    f"⚠️ {feature_name} using fallback: {error_msg}")
+                logging.warning(f"⚠️ {feature_name} using fallback: {error_msg}")
             else:
-                result = ImportResult(
-                    status=FeatureStatus.DISABLED, error=error_msg)
-                logging.info(
-                    f"ℹ️ {feature_name} disabled (optional): {error_msg}")
+                result = ImportResult(status=FeatureStatus.DISABLED, error=error_msg)
+                logging.info(f"ℹ️ {feature_name} disabled (optional): {error_msg}")
 
         except Exception as e:
             error_msg = f"Error loading {feature_name}: {str(e)}"
-            result = ImportResult(
-                status=FeatureStatus.DISABLED, error=error_msg)
+            result = ImportResult(status=FeatureStatus.DISABLED, error=error_msg)
 
             if critical:
                 self.failed_critical.append(error_msg)
@@ -94,13 +86,22 @@ class EnhancedImportManager:
     def get_feature_status(self) -> Dict[str, Any]:
         """Get clear status - no confusion about what's working"""
         return {
-            'available': [name for name, result in self.imports.items()
-                          if result.status == FeatureStatus.AVAILABLE],
-            'fallback': [name for name, result in self.imports.items()
-                         if result.status == FeatureStatus.FALLBACK],
-            'disabled': [name for name, result in self.imports.items()
-                         if result.status == FeatureStatus.DISABLED],
-            'ready_for_production': len(self.failed_critical) == 0
+            "available": [
+                name
+                for name, result in self.imports.items()
+                if result.status == FeatureStatus.AVAILABLE
+            ],
+            "fallback": [
+                name
+                for name, result in self.imports.items()
+                if result.status == FeatureStatus.FALLBACK
+            ],
+            "disabled": [
+                name
+                for name, result in self.imports.items()
+                if result.status == FeatureStatus.DISABLED
+            ],
+            "ready_for_production": len(self.failed_critical) == 0,
         }
 
     def log_startup_summary(self):
@@ -108,18 +109,17 @@ class EnhancedImportManager:
         status = self.get_feature_status()
 
         logging.info("🎯 Feature Status:")
-        if status['available']:
+        if status["available"]:
             logging.info(f"✅ Available: {', '.join(status['available'])}")
-        if status['fallback']:
+        if status["fallback"]:
             logging.info(f"⚠️ Using fallback: {', '.join(status['fallback'])}")
-        if status['disabled']:
+        if status["disabled"]:
             logging.info(f"⏸️ Disabled: {', '.join(status['disabled'])}")
 
-        if status['ready_for_production']:
+        if status["ready_for_production"]:
             logging.info("✅ Ready for production")
         else:
-            logging.error(
-                "❌ NOT ready for production - critical features missing")
+            logging.error("❌ NOT ready for production - critical features missing")
 
 
 # Initialize with new manager
@@ -133,44 +133,43 @@ def setup_enhanced_imports():
 
     # Import fallback classes (base versions)
     from services.ollama_client import OllamaClient
+
     # FIXED: correct fallback path
     from services.enhanced_router import EnhancedLLMRouter
 
     # Try enhanced client
     enhanced_ollama = import_manager.safe_import(
-        'enhanced_ollama_client',
-        'services.enhanced_ollama_client.EnhancedOllamaClient',
+        "enhanced_ollama_client",
+        "services.enhanced_ollama_client.EnhancedOllamaClient",
         fallback_class=OllamaClient,
-        critical=False
+        critical=False,
     )
 
     # Try enhanced router
     enhanced_router = import_manager.safe_import(
-        'enhanced_router',
-        'services.enhanced_router.EnhancedLLMRouter',
+        "enhanced_router",
+        "services.enhanced_router.EnhancedLLMRouter",
         fallback_class=EnhancedLLMRouter,
-        critical=False
+        critical=False,
     )
 
     # Streaming Service
     streaming_service = import_manager.safe_import(
-        'streaming_service',
-        'services.streaming.StreamingService',
-        critical=False
+        "streaming_service", "services.streaming.StreamingService", critical=False
     )
 
     # Model Warmup Service
     warmup_service = import_manager.safe_import(
-        'model_warmup_service',
-        'services.model_warmup.ModelWarmupService',
-        critical=False
+        "model_warmup_service",
+        "services.model_warmup.ModelWarmupService",
+        critical=False,
     )
 
     # Semantic Classifier
     semantic_classifier = import_manager.safe_import(
-        'semantic_classifier',
-        'services.semantic_classifier.SemanticIntentClassifier',
-        critical=False
+        "semantic_classifier",
+        "services.semantic_classifier.SemanticIntentClassifier",
+        critical=False,
     )
 
     # Final validation
@@ -178,18 +177,19 @@ def setup_enhanced_imports():
         raise RuntimeError("Critical features failed to load - cannot start")
 
     return {
-        'EnhancedOllamaClient': enhanced_ollama.module,
-        'LLMRouter': enhanced_router.module,
-        'StreamingService': streaming_service.module,
-        'ModelWarmupService': warmup_service.module,
-        'SemanticIntentClassifier': semantic_classifier.module,
-        'capabilities': {
-            'semantic_classification': semantic_classifier.status == FeatureStatus.AVAILABLE,
-            'streaming': streaming_service.status == FeatureStatus.AVAILABLE,
-            'model_warmup': warmup_service.status == FeatureStatus.AVAILABLE,
-            'enhanced_ollama': enhanced_ollama.status == FeatureStatus.AVAILABLE,
-            'enhanced_router': enhanced_router.status == FeatureStatus.AVAILABLE,
-        }
+        "EnhancedOllamaClient": enhanced_ollama.module,
+        "LLMRouter": enhanced_router.module,
+        "StreamingService": streaming_service.module,
+        "ModelWarmupService": warmup_service.module,
+        "SemanticIntentClassifier": semantic_classifier.module,
+        "capabilities": {
+            "semantic_classification": semantic_classifier.status
+            == FeatureStatus.AVAILABLE,
+            "streaming": streaming_service.status == FeatureStatus.AVAILABLE,
+            "model_warmup": warmup_service.status == FeatureStatus.AVAILABLE,
+            "enhanced_ollama": enhanced_ollama.status == FeatureStatus.AVAILABLE,
+            "enhanced_router": enhanced_router.status == FeatureStatus.AVAILABLE,
+        },
     }
 
 

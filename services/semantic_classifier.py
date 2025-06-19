@@ -22,34 +22,50 @@ class SemanticIntentClassifier:
 
         # Simplified training data with memory limits
         self.training_data = {
-            'math': [
-                "calculate 15% of 250", "what is 45 * 67?", "solve for x: 2x + 5 = 15",
-                "compute the square root of 144", "find the area of a circle with radius 5"
+            "math": [
+                "calculate 15% of 250",
+                "what is 45 * 67?",
+                "solve for x: 2x + 5 = 15",
+                "compute the square root of 144",
+                "find the area of a circle with radius 5",
             ],
-            'factual': [
-                "what is the capital of France?", "who invented the telephone?",
-                "when did world war 2 end?", "what is photosynthesis?", "define machine learning"
+            "factual": [
+                "what is the capital of France?",
+                "who invented the telephone?",
+                "when did world war 2 end?",
+                "what is photosynthesis?",
+                "define machine learning",
             ],
-            'resume': [
-                "analyze this resume for technical skills", "review my CV and suggest improvements",
-                "what experience does this candidate have?", "evaluate this resume for a software engineer role"
+            "resume": [
+                "analyze this resume for technical skills",
+                "review my CV and suggest improvements",
+                "what experience does this candidate have?",
+                "evaluate this resume for a software engineer role",
             ],
-            'interview': [
-                "prepare me for a software engineer interview", "what questions should I expect for a data scientist role?",
-                "help me practice behavioral interview questions", "common interview questions for product manager"
+            "interview": [
+                "prepare me for a software engineer interview",
+                "what questions should I expect for a data scientist role?",
+                "help me practice behavioral interview questions",
+                "common interview questions for product manager",
             ],
-            'creative': [
-                "write a short story about space travel", "compose a poem about friendship",
-                "create a marketing copy for a new product", "write a blog post about artificial intelligence"
+            "creative": [
+                "write a short story about space travel",
+                "compose a poem about friendship",
+                "create a marketing copy for a new product",
+                "write a blog post about artificial intelligence",
             ],
-            'coding': [
-                "write a Python function to sort a list", "debug this JavaScript code",
-                "create a REST API in FastAPI", "optimize this SQL query"
+            "coding": [
+                "write a Python function to sort a list",
+                "debug this JavaScript code",
+                "create a REST API in FastAPI",
+                "optimize this SQL query",
             ],
-            'analysis': [
-                "analyze the pros and cons of remote work", "compare different cloud providers",
-                "evaluate market trends in AI industry", "assess the impact of new regulations"
-            ]
+            "analysis": [
+                "analyze the pros and cons of remote work",
+                "compare different cloud providers",
+                "evaluate market trends in AI industry",
+                "assess the impact of new regulations",
+            ],
         }
 
     async def initialize(self):
@@ -70,13 +86,13 @@ class SemanticIntentClassifier:
                 logging.info("Semantic classifier initialized successfully")
             else:
                 logging.warning(
-                    "Semantic classifier model not loaded - using fallback only")
+                    "Semantic classifier model not loaded - using fallback only"
+                )
 
             self._initialized = True
 
         except Exception as e:
-            logging.error(
-                f"Failed to initialize semantic classifier: {str(e)}")
+            logging.error(f"Failed to initialize semantic classifier: {str(e)}")
             logging.info("Semantic classification will be disabled")
             self.model = None
             self._initialized = True  # Mark as initialized even if failed
@@ -90,7 +106,7 @@ class SemanticIntentClassifier:
 
             # Load lightweight model
             logging.info("Loading sentence transformer model...")
-            self.model = SentenceTransformer('all-MiniLM-L6-v2')
+            self.model = SentenceTransformer("all-MiniLM-L6-v2")
 
             # Verify model works with a test encoding
             test_encoding = self.model.encode(["test sentence"])
@@ -101,11 +117,11 @@ class SemanticIntentClassifier:
 
         except ImportError:
             logging.warning(
-                "sentence-transformers not available - semantic classification disabled")
+                "sentence-transformers not available - semantic classification disabled"
+            )
             self.model = None
         except Exception as e:
-            logging.error(
-                f"Failed to load sentence transformer model: {str(e)}")
+            logging.error(f"Failed to load sentence transformer model: {str(e)}")
             self.model = None
 
     async def _build_index(self):
@@ -119,8 +135,7 @@ class SemanticIntentClassifier:
             try:
                 import faiss
             except ImportError:
-                logging.warning(
-                    "FAISS not available - using simple similarity search")
+                logging.warning("FAISS not available - using simple similarity search")
                 self.index = None
                 return
 
@@ -136,15 +151,15 @@ class SemanticIntentClassifier:
 
             # Limit total examples
             if len(all_examples) > self.max_training_examples:
-                all_examples = all_examples[:self.max_training_examples]
-                all_labels = all_labels[:self.max_training_examples]
+                all_examples = all_examples[: self.max_training_examples]
+                all_labels = all_labels[: self.max_training_examples]
 
             # Generate embeddings in batches to control memory
             batch_size = 50
             embeddings = []
 
             for i in range(0, len(all_examples), batch_size):
-                batch = all_examples[i:i+batch_size]
+                batch = all_examples[i : i + batch_size]
                 batch_embeddings = self.model.encode(batch)
                 embeddings.append(batch_embeddings)
 
@@ -156,15 +171,13 @@ class SemanticIntentClassifier:
 
                 # Normalize embeddings for cosine similarity
                 faiss.normalize_L2(embeddings)
-                self.index.add(embeddings.astype('float32'))
+                self.index.add(embeddings.astype("float32"))
 
                 self.intent_labels = all_labels
 
-                logging.info(
-                    f"Built FAISS index with {len(all_examples)} examples")
+                logging.info(f"Built FAISS index with {len(all_examples)} examples")
             else:
-                logging.warning(
-                    "No embeddings generated - FAISS index not created")
+                logging.warning("No embeddings generated - FAISS index not created")
                 self.index = None
 
         except Exception as e:
@@ -199,11 +212,13 @@ class SemanticIntentClassifier:
 
                 # Import faiss here for thread safety
                 import faiss
+
                 faiss.normalize_L2(query_embedding)
 
                 # Search for similar examples
                 similarities, indices = self.index.search(
-                    query_embedding.astype('float32'), top_k)
+                    query_embedding.astype("float32"), top_k
+                )
 
                 # Count votes for each intent
                 intent_scores = {}
@@ -221,8 +236,7 @@ class SemanticIntentClassifier:
 
                 # Calculate average scores
                 intent_avg_scores = {
-                    intent: np.mean(scores)
-                    for intent, scores in intent_scores.items()
+                    intent: np.mean(scores) for intent, scores in intent_scores.items()
                 }
 
                 # Get best intent
@@ -238,8 +252,7 @@ class SemanticIntentClassifier:
     def get_classification_stats(self) -> Dict:
         """Get classification statistics"""
 
-        total_examples = sum(len(examples)
-                             for examples in self.training_data.values())
+        total_examples = sum(len(examples) for examples in self.training_data.values())
 
         return {
             "model_loaded": self.model is not None,
@@ -247,10 +260,9 @@ class SemanticIntentClassifier:
             "total_training_examples": total_examples,
             "intents": list(self.training_data.keys()),
             "examples_per_intent": {
-                intent: len(examples)
-                for intent, examples in self.training_data.items()
+                intent: len(examples) for intent, examples in self.training_data.items()
             },
             "index_size": self.index.ntotal if self.index else 0,
             "confidence_threshold": self.confidence_threshold,
-            "max_memory_mb": self.max_memory_mb
+            "max_memory_mb": self.max_memory_mb,
         }

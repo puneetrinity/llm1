@@ -5,7 +5,9 @@ from typing import Set
 
 
 class WebSocketDashboard:
-    def __init__(self, enhanced_dashboard, metrics_collector=None, performance_monitor=None):
+    def __init__(
+        self, enhanced_dashboard, metrics_collector=None, performance_monitor=None
+    ):
         self.dashboard = enhanced_dashboard
         self.metrics_collector = metrics_collector
         self.performance_monitor = performance_monitor
@@ -19,10 +21,9 @@ class WebSocketDashboard:
 
         try:
             dashboard_data = await self.dashboard.get_comprehensive_dashboard()
-            await websocket.send_text(json.dumps({
-                "type": "dashboard_update",
-                "data": dashboard_data
-            }))
+            await websocket.send_text(
+                json.dumps({"type": "dashboard_update", "data": dashboard_data})
+            )
         except Exception as e:
             print(f"Error sending initial data: {e}")
 
@@ -50,11 +51,13 @@ class WebSocketDashboard:
                 if self.active_connections:
                     dashboard_data = await self.dashboard.get_comprehensive_dashboard()
 
-                    message = json.dumps({
-                        "type": "dashboard_update",
-                        "data": dashboard_data,
-                        "timestamp": dashboard_data.get("timestamp", "")
-                    })
+                    message = json.dumps(
+                        {
+                            "type": "dashboard_update",
+                            "data": dashboard_data,
+                            "timestamp": dashboard_data.get("timestamp", ""),
+                        }
+                    )
 
                     disconnected = set()
                     for websocket in self.active_connections:

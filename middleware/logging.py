@@ -31,15 +31,15 @@ class LoggingMiddleware(BaseHTTPMiddleware):
                     "message": record.getMessage(),
                     "module": record.module,
                     "function": record.funcName,
-                    "line": record.lineno
+                    "line": record.lineno,
                 }
 
                 # Add extra fields if present
-                if hasattr(record, 'request_id'):
+                if hasattr(record, "request_id"):
                     log_entry["request_id"] = record.request_id
-                if hasattr(record, 'user_id'):
+                if hasattr(record, "user_id"):
                     log_entry["user_id"] = record.user_id
-                if hasattr(record, 'duration'):
+                if hasattr(record, "duration"):
                     log_entry["duration"] = record.duration
 
                 return json.dumps(log_entry)
@@ -59,26 +59,23 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         # Extract request info
         method = request.method
         path = request.url.path
-        query_params = str(
-            request.query_params) if request.query_params else ""
+        query_params = str(request.query_params) if request.query_params else ""
         client_ip = self.get_client_ip(request)
         user_agent = request.headers.get("User-Agent", "")
 
         # Get user info if available
         user_id = "anonymous"
-        if hasattr(request.state, 'user') and request.state.user:
-            user_id = request.state.user.get('user_id', 'unknown')
+        if hasattr(request.state, "user") and request.state.user:
+            user_id = request.state.user.get("user_id", "unknown")
 
         # Log incoming request
         self.log_request_start(
-            request_id, method, path, query_params,
-            client_ip, user_agent, user_id
+            request_id, method, path, query_params, client_ip, user_agent, user_id
         )
 
         # Track request count
         endpoint = f"{method} {path}"
-        self.request_counts[endpoint] = self.request_counts.get(
-            endpoint, 0) + 1
+        self.request_counts[endpoint] = self.request_counts.get(endpoint, 0) + 1
 
         # Process request
         try:
@@ -106,14 +103,11 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             duration = time.time() - start_time
 
             # Log error
-            self.log_request_error(
-                request_id, str(e), duration, user_id
-            )
+            self.log_request_error(request_id, str(e), duration, user_id)
 
             # Track error count
             error_type = type(e).__name__
-            self.error_counts[error_type] = self.error_counts.get(
-                error_type, 0) + 1
+            self.error_counts[error_type] = self.error_counts.get(error_type, 0) + 1
 
             # Re-raise the exception
             raise
@@ -134,14 +128,19 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         # Fallback to direct client IP
         return request.client.host if request.client else "unknown"
 
-    def log_request_start(self, request_id: str, method: str, path: str,
-                          query_params: str, client_ip: str, user_agent: str, user_id: str):
+    def log_request_start(
+        self,
+        request_id: str,
+        method: str,
+        path: str,
+        query_params: str,
+        client_ip: str,
+        user_agent: str,
+        user_id: str,
+    ):
         """Log incoming request"""
 
-        extra = {
-            "request_id": request_id,
-            "user_id": user_id
-        }
+        extra = {"request_id": request_id, "user_id": user_id}
 
         message = f"[{request_id}] {method} {path}"
         if query_params:
@@ -153,15 +152,12 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 
         logging.info(message, extra=extra)
 
-    def log_request_success(self, request_id: str, status_code: int,
-                            duration: float, user_id: str):
+    def log_request_success(
+        self, request_id: str, status_code: int, duration: float, user_id: str
+    ):
         """Log successful request completion"""
 
-        extra = {
-            "request_id": request_id,
-            "user_id": user_id,
-            "duration": duration
-        }
+        extra = {"request_id": request_id, "user_id": user_id, "duration": duration}
 
         # Color code by response time
         if duration < 1.0:
@@ -175,15 +171,12 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 
         logging.log(level, message, extra=extra)
 
-    def log_request_error(self, request_id: str, error: str,
-                          duration: float, user_id: str):
+    def log_request_error(
+        self, request_id: str, error: str, duration: float, user_id: str
+    ):
         """Log request error"""
 
-        extra = {
-            "request_id": request_id,
-            "user_id": user_id,
-            "duration": duration
-        }
+        extra = {"request_id": request_id, "user_id": user_id, "duration": duration}
 
         message = f"[{request_id}] ERROR - Duration: {duration:.3f}s - Error: {error}"
 
@@ -201,9 +194,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             "total_errors": total_errors,
             "error_rate": error_rate,
             "top_endpoints": sorted(
-                self.request_counts.items(),
-                key=lambda x: x[1],
-                reverse=True
+                self.request_counts.items(), key=lambda x: x[1], reverse=True
             )[:10],
-            "error_breakdown": dict(self.error_counts)
+            "error_breakdown": dict(self.error_counts),
         }

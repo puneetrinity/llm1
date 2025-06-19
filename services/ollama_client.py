@@ -9,7 +9,7 @@ from datetime import datetime
 
 class OllamaClient:
     def __init__(self, base_url: str = "http://localhost:11434", timeout: int = 300):
-        self.base_url = base_url.rstrip('/')
+        self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.session: Optional[aiohttp.ClientSession] = None
         self._initialized = False
@@ -26,8 +26,7 @@ class OllamaClient:
         # Test connection
         try:
             await self.health_check()
-            logging.info(
-                f"Successfully connected to Ollama at {self.base_url}")
+            logging.info(f"Successfully connected to Ollama at {self.base_url}")
         except Exception as e:
             logging.warning(f"Could not connect to Ollama: {str(e)}")
 
@@ -59,7 +58,7 @@ class OllamaClient:
             async with self.session.get(f"{self.base_url}/api/tags") as response:
                 if response.status == 200:
                     data = await response.json()
-                    return data.get('models', [])
+                    return data.get("models", [])
                 else:
                     logging.error(f"Failed to list models: {response.status}")
                     return []
@@ -74,8 +73,7 @@ class OllamaClient:
 
         try:
             async with self.session.post(
-                f"{self.base_url}/api/pull",
-                json={"name": model}
+                f"{self.base_url}/api/pull", json={"name": model}
             ) as response:
                 if response.status == 200:
                     # Consume the streaming response
@@ -83,9 +81,8 @@ class OllamaClient:
                         if line:
                             try:
                                 status = json.loads(line.decode())
-                                if status.get('status') == 'success':
-                                    logging.info(
-                                        f"Successfully pulled model: {model}")
+                                if status.get("status") == "success":
+                                    logging.info(f"Successfully pulled model: {model}")
                                     return True
                             except json.JSONDecodeError:
                                 continue
@@ -101,15 +98,13 @@ class OllamaClient:
 
         try:
             async with self.session.post(
-                f"{self.base_url}/api/chat",
-                json=request_data
+                f"{self.base_url}/api/chat", json=request_data
             ) as response:
                 if response.status == 200:
                     return await response.json()
                 else:
                     error_text = await response.text()
-                    raise Exception(
-                        f"Ollama API error {response.status}: {error_text}")
+                    raise Exception(f"Ollama API error {response.status}: {error_text}")
         except Exception as e:
             logging.error(f"Error in chat completion: {str(e)}")
             raise
@@ -121,15 +116,13 @@ class OllamaClient:
 
         try:
             async with self.session.post(
-                f"{self.base_url}/api/generate",
-                json=request_data
+                f"{self.base_url}/api/generate", json=request_data
             ) as response:
                 if response.status == 200:
                     return await response.json()
                 else:
                     error_text = await response.text()
-                    raise Exception(
-                        f"Ollama API error {response.status}: {error_text}")
+                    raise Exception(f"Ollama API error {response.status}: {error_text}")
         except Exception as e:
             logging.error(f"Error in completion: {str(e)}")
             raise
@@ -141,14 +134,14 @@ class OllamaClient:
 
         try:
             async with self.session.post(
-                f"{self.base_url}/api/show",
-                json={"name": model}
+                f"{self.base_url}/api/show", json={"name": model}
             ) as response:
                 if response.status == 200:
                     return await response.json()
                 else:
                     logging.warning(
-                        f"Could not get info for model {model}: {response.status}")
+                        f"Could not get info for model {model}: {response.status}"
+                    )
                     return None
         except Exception as e:
             logging.error(f"Error getting model info for {model}: {str(e)}")
@@ -161,8 +154,7 @@ class OllamaClient:
 
         try:
             async with self.session.delete(
-                f"{self.base_url}/api/delete",
-                json={"name": model}
+                f"{self.base_url}/api/delete", json={"name": model}
             ) as response:
                 return response.status == 200
         except Exception as e:

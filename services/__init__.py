@@ -25,19 +25,18 @@ except ImportError as e:
 # Enhanced imports with fallbacks
 try:
     from .circuit_breaker import CircuitBreakerManager, get_circuit_breaker_manager
+
     CIRCUIT_BREAKER_AVAILABLE = True
 except ImportError as e:
     print(f"Info: Circuit breaker not available: {e}")
     CircuitBreakerManager = None
-    def get_circuit_breaker_manager(): return None
+
+    def get_circuit_breaker_manager():
+        return None
+
     CIRCUIT_BREAKER_AVAILABLE = False
 
-__all__ = [
-    "OllamaClient",
-    "LLMRouter",
-    "AuthService",
-    "CIRCUIT_BREAKER_AVAILABLE"
-]
+__all__ = ["OllamaClient", "LLMRouter", "AuthService", "CIRCUIT_BREAKER_AVAILABLE"]
 
 if CIRCUIT_BREAKER_AVAILABLE:
     __all__.extend(["CircuitBreakerManager", "get_circuit_breaker_manager"])

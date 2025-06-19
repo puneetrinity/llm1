@@ -206,8 +206,8 @@ class OllamaClient:
             await self.session.close()
 
 class ModelRouter:
-    def __init__(self, request.app.state.ollama_client):
-        self.request.app.state.ollama_client = request.app.state.ollama_client
+    def __init__(self, ollama_client):
+        self.ollama_client = ollama_client
         self.model_config = {
             'phi:3.5': {
                 'priority': 1,

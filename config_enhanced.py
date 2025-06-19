@@ -20,7 +20,14 @@ from typing import Dict, List, Optional, Any, Union
 from contextlib import asynccontextmanager
 from collections import deque
 
-from fastapi import FastAPI, HTTPException, Request, Depends, WebSocket, WebSocketDisconnect
+from fastapi import (
+    FastAPI,
+    HTTPException,
+    Request,
+    Depends,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -39,7 +46,7 @@ from models.responses import (
     ChatCompletionStreamResponse,
     CompletionResponse,
     ModelResponse,
-    ModelListResponse
+    ModelListResponse,
 )
 
 # Import services
@@ -53,6 +60,7 @@ from utils.helpers import format_openai_response, handle_streaming_response
 # Optional enhanced services
 try:
     from services.optimized_router import EnhancedLLMRouter
+
     ROUTER_AVAILABLE = True
 except ImportError:
     ROUTER_AVAILABLE = False
@@ -60,6 +68,7 @@ except ImportError:
 
 try:
     from services.model_warmup import ModelWarmupService
+
     WARMUP_AVAILABLE = True
 except ImportError:
     WARMUP_AVAILABLE = False
@@ -67,6 +76,7 @@ except ImportError:
 
 try:
     from services.semantic_classifier import SemanticIntentClassifier
+
     SEMANTIC_AVAILABLE = True
 except ImportError:
     SEMANTIC_AVAILABLE = False
@@ -75,16 +85,17 @@ except ImportError:
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler('data/logs/app.log', mode='a')
-    ]
+        logging.FileHandler("data/logs/app.log", mode="a"),
+    ],
 )
 logger = logging.getLogger(__name__)
 
 # Load settings
 settings = Settings()
+
 
 # App state
 def create_initial_app_state():
@@ -97,13 +108,9 @@ def create_initial_app_state():
             "router": False,
             "warmup": False,
             "auth": False,
-            "rate_limiter": False
+            "rate_limiter": False,
         },
-        "models": {
-            "available": [],
-            "loaded": [],
-            "downloading": []
-        },
+        "models": {"available": [], "loaded": [], "downloading": []},
         "metrics": {
             "total_requests": 0,
             "successful_requests": 0,
@@ -111,12 +118,14 @@ def create_initial_app_state():
             "cache_hits": 0,
             "cache_misses": 0,
             "model_usage": {},
-            "response_times": deque(maxlen=1000)
-        }
+            "response_times": deque(maxlen=1000),
+        },
     }
+
 
 # WebSocket connections
 websocket_connections: Dict[str, WebSocket] = {}
+
 
 # Response models
 class HealthResponse(BaseModel):
@@ -127,6 +136,7 @@ class HealthResponse(BaseModel):
     services: Dict[str, Any]
     uptime_seconds: int
 
+
 class MetricsResponse(BaseModel):
     timestamp: str
     uptime_seconds: int
@@ -135,6 +145,7 @@ class MetricsResponse(BaseModel):
     models: Dict[str, Any]
     cache: Optional[Dict[str, Any]]
     services: Dict[str, Any]
+
 
 # Initialization service with retry logic
 class InitializationService:
@@ -149,44 +160,46 @@ class InitializationService:
                 async with aiohttp.ClientSession() as session:
                     async with session.get(
                         f"{settings.OLLAMA_BASE_URL}/api/tags",
-                        timeout=aiohttp.ClientTimeout(total=5)
+                        timeout=aiohttp.ClientTimeout(total=5),
                     ) as response:
                         if response.status == 200:
                             data = await response.json()
-                            models = data.get('models', [])
+                            models = data.get("models", [])
                             logger.info(f"✅ Ollama ready with {len(models)} models")
                             return True
             except Exception as e:
                 if attempt % 10 == 0:
-                    logger.debug(f"Ollama not ready (attempt {attempt + 1}/{self.max_retries})")
+                    logger.debug(
+                        f"Ollama not ready (attempt {attempt + 1}/{self.max_retries})"
+                    )
             await asyncio.sleep(self.retry_delay)
         logger.error("❌ Ollama failed to start")
         return False
 
+
 # Modular service initialization
 async def initialize_ollama_client(app):
     app.state.ollama_client = OllamaClient(
-        base_url=settings.OLLAMA_BASE_URL,
-        timeout=settings.OLLAMA_TIMEOUT
+        base_url=settings.OLLAMA_BASE_URL, timeout=settings.OLLAMA_TIMEOUT
     )
     await app.state.ollama_client.initialize()
     app.state.app_state["services"]["ollama"] = True
 
+
 async def initialize_cache_service(app):
     app.state.cache_service = CacheService(
-        ttl=settings.CACHE_TTL,
-        max_size=settings.CACHE_MAX_SIZE
+        ttl=settings.CACHE_TTL, max_size=settings.CACHE_MAX_SIZE
     )
     app.state.app_state["services"]["cache"] = True
     logger.info("✅ Cache service initialized")
 
+
 async def initialize_circuit_breaker(app):
     app.state.circuit_breaker = CircuitBreaker(
-        failure_threshold=5,
-        recovery_timeout=30,
-        expected_exception=Exception
+        failure_threshold=5, recovery_timeout=30, expected_exception=Exception
     )
     logger.info("✅ Circuit breaker initialized")
+
 
 async def initialize_router(app):
     if ROUTER_AVAILABLE and settings.ENABLE_MODEL_ROUTING:
@@ -197,25 +210,29 @@ async def initialize_router(app):
     else:
         app.state.router = None
 
+
 async def initialize_model_warmup(app):
     if WARMUP_AVAILABLE and settings.ENABLE_MODEL_WARMUP and app.state.router:
-        app.state.warmup_service = ModelWarmupService(app.state.ollama_client, app.state.router)
+        app.state.warmup_service = ModelWarmupService(
+            app.state.ollama_client, app.state.router
+        )
         asyncio.create_task(app.state.warmup_service.start_warmup_service())
         app.state.app_state["services"]["warmup"] = True
         logger.info("✅ Model warmup service started")
     else:
         app.state.warmup_service = None
 
+
 async def initialize_auth_middleware(app):
     if settings.ENABLE_AUTH:
         app.state.auth_middleware = AuthMiddleware(
-            api_keys=settings.API_KEYS,
-            enable_auth=True
+            api_keys=settings.API_KEYS, enable_auth=True
         )
         app.state.app_state["services"]["auth"] = True
         logger.info("✅ Authentication enabled")
     else:
         app.state.auth_middleware = None
+
 
 async def initialize_rate_limiter(app):
     if settings.ENABLE_RATE_LIMITING:
@@ -226,6 +243,7 @@ async def initialize_rate_limiter(app):
         logger.info("✅ Rate limiting enabled")
     else:
         app.state.rate_limiter = None
+
 
 async def initialize_services(app):
     app.state.app_state = create_initial_app_state()
@@ -238,7 +256,7 @@ async def initialize_services(app):
         await initialize_ollama_client(app)
         # Step 3: Get available models
         models = await app.state.ollama_client.list_models()
-        app.state.app_state["models"]["available"] = [m.get('name', '') for m in models]
+        app.state.app_state["models"]["available"] = [m.get("name", "") for m in models]
         logger.info(f"Available models: {app.state.app_state['models']['available']}")
         # Step 4: Cache
         if settings.ENABLE_CACHE:
@@ -262,26 +280,33 @@ async def initialize_services(app):
         app.state.app_state["initialized"] = False
         raise
 
+
 # Lifespan manager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("="*60)
+    logger.info("=" * 60)
     logger.info("🚀 Starting Enhanced LLM Proxy v4.0.0")
     logger.info(f"🔧 Environment: {settings.ENVIRONMENT}")
     logger.info(f"🌐 Host: {settings.HOST}:{settings.PORT}")
     logger.info(f"🔗 Ollama: {settings.OLLAMA_BASE_URL}")
-    logger.info("="*60)
+    logger.info("=" * 60)
     await initialize_services(app)
     # Log enabled features
     features = []
-    if settings.ENABLE_AUTH: features.append("Authentication")
-    if settings.ENABLE_CACHE: features.append("Caching")
-    if settings.ENABLE_MODEL_ROUTING: features.append("Smart Routing")
-    if settings.ENABLE_STREAMING: features.append("Streaming")
-    if settings.ENABLE_WEBSOCKET: features.append("WebSocket")
-    if settings.ENABLE_SEMANTIC_CLASSIFICATION: features.append("Semantic AI")
+    if settings.ENABLE_AUTH:
+        features.append("Authentication")
+    if settings.ENABLE_CACHE:
+        features.append("Caching")
+    if settings.ENABLE_MODEL_ROUTING:
+        features.append("Smart Routing")
+    if settings.ENABLE_STREAMING:
+        features.append("Streaming")
+    if settings.ENABLE_WEBSOCKET:
+        features.append("WebSocket")
+    if settings.ENABLE_SEMANTIC_CLASSIFICATION:
+        features.append("Semantic AI")
     logger.info(f"✨ Enabled features: {', '.join(features)}")
-    logger.info("="*60)
+    logger.info("=" * 60)
     yield
     logger.info("🛑 Shutting down Enhanced LLM Proxy...")
     if getattr(app.state, "warmup_service", None):
@@ -292,6 +317,7 @@ async def lifespan(app: FastAPI):
         await app.state.ollama_client.cleanup()
     logger.info("👋 Shutdown complete")
 
+
 # Create FastAPI app
 app = FastAPI(
     title="Enhanced LLM Proxy",
@@ -299,6 +325,7 @@ app = FastAPI(
     version="4.0.0",
     lifespan=lifespan,
 )
+
 
 # Example endpoint using app.state
 @app.get("/")
@@ -315,7 +342,9 @@ async def root(request: Request):
             "chat": "/v1/chat/completions",
             "completions": "/v1/completions",
             "docs": "/docs" if settings.DEBUG else None,
-            "dashboard": "/dashboard" if getattr(settings, "ENABLE_DASHBOARD", False) else None
+            "dashboard": (
+                "/dashboard" if getattr(settings, "ENABLE_DASHBOARD", False) else None
+            ),
         },
         "features": {
             "authentication": settings.ENABLE_AUTH,
@@ -323,9 +352,12 @@ async def root(request: Request):
             "streaming": settings.ENABLE_STREAMING,
             "websocket": settings.ENABLE_WEBSOCKET,
             "model_routing": settings.ENABLE_MODEL_ROUTING,
-            "semantic_classification": getattr(settings, "ENABLE_SEMANTIC_CLASSIFICATION", False)
-        }
+            "semantic_classification": getattr(
+                settings, "ENABLE_SEMANTIC_CLASSIFICATION", False
+            ),
+        },
     }
+
 
 # You should update all other endpoints in main.py to use `request.app.state` for services
 # For example:

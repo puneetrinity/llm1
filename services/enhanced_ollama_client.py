@@ -21,11 +21,11 @@ class EnhancedOllamaClient(BaseOllamaClient):
         super().__init__(base_url, timeout)
         self.connection_pool = None
         self.performance_stats = {
-            'total_requests': 0,
-            'total_response_time': 0,
-            'streaming_requests': 0,
-            'cache_hits': 0,
-            'errors': 0
+            "total_requests": 0,
+            "total_response_time": 0,
+            "streaming_requests": 0,
+            "cache_hits": 0,
+            "errors": 0,
         }
         self._request_cache = {}
 
@@ -33,9 +33,8 @@ class EnhancedOllamaClient(BaseOllamaClient):
         if self._initialized:
             return
 
-        if not allocate_memory('ollama_client', 50):
-            logging.warning(
-                "Could not allocate memory for Ollama client optimization")
+        if not allocate_memory("ollama_client", 50):
+            logging.warning("Could not allocate memory for Ollama client optimization")
 
         pool_config = ConnectionPoolConfig(
             total_limit=50,
@@ -43,7 +42,7 @@ class EnhancedOllamaClient(BaseOllamaClient):
             keepalive_timeout=120,
             connect_timeout=10,
             total_timeout=self.timeout,
-            dns_cache_ttl=600
+            dns_cache_ttl=600,
         )
 
         self.connection_pool = get_connection_pool(pool_config)
@@ -51,7 +50,8 @@ class EnhancedOllamaClient(BaseOllamaClient):
 
         self._initialized = True
         logging.info(
-            "Enhanced Ollama client initialized with optimized connection pool")
+            "Enhanced Ollama client initialized with optimized connection pool"
+        )
 
         try:
             await self.health_check()
@@ -68,63 +68,63 @@ class EnhancedOllamaClient(BaseOllamaClient):
 
         if request_key in self._request_cache:
             cache_entry = self._request_cache[request_key]
-            if time.time() - cache_entry['timestamp'] < 5:
-                self.performance_stats['cache_hits'] += 1
-                logging.debug(
-                    "Request deduplicated (identical request within 5s)")
-                return cache_entry['response']
+            if time.time() - cache_entry["timestamp"] < 5:
+                self.performance_stats["cache_hits"] += 1
+                logging.debug("Request deduplicated (identical request within 5s)")
+                return cache_entry["response"]
 
         try:
-            self.performance_stats['total_requests'] += 1
+            self.performance_stats["total_requests"] += 1
 
             response_data = await self.connection_pool.post_json(
-                f"{self.base_url}/api/chat",
-                request_data
+                f"{self.base_url}/api/chat", request_data
             )
 
             self._request_cache[request_key] = {
-                'response': response_data,
-                'timestamp': time.time()
+                "response": response_data,
+                "timestamp": time.time(),
             }
 
             if len(self._request_cache) > 100:
-                oldest_key = min(self._request_cache.keys(),
-                                 key=lambda k: self._request_cache[k]['timestamp'])
+                oldest_key = min(
+                    self._request_cache.keys(),
+                    key=lambda k: self._request_cache[k]["timestamp"],
+                )
                 del self._request_cache[oldest_key]
 
             response_time = time.time() - start_time
-            self.performance_stats['total_response_time'] += response_time
+            self.performance_stats["total_response_time"] += response_time
 
-            logging.debug(
-                f"Chat completion successful in {response_time:.3f}s")
+            logging.debug(f"Chat completion successful in {response_time:.3f}s")
             return response_data
 
         except Exception as e:
-            self.performance_stats['errors'] += 1
+            self.performance_stats["errors"] += 1
             logging.error(f"Chat completion failed: {str(e)}")
             raise
 
-    async def stream_chat(self, request_data: Dict[str, Any]) -> AsyncGenerator[Dict[str, Any], None]:
+    async def stream_chat(
+        self, request_data: Dict[str, Any]
+    ) -> AsyncGenerator[Dict[str, Any], None]:
         if not self._initialized:
             await self.initialize()
 
         start_time = time.time()
-        self.performance_stats['streaming_requests'] += 1
+        self.performance_stats["streaming_requests"] += 1
 
         try:
             request_data = request_data.copy()
             request_data["stream"] = True
 
             async with await self.connection_pool.request(
-                'POST',
-                f"{self.base_url}/api/chat",
-                json=request_data
+                "POST", f"{self.base_url}/api/chat", json=request_data
             ) as response:
 
                 if response.status != 200:
                     error_text = await response.text()
                     raise Exception(
-                        f"Ollama streaming error {response.status}: {error_text}")
+                        f"Ollama streaming error {response.status}: {error_text}"
+                    )
 
                 async for line in response.content:
                     if line:
@@ -139,18 +139,19 @@ class EnhancedOllamaClient(BaseOllamaClient):
 
                         except json.JSONDecodeError as e:
                             logging.warning(
-                                f"Failed to parse streaming line: {line_text}, error: {e}")
+                                f"Failed to parse streaming line: {line_text}, error: {e}"
+                            )
                             continue
                         except Exception as e:
                             logging.error(f"Streaming processing error: {e}")
                             break
 
             response_time = time.time() - start_time
-            self.performance_stats['total_response_time'] += response_time
+            self.performance_stats["total_response_time"] += response_time
             logging.debug(f"Streaming completed in {response_time:.3f}s")
 
         except Exception as e:
-            self.performance_stats['errors'] += 1
+            self.performance_stats["errors"] += 1
             logging.error(f"Error in streaming: {str(e)}")
             raise
 
@@ -173,7 +174,7 @@ class EnhancedOllamaClient(BaseOllamaClient):
             "timestamp": datetime.now().isoformat(),
             "connection_pool": {},
             "performance": self.get_performance_stats(),
-            "optimization_active": True
+            "optimization_active": True,
         }
 
         if self.connection_pool:
@@ -186,19 +187,24 @@ class EnhancedOllamaClient(BaseOllamaClient):
         return health_data
 
     def get_performance_stats(self) -> Dict[str, Any]:
-        total_requests = self.performance_stats['total_requests']
+        total_requests = self.performance_stats["total_requests"]
 
         stats = {
-            'total_requests': total_requests,
-            'streaming_requests': self.performance_stats['streaming_requests'],
-            'cache_hits': self.performance_stats['cache_hits'],
-            'errors': self.performance_stats['errors'],
-            'error_rate': (self.performance_stats['errors'] / max(1, total_requests)) * 100,
-            'cache_hit_rate': (self.performance_stats['cache_hits'] / max(1, total_requests)) * 100,
-            'avg_response_time': (
-                self.performance_stats['total_response_time'] /
-                total_requests if total_requests > 0 else 0
+            "total_requests": total_requests,
+            "streaming_requests": self.performance_stats["streaming_requests"],
+            "cache_hits": self.performance_stats["cache_hits"],
+            "errors": self.performance_stats["errors"],
+            "error_rate": (self.performance_stats["errors"] / max(1, total_requests))
+            * 100,
+            "cache_hit_rate": (
+                self.performance_stats["cache_hits"] / max(1, total_requests)
             )
+            * 100,
+            "avg_response_time": (
+                self.performance_stats["total_response_time"] / total_requests
+                if total_requests > 0
+                else 0
+            ),
         }
 
         return stats
@@ -206,13 +212,13 @@ class EnhancedOllamaClient(BaseOllamaClient):
     def _generate_request_key(self, request_data: Dict[str, Any]) -> str:
         """Generate a stable cache key for deduplication using SHA256"""
         key_data = {
-            'model': request_data.get('model'),
+            "model": request_data.get("model"),
             # Only last message
-            'messages': request_data.get('messages', [])[-1:],
-            'temperature': request_data.get('options', {}).get('temperature', 0.7)
+            "messages": request_data.get("messages", [])[-1:],
+            "temperature": request_data.get("options", {}).get("temperature", 0.7),
         }
         raw = json.dumps(key_data, sort_keys=True)
-        return hashlib.sha256(raw.encode('utf-8')).hexdigest()
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
     async def warm_up_model(self, model: str) -> bool:
         try:
@@ -220,10 +226,7 @@ class EnhancedOllamaClient(BaseOllamaClient):
                 "model": model,
                 "messages": [{"role": "user", "content": "Hello"}],
                 "stream": False,
-                "options": {
-                    "num_predict": 1,
-                    "temperature": 0.1
-                }
+                "options": {"num_predict": 1, "temperature": 0.1},
             }
 
             response = await self.chat_completion(warmup_request)
@@ -237,10 +240,12 @@ class EnhancedOllamaClient(BaseOllamaClient):
     async def cleanup(self):
         if self.connection_pool:
             pass
-        deallocate_memory('ollama_client')
+        deallocate_memory("ollama_client")
         self._initialized = False
         logging.info("Enhanced Ollama client cleaned up")
 
 
-def create_enhanced_ollama_client(base_url: str = "http://localhost:11434", timeout: int = 300) -> EnhancedOllamaClient:
+def create_enhanced_ollama_client(
+    base_url: str = "http://localhost:11434", timeout: int = 300
+) -> EnhancedOllamaClient:
     return EnhancedOllamaClient(base_url, timeout)

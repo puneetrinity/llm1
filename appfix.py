@@ -10,7 +10,7 @@ from pathlib import Path
 
 def create_project_structure():
     """Create all necessary directories and files"""
-    
+
     # Define directory structure
     directories = [
         "models",
@@ -26,15 +26,15 @@ def create_project_structure():
         "frontend/build",
         "frontend/src",
         "frontend/public",
-        "tests"
+        "tests",
     ]
-    
+
     # Create directories
     print("🚀 Creating project directories...")
     for directory in directories:
         Path(directory).mkdir(parents=True, exist_ok=True)
         print(f"  ✅ Created: {directory}")
-    
+
     # Create __init__.py files
     print("\n📄 Creating __init__.py files...")
     init_dirs = ["models", "services", "middleware", "utils", "tests"]
@@ -43,7 +43,7 @@ def create_project_structure():
         if not init_file.exists():
             init_file.touch()
             print(f"  ✅ Created: {init_file}")
-    
+
     # Create .gitkeep files for empty directories
     print("\n📌 Creating .gitkeep files...")
     gitkeep_dirs = ["data/logs", "data/cache", "static/dashboard", "frontend/build"]
@@ -52,7 +52,7 @@ def create_project_structure():
         if not gitkeep_file.exists():
             gitkeep_file.touch()
             print(f"  ✅ Created: {gitkeep_file}")
-    
+
     # Create basic .env file if it doesn't exist
     if not Path(".env").exists():
         print("\n🔧 Creating .env file...")
@@ -89,7 +89,7 @@ CACHE_MEMORY_LIMIT_MB=1024
         with open(".env", "w") as f:
             f.write(env_content)
         print("  ✅ Created: .env")
-    
+
     # Create .gitignore if it doesn't exist
     if not Path(".gitignore").exists():
         print("\n📝 Creating .gitignore file...")
@@ -160,9 +160,9 @@ htmlcov/
         with open(".gitignore", "w") as f:
             f.write(gitignore_content)
         print("  ✅ Created: .gitignore")
-    
+
     print("\n✨ Project structure created successfully!")
-    
+
     # Create README if it doesn't exist
     if not Path("README.md").exists():
         print("\n📖 Creating README.md...")
@@ -236,10 +236,10 @@ See the `/docs` endpoint when running in debug mode.
         with open("README.md", "w") as f:
             f.write(readme_content)
         print("  ✅ Created: README.md")
-    
-    print("\n" + "="*50)
+
+    print("\n" + "=" * 50)
     print("🎉 Setup complete!")
-    print("="*50)
+    print("=" * 50)
     print("\n📋 Next steps:")
     print("1. Install dependencies: pip install -r requirements.txt")
     print("2. Configure environment: edit .env file")
@@ -250,15 +250,9 @@ See the `/docs` endpoint when running in debug mode.
 def check_dependencies():
     """Check if required dependencies are installed"""
     print("\n🔍 Checking dependencies...")
-    
-    required_modules = [
-        "fastapi",
-        "uvicorn",
-        "aiohttp",
-        "pydantic",
-        "psutil"
-    ]
-    
+
+    required_modules = ["fastapi", "uvicorn", "aiohttp", "pydantic", "psutil"]
+
     missing = []
     for module in required_modules:
         try:
@@ -267,30 +261,31 @@ def check_dependencies():
         except ImportError:
             print(f"  ❌ {module} (missing)")
             missing.append(module)
-    
+
     if missing:
         print(f"\n⚠️  Missing dependencies: {', '.join(missing)}")
         print("Run: pip install -r requirements.txt")
         return False
-    
+
     return True
 
 
 def main():
     """Main setup function"""
     print("🚀 Enhanced LLM Proxy Setup")
-    print("="*50)
-    
+    print("=" * 50)
+
     # Create project structure
     create_project_structure()
-    
+
     # Check dependencies
     dependencies_ok = check_dependencies()
-    
+
     # Check for Ollama
     print("\n🔍 Checking for Ollama...")
     try:
         import subprocess
+
         result = subprocess.run(["ollama", "--version"], capture_output=True, text=True)
         if result.returncode == 0:
             print(f"  ✅ Ollama installed: {result.stdout.strip()}")
@@ -300,11 +295,13 @@ def main():
     except FileNotFoundError:
         print("  ❌ Ollama not found")
         print("  Install from: https://ollama.ai")
-    
+
     print("\n✅ Setup script completed!")
-    
+
     if not dependencies_ok:
-        print("\n⚠️  Please install missing dependencies before running the application.")
+        print(
+            "\n⚠️  Please install missing dependencies before running the application."
+        )
         sys.exit(1)
 
 

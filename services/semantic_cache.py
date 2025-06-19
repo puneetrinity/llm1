@@ -18,9 +18,7 @@ class SemanticCache:
         self.max_cache_size = 5000
 
     async def get_semantic_match(
-        self,
-        query: str,
-        max_results: int = 3
+        self, query: str, max_results: int = 3
     ) -> Optional[Tuple[str, float, Any]]:
         """Find semantically similar cached responses"""
 
@@ -37,11 +35,14 @@ class SemanticCache:
 
             for cache_key, stored_embedding in self.embeddings_store.items():
                 similarity = np.dot(query_embedding[0], stored_embedding) / (
-                    np.linalg.norm(
-                        query_embedding[0]) * np.linalg.norm(stored_embedding)
+                    np.linalg.norm(query_embedding[0])
+                    * np.linalg.norm(stored_embedding)
                 )
 
-                if similarity > best_similarity and similarity > self.similarity_threshold:
+                if (
+                    similarity > best_similarity
+                    and similarity > self.similarity_threshold
+                ):
                     best_similarity = similarity
                     best_match = cache_key
 
@@ -62,12 +63,7 @@ class SemanticCache:
             logging.error(f"Error in semantic cache lookup: {str(e)}")
             return None
 
-    async def store_with_semantics(
-        self,
-        query: str,
-        response: Any,
-        ttl: int = 7200
-    ):
+    async def store_with_semantics(self, query: str, response: Any, ttl: int = 7200):
         """Store response with semantic embedding"""
 
         try:
@@ -90,7 +86,7 @@ class SemanticCache:
                 "response": compressed_response,
                 "created_at": datetime.now(),
                 "expires_at": expires_at,
-                "access_count": 0
+                "access_count": 0,
             }
 
             # Cleanup if cache is too large
@@ -122,7 +118,7 @@ class SemanticCache:
         # Sort by access count and age
         sorted_entries = sorted(
             self.cache_store.items(),
-            key=lambda x: (x[1]["access_count"], x[1]["created_at"])
+            key=lambda x: (x[1]["access_count"], x[1]["created_at"]),
         )
 
         # Remove bottom 20%

@@ -8,8 +8,7 @@ from pathlib import Path
 
 
 def setup_logging():
-    logging.basicConfig(level=logging.INFO,
-                        format='%(levelname)s: %(message)s')
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
 
 def main():
@@ -27,7 +26,7 @@ def main():
         if Path("semantic_classifier.py").exists():
             dst = services_dir / "semantic_classifier.py"
             if dst.exists():
-                shutil.copy(dst, dst.with_suffix('.backup'))
+                shutil.copy(dst, dst.with_suffix(".backup"))
                 print("📋 Backed up existing semantic_classifier.py")
             shutil.copy("semantic_classifier.py", dst)
             print("✅ Added semantic_classifier.py")
@@ -47,12 +46,12 @@ def main():
         # Update main.py safely
         main_file = app_dir / "main.py"
         if main_file.exists():
-            with open(main_file, 'r') as f:
+            with open(main_file, "r") as f:
                 content = f.read()
 
             if "semantic_enhanced_router" not in content:
                 # Backup main.py
-                shutil.copy(main_file, main_file.with_suffix('.backup'))
+                shutil.copy(main_file, main_file.with_suffix(".backup"))
                 print("📋 Backed up main.py")
 
                 # Add semantic import after existing imports
@@ -72,13 +71,16 @@ except ImportError as e:
                 if "from services.enhanced_router import" in content:
                     content = content.replace(
                         "from services.enhanced_router import",
-                        "from services.enhanced_router import" +
-                        semantic_import + "\n# Original import:"
+                        "from services.enhanced_router import"
+                        + semantic_import
+                        + "\n# Original import:",
                     )
                 elif "from services.router import" in content:
                     content = content.replace(
                         "from services.router import",
-                        "from services.router import" + semantic_import + "\n# Original import:"
+                        "from services.router import"
+                        + semantic_import
+                        + "\n# Original import:",
                     )
 
                 # Replace router initialization
@@ -93,8 +95,7 @@ except ImportError as e:
             logging.info("🔧 Using standard EnhancedLLMRouter")"""
 
                     content = content.replace(
-                        "llm_router = EnhancedLLMRouter(ollama_client)",
-                        replacement
+                        "llm_router = EnhancedLLMRouter(ollama_client)", replacement
                     )
                 elif "llm_router = LLMRouter(ollama_client)" in content:
                     replacement = """        # Use semantic enhanced router if available
@@ -107,12 +108,11 @@ except ImportError as e:
             logging.info("🔧 Using standard LLMRouter")"""
 
                     content = content.replace(
-                        "llm_router = LLMRouter(ollama_client)",
-                        replacement
+                        "llm_router = LLMRouter(ollama_client)", replacement
                     )
 
                 # Write updated content
-                with open(main_file, 'w') as f:
+                with open(main_file, "w") as f:
                     f.write(content)
 
                 print("✅ Enhanced main.py with semantic routing")
@@ -129,6 +129,7 @@ except ImportError as e:
     except Exception as e:
         print(f"❌ Integration failed: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
 

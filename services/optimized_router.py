@@ -13,15 +13,15 @@ except ImportError:
     try:
         from services.router import LLMRouter as BaseRouter
     except ImportError:
-        logging.error(
-            "Could not import base LLMRouter - enhanced router disabled")
+        logging.error("Could not import base LLMRouter - enhanced router disabled")
         BaseRouter = None
 
 try:
     from services.semantic_classifier import SemanticIntentClassifier
 except ImportError:
     logging.warning(
-        "SemanticIntentClassifier not available - using rule-based classification only")
+        "SemanticIntentClassifier not available - using rule-based classification only"
+    )
     SemanticIntentClassifier = None
 
 try:
@@ -41,17 +41,18 @@ class EnhancedLLMRouter:
         else:
             self.base_router = None
             logging.error(
-                "Base router not available - enhanced router will have limited functionality")
+                "Base router not available - enhanced router will have limited functionality"
+            )
 
         self.ollama_client = ollama_client
         self.semantic_classifier = None
         self.classification_cache = {}
         self.cache_max_size = 1000
         self.cache_stats = {
-            'hits': 0,
-            'misses': 0,
-            'semantic_calls': 0,
-            'rule_based_calls': 0
+            "hits": 0,
+            "misses": 0,
+            "semantic_calls": 0,
+            "rule_based_calls": 0,
         }
 
         # Task management for async semantic classification
@@ -61,23 +62,38 @@ class EnhancedLLMRouter:
 
         # Enhanced intent patterns (more comprehensive)
         self.intent_patterns = {
-            'math': r'\b(?:calculate|compute|solve|equation|math|arithmetic|what.*is.*[\d\+\-\*/]|[\d\+\-\*/].*equals?)\b',
-            'factual': r'\b(?:what is|who is|when did|where is|define|explain|fact|tell me about)\b',
-            'creative': r'\b(?:write|create|compose|story|poem|creative|imagine|generate|draft)\b',
-            'coding': r'\b(?:code|function|algorithm|debug|program|script|python|javascript|api|sql)\b',
-            'resume': r'\b(?:resume|cv|experience|skills|qualifications|work history|career summary)\b',
-            'interview': r'\b(?:interview|job|career|hiring|prepare.*interview|interview.*question)\b',
-            'analysis': r'\b(?:analyze|review|evaluate|assess|compare|examine|pros.*cons|advantages.*disadvantages)\b',
-            'translation': r'\b(?:translate|translation|language.*to.*language)\b',
-            'summarization': r'\b(?:summarize|summary|tldr|brief|key points)\b'
+            "math": r"\b(?:calculate|compute|solve|equation|math|arithmetic|what.*is.*[\d\+\-\*/]|[\d\+\-\*/].*equals?)\b",
+            "factual": r"\b(?:what is|who is|when did|where is|define|explain|fact|tell me about)\b",
+            "creative": r"\b(?:write|create|compose|story|poem|creative|imagine|generate|draft)\b",
+            "coding": r"\b(?:code|function|algorithm|debug|program|script|python|javascript|api|sql)\b",
+            "resume": r"\b(?:resume|cv|experience|skills|qualifications|work history|career summary)\b",
+            "interview": r"\b(?:interview|job|career|hiring|prepare.*interview|interview.*question)\b",
+            "analysis": r"\b(?:analyze|review|evaluate|assess|compare|examine|pros.*cons|advantages.*disadvantages)\b",
+            "translation": r"\b(?:translate|translation|language.*to.*language)\b",
+            "summarization": r"\b(?:summarize|summary|tldr|brief|key points)\b",
         }
 
         # Model capabilities mapping - Updated for 4 models
         self.model_capabilities = {
-            'phi3.5': ['math', 'reasoning', 'logic', 'scientific', 'analysis'],
-            'mistral:7b-instruct-q4_0': ['factual', 'general', 'translation', 'summary'],
-            'gemma:7b-instruct': ['coding', 'technical', 'programming', 'documentation'],
-            'llama3:8b-instruct-q4_0': ['creative', 'storytelling', 'writing', 'conversation']
+            "phi3.5": ["math", "reasoning", "logic", "scientific", "analysis"],
+            "mistral:7b-instruct-q4_0": [
+                "factual",
+                "general",
+                "translation",
+                "summary",
+            ],
+            "gemma:7b-instruct": [
+                "coding",
+                "technical",
+                "programming",
+                "documentation",
+            ],
+            "llama3:8b-instruct-q4_0": [
+                "creative",
+                "storytelling",
+                "writing",
+                "conversation",
+            ],
         }
 
         self._initialized = False
@@ -92,7 +108,7 @@ class EnhancedLLMRouter:
             if self.base_router:
                 await self.base_router.initialize()
                 # Copy available models from base router
-                if hasattr(self.base_router, 'available_models'):
+                if hasattr(self.base_router, "available_models"):
                     self.available_models = self.base_router.available_models
                 else:
                     self.available_models = {}
@@ -100,10 +116,16 @@ class EnhancedLLMRouter:
             else:
                 # Fallback initialization
                 self.available_models = {
-                    'phi3.5': {'priority': 1, 'good_for': ['math', 'reasoning']},
-                    'mistral:7b-instruct-q4_0': {'priority': 2, 'good_for': ['general']},
-                    'gemma:7b-instruct': {'priority': 2, 'good_for': ['coding']},
-                    'llama3:8b-instruct-q4_0': {'priority': 3, 'good_for': ['creative']}
+                    "phi3.5": {"priority": 1, "good_for": ["math", "reasoning"]},
+                    "mistral:7b-instruct-q4_0": {
+                        "priority": 2,
+                        "good_for": ["general"],
+                    },
+                    "gemma:7b-instruct": {"priority": 2, "good_for": ["coding"]},
+                    "llama3:8b-instruct-q4_0": {
+                        "priority": 3,
+                        "good_for": ["creative"],
+                    },
                 }
                 logging.warning("Using fallback model configuration")
 
@@ -113,19 +135,21 @@ class EnhancedLLMRouter:
                     self.semantic_classifier = SemanticIntentClassifier()
                     await self.semantic_classifier.initialize()
                     if self.semantic_classifier.model:
-                        logging.info(
-                            "✅ Semantic classifier initialized successfully")
+                        logging.info("✅ Semantic classifier initialized successfully")
                     else:
                         logging.warning(
-                            "⚠️ Semantic classifier model not loaded - using rule-based only")
+                            "⚠️ Semantic classifier model not loaded - using rule-based only"
+                        )
                         self.semantic_classifier = None
                 except Exception as e:
                     logging.warning(
-                        f"⚠️ Semantic classifier initialization failed: {str(e)}")
+                        f"⚠️ Semantic classifier initialization failed: {str(e)}"
+                    )
                     self.semantic_classifier = None
             else:
                 logging.info(
-                    "ℹ️ Semantic classifier not available - using rule-based classification")
+                    "ℹ️ Semantic classifier not available - using rule-based classification"
+                )
 
             self._initialized = True
             logging.info("🎯 Enhanced LLM Router initialized successfully")
@@ -141,7 +165,7 @@ class EnhancedLLMRouter:
             await self.initialize()
 
         # Handle different request types
-        if hasattr(request, 'model') and request.model:
+        if hasattr(request, "model") and request.model:
             # Check if explicitly requested model is available
             if request.model in self.available_models:
                 return request.model
@@ -152,20 +176,22 @@ class EnhancedLLMRouter:
             return self._get_default_model()
 
         # Get explicit intent if available
-        explicit_intent = getattr(request, 'intent', None)
+        explicit_intent = getattr(request, "intent", None)
 
         # Classify intent
         intent = await self.classify_intent(text_content, explicit_intent)
 
         # Select model based on intent and requirements
-        selected_model = self._select_model_for_intent(
-            intent, text_content, request)
+        selected_model = self._select_model_for_intent(intent, text_content, request)
 
         logging.info(
-            f"🎯 Enhanced routing: intent='{intent}' → model='{selected_model}'")
+            f"🎯 Enhanced routing: intent='{intent}' → model='{selected_model}'"
+        )
         return selected_model
 
-    async def classify_intent(self, text: str, explicit_intent: Optional[str]=None) -> str:
+    async def classify_intent(
+        self, text: str, explicit_intent: Optional[str] = None
+    ) -> str:
         """Enhanced intent classification with caching and fallbacks"""
 
         if explicit_intent:
@@ -174,15 +200,15 @@ class EnhancedLLMRouter:
         # Check cache first
         cache_key = self._generate_cache_key(text)
         if cache_key in self.classification_cache:
-            self.cache_stats['hits'] += 1
+            self.cache_stats["hits"] += 1
             return self.classification_cache[cache_key]
 
-        self.cache_stats['misses'] += 1
+        self.cache_stats["misses"] += 1
 
         # Try rule-based classification first (fast and reliable)
         rule_based_intent = self._rule_based_classification(text)
-        if rule_based_intent != 'unknown':
-            self.cache_stats['rule_based_calls'] += 1
+        if rule_based_intent != "unknown":
+            self.cache_stats["rule_based_calls"] += 1
             self._cache_classification(cache_key, rule_based_intent)
             return rule_based_intent
 
@@ -190,8 +216,8 @@ class EnhancedLLMRouter:
         if self.semantic_classifier:
             try:
                 semantic_intent = await self._semantic_classification(text)
-                if semantic_intent != 'unknown':
-                    self.cache_stats['semantic_calls'] += 1
+                if semantic_intent != "unknown":
+                    self.cache_stats["semantic_calls"] += 1
                     self._cache_classification(cache_key, semantic_intent)
                     return semantic_intent
             except Exception as e:
@@ -208,32 +234,32 @@ class EnhancedLLMRouter:
 
         try:
             # Handle ChatCompletionRequest
-            if hasattr(request, 'messages') and request.messages:
+            if hasattr(request, "messages") and request.messages:
                 for message in request.messages:
-                    if hasattr(message, 'role') and hasattr(message, 'content'):
-                        if message.role == 'user':
+                    if hasattr(message, "role") and hasattr(message, "content"):
+                        if message.role == "user":
                             text_parts.append(message.content)
                     elif isinstance(message, dict):
-                        if message.get('role') == 'user':
-                            text_parts.append(message.get('content', ''))
+                        if message.get("role") == "user":
+                            text_parts.append(message.get("content", ""))
 
             # Handle CompletionRequest
-            elif hasattr(request, 'prompt') and request.prompt:
+            elif hasattr(request, "prompt") and request.prompt:
                 text_parts.append(request.prompt)
 
             # Handle dict-like requests
             elif isinstance(request, dict):
-                if 'messages' in request:
-                    for msg in request['messages']:
-                        if msg.get('role') == 'user':
-                            text_parts.append(msg.get('content', ''))
-                elif 'prompt' in request:
-                    text_parts.append(request['prompt'])
+                if "messages" in request:
+                    for msg in request["messages"]:
+                        if msg.get("role") == "user":
+                            text_parts.append(msg.get("content", ""))
+                elif "prompt" in request:
+                    text_parts.append(request["prompt"])
 
         except Exception as e:
             logging.warning(f"Error extracting text content: {str(e)}")
 
-        return ' '.join(text_parts) if text_parts else ''
+        return " ".join(text_parts) if text_parts else ""
 
     def _rule_based_classification(self, text: str) -> str:
         """Rule-based classification using enhanced patterns"""
@@ -250,31 +276,32 @@ class EnhancedLLMRouter:
         if intent_scores:
             return max(intent_scores.items(), key=lambda x: x[1])[0]
 
-        return 'unknown'
+        return "unknown"
 
     async def _semantic_classification(self, text: str) -> str:
         """Semantic classification with proper error handling"""
         if not self.semantic_classifier:
-            return 'unknown'
+            return "unknown"
 
         try:
             intent, confidence = await self.semantic_classifier.classify_intent(text)
 
             # Use result only if confidence is high enough
-            threshold = getattr(self.semantic_classifier,
-                                'confidence_threshold', 0.7)
+            threshold = getattr(self.semantic_classifier, "confidence_threshold", 0.7)
             if confidence >= threshold:
                 logging.debug(
-                    f"Semantic classification: {intent} (confidence: {confidence:.3f})")
+                    f"Semantic classification: {intent} (confidence: {confidence:.3f})"
+                )
                 return intent
             else:
                 logging.debug(
-                    f"Semantic classification confidence too low: {confidence:.3f} < {threshold}")
-                return 'unknown'
+                    f"Semantic classification confidence too low: {confidence:.3f} < {threshold}"
+                )
+                return "unknown"
 
         except Exception as e:
             logging.error(f"Semantic classification error: {str(e)}")
-            return 'unknown'
+            return "unknown"
 
     def _heuristic_classification(self, text: str) -> str:
         """Improved heuristic classification as final fallback"""
@@ -283,21 +310,59 @@ class EnhancedLLMRouter:
 
         # Length-based heuristics
         if word_count < 5:
-            return 'factual'  # Very short queries are usually factual
+            return "factual"  # Very short queries are usually factual
         elif word_count > 150:
-            if any(word in text_lower for word in ['analyze', 'review', 'evaluate', 'compare']):
-                return 'analysis'
+            if any(
+                word in text_lower
+                for word in ["analyze", "review", "evaluate", "compare"]
+            ):
+                return "analysis"
             else:
-                return 'creative'  # Long queries are often creative
+                return "creative"  # Long queries are often creative
 
         # Content-based heuristics with better patterns
         content_indicators = {
-            'resume': ['resume', 'cv', 'experience', 'qualifications', 'work history', 'skills'],
-            'interview': ['interview', 'job application', 'career', 'hiring', 'position'],
-            'creative': ['write', 'create', 'compose', 'story', 'poem', 'article', 'blog'],
-            'coding': ['code', 'function', 'algorithm', 'programming', 'script', 'debug'],
-            'math': ['calculate', 'solve', 'equation', 'formula', 'math', 'arithmetic'],
-            'analysis': ['analyze', 'compare', 'evaluate', 'review', 'assess', 'examine']
+            "resume": [
+                "resume",
+                "cv",
+                "experience",
+                "qualifications",
+                "work history",
+                "skills",
+            ],
+            "interview": [
+                "interview",
+                "job application",
+                "career",
+                "hiring",
+                "position",
+            ],
+            "creative": [
+                "write",
+                "create",
+                "compose",
+                "story",
+                "poem",
+                "article",
+                "blog",
+            ],
+            "coding": [
+                "code",
+                "function",
+                "algorithm",
+                "programming",
+                "script",
+                "debug",
+            ],
+            "math": ["calculate", "solve", "equation", "formula", "math", "arithmetic"],
+            "analysis": [
+                "analyze",
+                "compare",
+                "evaluate",
+                "review",
+                "assess",
+                "examine",
+            ],
         }
 
         for intent, indicators in content_indicators.items():
@@ -305,7 +370,7 @@ class EnhancedLLMRouter:
                 return intent
 
         # Default to factual for general questions
-        return 'factual'
+        return "factual"
 
     def _select_model_for_intent(self, intent: str, text: str, request) -> str:
         """Select the best model for the given intent and requirements"""
@@ -313,27 +378,30 @@ class EnhancedLLMRouter:
         # Get models that are good for this intent
         suitable_models = []
         for model_name, capabilities in self.model_capabilities.items():
-            if model_name in self.available_models and (intent in capabilities or 'general' in capabilities):
+            if model_name in self.available_models and (
+                intent in capabilities or "general" in capabilities
+            ):
                 model_config = self.available_models[model_name]
-                suitable_models.append(
-                    (model_name, model_config.get('priority', 99)))
+                suitable_models.append((model_name, model_config.get("priority", 99)))
 
         # If no specific models found, use all available models
         if not suitable_models:
-            suitable_models = [(name, config.get('priority', 99))
-                             for name, config in self.available_models.items()]
+            suitable_models = [
+                (name, config.get("priority", 99))
+                for name, config in self.available_models.items()
+            ]
 
         if not suitable_models:
             return self._get_default_model()
 
         # Consider request requirements
-        max_tokens = getattr(request, 'max_tokens', None) or 2048
+        max_tokens = getattr(request, "max_tokens", None) or 2048
 
         # Filter by context length if available
         context_suitable = []
         for model_name, priority in suitable_models:
             model_config = self.available_models[model_name]
-            max_context = model_config.get('max_context', 4096)
+            max_context = model_config.get("max_context", 4096)
             if max_context >= max_tokens:
                 context_suitable.append((model_name, priority))
 
@@ -348,9 +416,11 @@ class EnhancedLLMRouter:
         """Get default model as fallback"""
         if self.available_models:
             # Return model with highest priority (lowest priority number)
-            return min(self.available_models.items(), key=lambda x: x[1].get('priority', 99))[0]
+            return min(
+                self.available_models.items(), key=lambda x: x[1].get("priority", 99)
+            )[0]
         else:
-            return 'mistral:7b-instruct-q4_0'  # Hardcoded fallback
+            return "mistral:7b-instruct-q4_0"  # Hardcoded fallback
 
     def _generate_cache_key(self, text: str) -> str:
         """Generate cache key from text (first 200 chars for efficiency)"""
@@ -363,8 +433,7 @@ class EnhancedLLMRouter:
         if len(self.classification_cache) >= self.cache_max_size:
             # Remove oldest 20% of entries (simple FIFO)
             items_to_remove = len(self.classification_cache) // 5
-            keys_to_remove = list(self.classification_cache.keys())[
-                                  :items_to_remove]
+            keys_to_remove = list(self.classification_cache.keys())[:items_to_remove]
             for key in keys_to_remove:
                 del self.classification_cache[key]
 
@@ -378,55 +447,55 @@ class EnhancedLLMRouter:
 
     def _cleanup_background_tasks(self):
         """Clean up completed background tasks"""
-        completed_tasks = [
-            task for task in self.background_tasks if task.done()]
+        completed_tasks = [task for task in self.background_tasks if task.done()]
         for task in completed_tasks:
             self.background_tasks.discard(task)
 
     # Delegate other methods to base router if available
     async def ensure_model_loaded(self, model: str) -> bool:
         """Ensure model is loaded"""
-        if self.base_router and hasattr(self.base_router, 'ensure_model_loaded'):
+        if self.base_router and hasattr(self.base_router, "ensure_model_loaded"):
             return await self.base_router.ensure_model_loaded(model)
         return True  # Assume loaded
 
     async def process_chat_completion(self, request, model: str):
         """Process chat completion"""
-        if self.base_router and hasattr(self.base_router, 'process_chat_completion'):
+        if self.base_router and hasattr(self.base_router, "process_chat_completion"):
             return await self.base_router.process_chat_completion(request, model)
         else:
-            raise NotImplementedError(
-                "Base router not available for processing")
+            raise NotImplementedError("Base router not available for processing")
 
     async def get_available_models(self) -> List[Dict[str, Any]]:
         """Get available models"""
-        if self.base_router and hasattr(self.base_router, 'get_available_models'):
+        if self.base_router and hasattr(self.base_router, "get_available_models"):
             return await self.base_router.get_available_models()
         else:
             # Return basic model info
-            return [{"id": model, "object": "model"} for model in self.available_models.keys()]
+            return [
+                {"id": model, "object": "model"}
+                for model in self.available_models.keys()
+            ]
 
     def get_classification_stats(self) -> Dict[str, Any]:
         """Get comprehensive classification statistics"""
 
-        total_classifications = self.cache_stats['hits'] + self.cache_stats['misses']
-        hit_rate = (self.cache_stats['hits'] /
-                    max(1, total_classifications)) * 100
+        total_classifications = self.cache_stats["hits"] + self.cache_stats["misses"]
+        hit_rate = (self.cache_stats["hits"] / max(1, total_classifications)) * 100
 
         stats = {
             "cache_stats": {
                 "size": len(self.classification_cache),
                 "max_size": self.cache_max_size,
                 "hit_rate": hit_rate,
-                **self.cache_stats
+                **self.cache_stats,
             },
             "classification_methods": {
                 "semantic_available": self.semantic_classifier is not None,
-                "rule_based_calls": self.cache_stats['rule_based_calls'],
-                "semantic_calls": self.cache_stats['semantic_calls']
+                "rule_based_calls": self.cache_stats["rule_based_calls"],
+                "semantic_calls": self.cache_stats["semantic_calls"],
             },
             "supported_intents": list(self.intent_patterns.keys()),
-            "model_capabilities": self.model_capabilities
+            "model_capabilities": self.model_capabilities,
         }
 
         # Add semantic classifier stats if available
@@ -443,22 +512,28 @@ class EnhancedLLMRouter:
         """Get routing optimization recommendations"""
         recommendations = []
 
-        total_calls = self.cache_stats['rule_based_calls'] + self.cache_stats['semantic_calls']
+        total_calls = (
+            self.cache_stats["rule_based_calls"] + self.cache_stats["semantic_calls"]
+        )
         if total_calls > 0:
-            semantic_ratio = self.cache_stats['semantic_calls'] / total_calls
+            semantic_ratio = self.cache_stats["semantic_calls"] / total_calls
             if semantic_ratio < 0.1:
                 recommendations.append(
-                    "Consider enabling semantic classification for better routing accuracy")
+                    "Consider enabling semantic classification for better routing accuracy"
+                )
 
-        cache_hit_rate = self.cache_stats['hits'] / max(
-            1, self.cache_stats['hits'] + self.cache_stats['misses'])
+        cache_hit_rate = self.cache_stats["hits"] / max(
+            1, self.cache_stats["hits"] + self.cache_stats["misses"]
+        )
         if cache_hit_rate < 0.5:
             recommendations.append(
-                "Low cache hit rate - consider increasing cache size or review query patterns")
+                "Low cache hit rate - consider increasing cache size or review query patterns"
+            )
 
         if len(self.available_models) < 2:
             recommendations.append(
-                "Consider adding more models for better intent-based routing")
+                "Consider adding more models for better intent-based routing"
+            )
 
         return recommendations
 
@@ -477,10 +552,11 @@ class EnhancedLLMRouter:
         self.classification_cache.clear()
 
         # Cleanup base router
-        if self.base_router and hasattr(self.base_router, 'cleanup'):
+        if self.base_router and hasattr(self.base_router, "cleanup"):
             await self.base_router.cleanup()
 
         logging.info("Enhanced router cleanup completed")
+
 
 # Factory function for easy creation
 def create_enhanced_router(ollama_client=None) -> EnhancedLLMRouter:

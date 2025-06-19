@@ -12,6 +12,7 @@ import asyncio
 # Optional imports with fallbacks
 try:
     import redis.asyncio as redis
+
     REDIS_AVAILABLE = True
 except ImportError:
     REDIS_AVAILABLE = False
@@ -19,11 +20,11 @@ except ImportError:
 
 try:
     from sentence_transformers import SentenceTransformer
+
     SEMANTIC_AVAILABLE = True
 except ImportError:
     SEMANTIC_AVAILABLE = False
-    logging.info(
-        "Sentence transformers not available - semantic caching disabled")
+    logging.info("Sentence transformers not available - semantic caching disabled")
 
 from utils.memory_manager import allocate_memory, deallocate_memory
 
@@ -31,6 +32,7 @@ from utils.memory_manager import allocate_memory, deallocate_memory
 @dataclass
 class CacheConfig:
     """Configuration for smart caching system"""
+
     # Redis settings
     redis_url: str = "redis://localhost:6379"
     redis_db: int = 0
@@ -61,7 +63,7 @@ class CacheEntry:
         self.expires_at = self.created_at + ttl
         self.access_count = 0
         self.last_accessed = self.created_at
-        self.size_bytes = len(str(value).encode('utf-8'))
+        self.size_bytes = len(str(value).encode("utf-8"))
 
     def is_expired(self) -> bool:
         """Check if cache entry has expired"""
@@ -75,13 +77,13 @@ class CacheEntry:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization"""
         return {
-            'key': self.key,
-            'value': self.value,
-            'created_at': self.created_at,
-            'expires_at': self.expires_at,
-            'access_count': self.access_count,
-            'last_accessed': self.last_accessed,
-            'size_bytes': self.size_bytes
+            "key": self.key,
+            "value": self.value,
+            "created_at": self.created_at,
+            "expires_at": self.expires_at,
+            "access_count": self.access_count,
+            "last_accessed": self.last_accessed,
+            "size_bytes": self.size_bytes,
         }
 
 
@@ -144,10 +146,14 @@ class MemoryCache:
         """Get cache statistics"""
         total_size = sum(entry.size_bytes for entry in self.cache.values())
         return {
-            'entries': len(self.cache),
-            'max_size': self.max_size,
-            'total_size_bytes': total_size,
-            'avg_access_count': np.mean([e.access_count for e in self.cache.values()]) if self.cache else 0
+            "entries": len(self.cache),
+            "max_size": self.max_size,
+            "total_size_bytes": total_size,
+            "avg_access_count": (
+                np.mean([e.access_count for e in self.cache.values()])
+                if self.cache
+                else 0
+            ),
         }
 
 
@@ -168,7 +174,7 @@ class SemanticIndex:
 
         try:
             # Allocate memory for semantic model
-            if not allocate_memory('semantic_model', 500):  # 500MB for model
+            if not allocate_memory("semantic_model", 500):  # 500MB for model
                 logging.warning("Could not allocate memory for semantic model")
                 return
 
@@ -179,7 +185,7 @@ class SemanticIndex:
 
         except Exception as e:
             logging.error(f"Failed to initialize semantic model: {e}")
-            deallocate_memory('semantic_model')
+            deallocate_memory("semantic_model")
 
     async def add_embedding(self, key: str, content: str):
         """Add content embedding to index"""
@@ -203,7 +209,9 @@ class SemanticIndex:
         except Exception as e:
             logging.error(f"Failed to add embedding: {e}")
 
-    async def find_similar(self, content: str, threshold: float = 0.85, max_results: int = 3) -> List[tuple]:
+    async def find_similar(
+        self, content: str, threshold: float = 0.85, max_results: int = 3
+    ) -> List[tuple]:
         """Find similar cached content"""
         if not self._initialized or not self.embeddings:
             return []
@@ -232,10 +240,10 @@ class SemanticIndex:
     def get_stats(self) -> Dict[str, Any]:
         """Get semantic index statistics"""
         return {
-            'initialized': self._initialized,
-            'model_name': self.model_name,
-            'embeddings_count': len(self.embeddings),
-            'content_keys': len(self.key_to_content)
+            "initialized": self._initialized,
+            "model_name": self.model_name,
+            "embeddings_count": len(self.embeddings),
+            "content_keys": len(self.key_to_content),
         }
 
 
@@ -250,12 +258,12 @@ class SmartCache:
 
         # Statistics
         self.stats = {
-            'memory_hits': 0,
-            'redis_hits': 0,
-            'semantic_hits': 0,
-            'misses': 0,
-            'sets': 0,
-            'errors': 0
+            "memory_hits": 0,
+            "redis_hits": 0,
+            "semantic_hits": 0,
+            "misses": 0,
+            "sets": 0,
+            "errors": 0,
         }
 
         self._initialized = False
@@ -272,7 +280,7 @@ class SmartCache:
                     self.config.redis_url,
                     db=self.config.redis_db,
                     socket_timeout=self.config.redis_timeout,
-                    decode_responses=True
+                    decode_responses=True,
                 )
                 # Test connection
                 await self.redis_client.ping()
@@ -295,7 +303,7 @@ class SmartCache:
         # Try memory cache first (fastest)
         value = await self.memory_cache.get(key)
         if value is not None:
-            self.stats['memory_hits'] += 1
+            self.stats["memory_hits"] += 1
             if self.config.cache_hit_logging:
                 logging.debug(f"Memory cache hit: {key}")
             return value
@@ -307,21 +315,22 @@ class SmartCache:
                 if cached_data:
                     value = json.loads(cached_data)
                     # Populate memory cache
-                    await self.memory_cache.set(key, value, self.config.memory_ttl_seconds)
-                    self.stats['redis_hits'] += 1
+                    await self.memory_cache.set(
+                        key, value, self.config.memory_ttl_seconds
+                    )
+                    self.stats["redis_hits"] += 1
                     if self.config.cache_hit_logging:
                         logging.debug(f"Redis cache hit: {key}")
                     return value
             except Exception as e:
                 logging.error(f"Redis get error: {e}")
-                self.stats['errors'] += 1
+                self.stats["errors"] += 1
 
         # Try semantic similarity search
         if query_text and self.semantic_index._initialized:
             try:
                 similar_keys = await self.semantic_index.find_similar(
-                    query_text,
-                    self.config.similarity_threshold
+                    query_text, self.config.similarity_threshold
                 )
 
                 for similar_key, similarity in similar_keys:
@@ -336,10 +345,11 @@ class SmartCache:
                             logging.error(f"Redis semantic get error: {e}")
 
                     if similar_value is not None:
-                        self.stats['semantic_hits'] += 1
+                        self.stats["semantic_hits"] += 1
                         if self.config.cache_hit_logging:
                             logging.info(
-                                f"Semantic cache hit: {similar_key} (similarity: {similarity:.3f})")
+                                f"Semantic cache hit: {similar_key} (similarity: {similarity:.3f})"
+                            )
 
                         # Cache this result with the new key
                         await self.set(key, similar_value, query_text=query_text)
@@ -347,9 +357,9 @@ class SmartCache:
 
             except Exception as e:
                 logging.error(f"Semantic search error: {e}")
-                self.stats['errors'] += 1
+                self.stats["errors"] += 1
 
-        self.stats['misses'] += 1
+        self.stats["misses"] += 1
         return None
 
     async def set(self, key: str, value: Any, ttl: int = None, query_text: str = None):
@@ -367,19 +377,17 @@ class SmartCache:
             if self.redis_client:
                 try:
                     await self.redis_client.setex(
-                        key,
-                        effective_ttl,
-                        json.dumps(value, default=str)
+                        key, effective_ttl, json.dumps(value, default=str)
                     )
                 except Exception as e:
                     logging.error(f"Redis set error: {e}")
-                    self.stats['errors'] += 1
+                    self.stats["errors"] += 1
 
             # Add to semantic index
             if query_text:
                 await self.semantic_index.add_embedding(key, query_text)
 
-            self.stats['sets'] += 1
+            self.stats["sets"] += 1
 
             # Async write optimization
             if self.config.enable_async_write:
@@ -388,7 +396,7 @@ class SmartCache:
 
         except Exception as e:
             logging.error(f"Cache set error: {e}")
-            self.stats['errors'] += 1
+            self.stats["errors"] += 1
 
     async def delete(self, key: str):
         """Delete value from all cache layers"""
@@ -404,7 +412,7 @@ class SmartCache:
 
         except Exception as e:
             logging.error(f"Cache delete error: {e}")
-            self.stats['errors'] += 1
+            self.stats["errors"] += 1
 
     async def clear(self):
         """Clear all cache layers"""
@@ -419,17 +427,17 @@ class SmartCache:
 
         except Exception as e:
             logging.error(f"Cache clear error: {e}")
-            self.stats['errors'] += 1
+            self.stats["errors"] += 1
 
     def generate_cache_key(self, request_data: Dict[str, Any]) -> str:
         """Generate consistent cache key from request data"""
         # Create a normalized representation of the request
         key_data = {
-            'model': request_data.get('model'),
-            'messages': request_data.get('messages', []),
-            'temperature': request_data.get('temperature', 0.7),
-            'max_tokens': request_data.get('max_tokens'),
-            'top_p': request_data.get('top_p', 1.0)
+            "model": request_data.get("model"),
+            "messages": request_data.get("messages", []),
+            "temperature": request_data.get("temperature", 0.7),
+            "max_tokens": request_data.get("max_tokens"),
+            "top_p": request_data.get("top_p", 1.0),
         }
 
         # Create hash of the key data
@@ -438,50 +446,55 @@ class SmartCache:
 
     def extract_query_text(self, request_data: Dict[str, Any]) -> str:
         """Extract searchable text from request for semantic indexing"""
-        messages = request_data.get('messages', [])
+        messages = request_data.get("messages", [])
         if messages:
             # Use the last user message for semantic search
             for message in reversed(messages):
-                if message.get('role') == 'user':
-                    return message.get('content', '')
-        return ''
+                if message.get("role") == "user":
+                    return message.get("content", "")
+        return ""
 
     def get_stats(self) -> Dict[str, Any]:
         """Get comprehensive cache statistics"""
-        total_requests = sum([
-            self.stats['memory_hits'],
-            self.stats['redis_hits'],
-            self.stats['semantic_hits'],
-            self.stats['misses']
-        ])
+        total_requests = sum(
+            [
+                self.stats["memory_hits"],
+                self.stats["redis_hits"],
+                self.stats["semantic_hits"],
+                self.stats["misses"],
+            ]
+        )
 
         hit_rate = 0
         if total_requests > 0:
-            total_hits = self.stats['memory_hits'] + \
-                self.stats['redis_hits'] + self.stats['semantic_hits']
+            total_hits = (
+                self.stats["memory_hits"]
+                + self.stats["redis_hits"]
+                + self.stats["semantic_hits"]
+            )
             hit_rate = (total_hits / total_requests) * 100
 
         return {
-            'hit_rate': hit_rate,
-            'total_requests': total_requests,
-            'breakdown': {
-                'memory_hits': self.stats['memory_hits'],
-                'redis_hits': self.stats['redis_hits'],
-                'semantic_hits': self.stats['semantic_hits'],
-                'misses': self.stats['misses'],
-                'sets': self.stats['sets'],
-                'errors': self.stats['errors']
+            "hit_rate": hit_rate,
+            "total_requests": total_requests,
+            "breakdown": {
+                "memory_hits": self.stats["memory_hits"],
+                "redis_hits": self.stats["redis_hits"],
+                "semantic_hits": self.stats["semantic_hits"],
+                "misses": self.stats["misses"],
+                "sets": self.stats["sets"],
+                "errors": self.stats["errors"],
             },
-            'backends': {
-                'memory': self.memory_cache.get_stats(),
-                'redis_available': self.redis_client is not None,
-                'semantic': self.semantic_index.get_stats()
+            "backends": {
+                "memory": self.memory_cache.get_stats(),
+                "redis_available": self.redis_client is not None,
+                "semantic": self.semantic_index.get_stats(),
             },
-            'config': {
-                'similarity_threshold': self.config.similarity_threshold,
-                'memory_cache_size': self.config.memory_cache_size,
-                'semantic_enabled': self.semantic_index._initialized
-            }
+            "config": {
+                "similarity_threshold": self.config.similarity_threshold,
+                "memory_cache_size": self.config.memory_cache_size,
+                "semantic_enabled": self.semantic_index._initialized,
+            },
         }
 
     async def cleanup(self):
@@ -489,7 +502,7 @@ class SmartCache:
         if self.redis_client:
             await self.redis_client.close()
 
-        deallocate_memory('semantic_model')
+        deallocate_memory("semantic_model")
         logging.info("Smart cache cleanup completed")
 
 

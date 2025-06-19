@@ -13,12 +13,14 @@ import json
 class PerformanceMonitor:
     def __init__(self):
         self.request_timings = deque(maxlen=1000)
-        self.model_performance = defaultdict(lambda: {
-            "response_times": deque(maxlen=100),
-            "throughput": deque(maxlen=100),
-            "error_count": 0,
-            "total_requests": 0
-        })
+        self.model_performance = defaultdict(
+            lambda: {
+                "response_times": deque(maxlen=100),
+                "throughput": deque(maxlen=100),
+                "error_count": 0,
+                "total_requests": 0,
+            }
+        )
 
         self.system_metrics = deque(maxlen=288)  # 24 hours at 5-min intervals
         self.monitoring_task = None
@@ -26,10 +28,10 @@ class PerformanceMonitor:
         # Performance thresholds
         self.thresholds = {
             "response_time_p95": 10.0,  # seconds
-            "cpu_usage": 80.0,          # percentage
-            "memory_usage": 85.0,       # percentage
-            "gpu_memory": 90.0,         # percentage
-            "error_rate": 5.0           # percentage
+            "cpu_usage": 80.0,  # percentage
+            "memory_usage": 85.0,  # percentage
+            "gpu_memory": 90.0,  # percentage
+            "error_rate": 5.0,  # percentage
         }
 
         self.alerts = []
@@ -70,7 +72,7 @@ class PerformanceMonitor:
             # CPU and Memory
             cpu_percent = psutil.cpu_percent(interval=1)
             memory = psutil.virtual_memory()
-            disk = psutil.disk_usage('/')
+            disk = psutil.disk_usage("/")
 
             # Network
             network = psutil.net_io_counters()
@@ -86,7 +88,7 @@ class PerformanceMonitor:
                 "disk_percent": disk.percent,
                 "network_bytes_sent": network.bytes_sent,
                 "network_bytes_recv": network.bytes_recv,
-                "gpu_metrics": gpu_metrics
+                "gpu_metrics": gpu_metrics,
             }
 
             self.system_metrics.append(metrics)
@@ -99,6 +101,7 @@ class PerformanceMonitor:
 
         try:
             import GPUtil
+
             gpus = GPUtil.getGPUs()
 
             if gpus:
@@ -108,7 +111,7 @@ class PerformanceMonitor:
                     "gpu_memory_used": gpu.memoryUsed,
                     "gpu_memory_total": gpu.memoryTotal,
                     "gpu_memory_percent": (gpu.memoryUsed / gpu.memoryTotal) * 100,
-                    "gpu_temperature": gpu.temperature
+                    "gpu_temperature": gpu.temperature,
                 }
 
         except ImportError:
@@ -124,19 +127,21 @@ class PerformanceMonitor:
         model: str,
         response_time: float,
         tokens_generated: int,
-        success: bool = True
+        success: bool = True,
     ):
         """Track individual request performance"""
 
         timestamp = datetime.now()
 
         # Overall request timing
-        self.request_timings.append({
-            "timestamp": timestamp,
-            "response_time": response_time,
-            "model": model,
-            "success": success
-        })
+        self.request_timings.append(
+            {
+                "timestamp": timestamp,
+                "response_time": response_time,
+                "model": model,
+                "success": success,
+            }
+        )
 
         # Model-specific performance
         model_stats = self.model_performance[model]
@@ -159,42 +164,53 @@ class PerformanceMonitor:
 
         # Check response time
         if current_metrics["response_time_p95"] > self.thresholds["response_time_p95"]:
-            alerts_triggered.append({
-                "type": "high_response_time",
-                "value": current_metrics["response_time_p95"],
-                "threshold": self.thresholds["response_time_p95"],
-                "timestamp": datetime.now()
-            })
+            alerts_triggered.append(
+                {
+                    "type": "high_response_time",
+                    "value": current_metrics["response_time_p95"],
+                    "threshold": self.thresholds["response_time_p95"],
+                    "timestamp": datetime.now(),
+                }
+            )
 
         # Check system resources
         if self.system_metrics:
             latest_metrics = self.system_metrics[-1]
 
             if latest_metrics["cpu_percent"] > self.thresholds["cpu_usage"]:
-                alerts_triggered.append({
-                    "type": "high_cpu_usage",
-                    "value": latest_metrics["cpu_percent"],
-                    "threshold": self.thresholds["cpu_usage"],
-                    "timestamp": datetime.now()
-                })
+                alerts_triggered.append(
+                    {
+                        "type": "high_cpu_usage",
+                        "value": latest_metrics["cpu_percent"],
+                        "threshold": self.thresholds["cpu_usage"],
+                        "timestamp": datetime.now(),
+                    }
+                )
 
             if latest_metrics["memory_percent"] > self.thresholds["memory_usage"]:
-                alerts_triggered.append({
-                    "type": "high_memory_usage",
-                    "value": latest_metrics["memory_percent"],
-                    "threshold": self.thresholds["memory_usage"],
-                    "timestamp": datetime.now()
-                })
+                alerts_triggered.append(
+                    {
+                        "type": "high_memory_usage",
+                        "value": latest_metrics["memory_percent"],
+                        "threshold": self.thresholds["memory_usage"],
+                        "timestamp": datetime.now(),
+                    }
+                )
 
             # GPU checks
             gpu_metrics = latest_metrics.get("gpu_metrics")
-            if gpu_metrics and gpu_metrics["gpu_memory_percent"] > self.thresholds["gpu_memory"]:
-                alerts_triggered.append({
-                    "type": "high_gpu_memory",
-                    "value": gpu_metrics["gpu_memory_percent"],
-                    "threshold": self.thresholds["gpu_memory"],
-                    "timestamp": datetime.now()
-                })
+            if (
+                gpu_metrics
+                and gpu_metrics["gpu_memory_percent"] > self.thresholds["gpu_memory"]
+            ):
+                alerts_triggered.append(
+                    {
+                        "type": "high_gpu_memory",
+                        "value": gpu_metrics["gpu_memory_percent"],
+                        "threshold": self.thresholds["gpu_memory"],
+                        "timestamp": datetime.now(),
+                    }
+                )
 
         # Store alerts
         self.alerts.extend(alerts_triggered)
@@ -202,14 +218,14 @@ class PerformanceMonitor:
         # Keep only recent alerts (last 24 hours)
         cutoff_time = datetime.now() - timedelta(hours=24)
         self.alerts = [
-            alert for alert in self.alerts
-            if alert["timestamp"] > cutoff_time
+            alert for alert in self.alerts if alert["timestamp"] > cutoff_time
         ]
 
         # Log critical alerts
         for alert in alerts_triggered:
             logging.warning(
-                f"Performance alert: {alert['type']} = {alert['value']:.2f} (threshold: {alert['threshold']:.2f})")
+                f"Performance alert: {alert['type']} = {alert['value']:.2f} (threshold: {alert['threshold']:.2f})"
+            )
 
     async def get_current_performance_summary(self) -> Dict[str, Any]:
         """Get current performance summary"""
@@ -223,13 +239,12 @@ class PerformanceMonitor:
             "error_rate": 0,
             "models_performance": {},
             "system_health": "unknown",
-            "active_alerts": len(self.alerts)
+            "active_alerts": len(self.alerts),
         }
 
         # Calculate response time percentiles
         if self.request_timings:
-            response_times = [req["response_time"]
-                              for req in self.request_timings]
+            response_times = [req["response_time"] for req in self.request_timings]
             response_times.sort()
 
             n = len(response_times)
@@ -238,25 +253,31 @@ class PerformanceMonitor:
             summary["response_time_p99"] = response_times[int(n * 0.99)]
 
             # Calculate error rate
-            errors = sum(
-                1 for req in self.request_timings if not req["success"])
+            errors = sum(1 for req in self.request_timings if not req["success"])
             summary["error_rate"] = (errors / n) * 100 if n > 0 else 0
 
         # Model-specific performance
         for model, stats in self.model_performance.items():
             if stats["response_times"]:
-                avg_response_time = sum(
-                    stats["response_times"]) / len(stats["response_times"])
-                avg_throughput = sum(
-                    stats["throughput"]) / len(stats["throughput"]) if stats["throughput"] else 0
-                error_rate = (stats["error_count"] / stats["total_requests"]
-                              ) * 100 if stats["total_requests"] > 0 else 0
+                avg_response_time = sum(stats["response_times"]) / len(
+                    stats["response_times"]
+                )
+                avg_throughput = (
+                    sum(stats["throughput"]) / len(stats["throughput"])
+                    if stats["throughput"]
+                    else 0
+                )
+                error_rate = (
+                    (stats["error_count"] / stats["total_requests"]) * 100
+                    if stats["total_requests"] > 0
+                    else 0
+                )
 
                 summary["models_performance"][model] = {
                     "avg_response_time": avg_response_time,
                     "avg_throughput_tokens_per_sec": avg_throughput,
                     "error_rate": error_rate,
-                    "total_requests": stats["total_requests"]
+                    "total_requests": stats["total_requests"],
                 }
 
         # System health assessment
@@ -296,8 +317,9 @@ class PerformanceMonitor:
         model_avg_times = {}
         for model, stats in self.model_performance.items():
             if stats["response_times"]:
-                model_avg_times[model] = sum(
-                    stats["response_times"]) / len(stats["response_times"])
+                model_avg_times[model] = sum(stats["response_times"]) / len(
+                    stats["response_times"]
+                )
 
         # Recommend model optimizations
         if model_avg_times:
@@ -331,11 +353,11 @@ class PerformanceMonitor:
                 )
 
         # Caching recommendations
-        recent_requests = list(
-            self.request_timings)[-100:]  # Last 100 requests
+        recent_requests = list(self.request_timings)[-100:]  # Last 100 requests
         if len(recent_requests) >= 50:
-            avg_response_time = sum(req["response_time"]
-                                    for req in recent_requests) / len(recent_requests)
+            avg_response_time = sum(
+                req["response_time"] for req in recent_requests
+            ) / len(recent_requests)
 
             if avg_response_time > 3.0:
                 recommendations.append(

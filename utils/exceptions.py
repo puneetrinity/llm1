@@ -24,7 +24,7 @@ class LLMProxyError(Exception):
         error_code: str,
         category: ErrorCategory,
         status_code: int = 500,
-        user_message: str = None
+        user_message: str = None,
     ):
         super().__init__(message)
         self.message = message
@@ -42,10 +42,11 @@ class LLMProxyError(Exception):
                     "code": self.error_code,
                     "message": self.user_message,
                     "category": self.category.value,
-                    "timestamp": self.timestamp.isoformat() + "Z"
+                    "timestamp": self.timestamp.isoformat() + "Z",
                 }
-            }
+            },
         )
+
 
 # Specific errors your app needs
 
@@ -57,7 +58,7 @@ class ModelNotAvailableError(LLMProxyError):
             error_code="MODEL_NOT_AVAILABLE",
             category=ErrorCategory.RESOURCE,
             status_code=400,
-            user_message=f"The model '{model_name}' is not available. Please check the model name."
+            user_message=f"The model '{model_name}' is not available. Please check the model name.",
         )
 
 
@@ -68,7 +69,7 @@ class OllamaConnectionError(LLMProxyError):
             error_code="OLLAMA_CONNECTION_ERROR",
             category=ErrorCategory.EXTERNAL_SERVICE,
             status_code=503,
-            user_message="AI service is temporarily unavailable. Please try again in a few moments."
+            user_message="AI service is temporarily unavailable. Please try again in a few moments.",
         )
 
 
@@ -79,5 +80,5 @@ class InvalidRequestError(LLMProxyError):
             error_code="INVALID_REQUEST",
             category=ErrorCategory.VALIDATION,
             status_code=400,
-            user_message=f"Invalid request: {issue}"
+            user_message=f"Invalid request: {issue}",
         )

@@ -16,7 +16,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             "/docs",
             "/openapi.json",
             "/redoc",
-            "/favicon.ico"
+            "/favicon.ico",
         }
 
     async def dispatch(self, request: Request, call_next):
@@ -33,16 +33,15 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         # Extract API key
-        api_key = request.headers.get(
-            self.auth_service.settings.API_KEY_HEADER)
+        api_key = request.headers.get(self.auth_service.settings.API_KEY_HEADER)
 
         if not api_key:
             return JSONResponse(
                 status_code=401,
                 content={
                     "error": "API key required",
-                    "message": f"Please provide API key in {self.auth_service.settings.API_KEY_HEADER} header"
-                }
+                    "message": f"Please provide API key in {self.auth_service.settings.API_KEY_HEADER} header",
+                },
             )
 
         # Validate API key
@@ -53,8 +52,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 status_code=403,
                 content={
                     "error": "Invalid API key",
-                    "message": "The provided API key is not valid"
-                }
+                    "message": "The provided API key is not valid",
+                },
             )
 
         # Add user info to request state
@@ -62,6 +61,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         # Log authenticated request
         logging.info(
-            f"Authenticated request: {user_info['user_id']} - {request.method} {request.url.path}")
+            f"Authenticated request: {user_info['user_id']} - {request.method} {request.url.path}"
+        )
 
         return await call_next(request)

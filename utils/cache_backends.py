@@ -12,6 +12,7 @@ from dataclasses import dataclass
 # Optional imports with fallbacks
 try:
     import redis.asyncio as redis
+
     REDIS_AVAILABLE = True
 except ImportError:
     REDIS_AVAILABLE = False
@@ -19,6 +20,7 @@ except ImportError:
 try:
     import pickle
     import gzip
+
     COMPRESSION_AVAILABLE = True
 except ImportError:
     COMPRESSION_AVAILABLE = False
@@ -27,6 +29,7 @@ except ImportError:
 @dataclass
 class CacheEntry:
     """Standardized cache entry with metadata"""
+
     key: str
     value: Any
     created_at: float
@@ -42,7 +45,7 @@ class CacheEntry:
         if self.metadata is None:
             self.metadata = {}
         if self.size_bytes == 0:
-            self.size_bytes = len(str(self.value).encode('utf-8'))
+            self.size_bytes = len(str(self.value).encode("utf-8"))
 
     def is_expired(self) -> bool:
         """Check if entry has expired"""
@@ -56,18 +59,18 @@ class CacheEntry:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization"""
         return {
-            'key': self.key,
-            'value': self.value,
-            'created_at': self.created_at,
-            'expires_at': self.expires_at,
-            'access_count': self.access_count,
-            'last_accessed': self.last_accessed,
-            'size_bytes': self.size_bytes,
-            'metadata': self.metadata
+            "key": self.key,
+            "value": self.value,
+            "created_at": self.created_at,
+            "expires_at": self.expires_at,
+            "access_count": self.access_count,
+            "last_accessed": self.last_accessed,
+            "size_bytes": self.size_bytes,
+            "metadata": self.metadata,
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'CacheEntry':
+    def from_dict(cls, data: Dict[str, Any]) -> "CacheEntry":
         """Create from dictionary"""
         return cls(**data)
 
@@ -81,7 +84,9 @@ class CacheBackend(ABC):
         pass
 
     @abstractmethod
-    async def set(self, key: str, value: Any, ttl: int = 3600, metadata: Dict[str, Any] = None) -> bool:
+    async def set(
+        self, key: str, value: Any, ttl: int = 3600, metadata: Dict[str, Any] = None
+    ) -> bool:
         """Set cache entry"""
         pass
 
@@ -120,18 +125,18 @@ class MemoryCacheBackend(CacheBackend):
         self.cache: Dict[str, CacheEntry] = {}
         self.access_order: List[str] = []
         self.stats = {
-            'hits': 0,
-            'misses': 0,
-            'sets': 0,
-            'deletes': 0,
-            'evictions': 0,
-            'memory_usage_bytes': 0
+            "hits": 0,
+            "misses": 0,
+            "sets": 0,
+            "deletes": 0,
+            "evictions": 0,
+            "memory_usage_bytes": 0,
         }
 
     async def get(self, key: str) -> Optional[CacheEntry]:
         """Get cache entry with LRU tracking"""
         if key not in self.cache:
-            self.stats['misses'] += 1
+            self.stats["misses"] += 1
             return None
 
         entry = self.cache[key]
@@ -139,17 +144,19 @@ class MemoryCacheBackend(CacheBackend):
         # Check expiration
         if entry.is_expired():
             await self.delete(key)
-            self.stats['misses'] += 1
+            self.stats["misses"] += 1
             return None
 
         # Update access tracking
         entry.access()
         self._update_access_order(key)
-        self.stats['hits'] += 1
+        self.stats["hits"] += 1
 
         return entry
 
-    async def set(self, key: str, value: Any, ttl: int = 3600, metadata: Dict[str, Any] = None) -> bool:
+    async def set(
+        self, key: str, value: Any, ttl: int = 3600, metadata: Dict[str, Any] = None
+    ) -> bool:
         """Set cache entry with eviction if needed"""
         try:
             # Remove old entry if exists
@@ -162,7 +169,7 @@ class MemoryCacheBackend(CacheBackend):
                 value=value,
                 created_at=time.time(),
                 expires_at=time.time() + ttl,
-                metadata=metadata or {}
+                metadata=metadata or {},
             )
 
             # Check memory limits before adding
@@ -172,8 +179,8 @@ class MemoryCacheBackend(CacheBackend):
             # Add entry
             self.cache[key] = entry
             self.access_order.append(key)
-            self.stats['sets'] += 1
-            self.stats['memory_usage_bytes'] += entry.size_bytes
+            self.stats["sets"] += 1
+            self.stats["memory_usage_bytes"] += entry.size_bytes
 
             # Evict if over size limit
             await self._evict_if_needed()
@@ -188,8 +195,8 @@ class MemoryCacheBackend(CacheBackend):
         """Delete cache entry"""
         if key in self.cache:
             entry = self.cache.pop(key)
-            self.stats['memory_usage_bytes'] -= entry.size_bytes
-            self.stats['deletes'] += 1
+            self.stats["memory_usage_bytes"] -= entry.size_bytes
+            self.stats["deletes"] += 1
 
             if key in self.access_order:
                 self.access_order.remove(key)
@@ -201,7 +208,7 @@ class MemoryCacheBackend(CacheBackend):
         """Clear all entries"""
         self.cache.clear()
         self.access_order.clear()
-        self.stats['memory_usage_bytes'] = 0
+        self.stats["memory_usage_bytes"] = 0
         return True
 
     async def exists(self, key: str) -> bool:
@@ -218,7 +225,9 @@ class MemoryCacheBackend(CacheBackend):
 
     def _can_add_entry(self, entry: CacheEntry) -> bool:
         """Check if entry can be added without exceeding memory limit"""
-        return (self.stats['memory_usage_bytes'] + entry.size_bytes) <= self.max_memory_bytes
+        return (
+            self.stats["memory_usage_bytes"] + entry.size_bytes
+        ) <= self.max_memory_bytes
 
     async def _evict_entries(self, needed_bytes: int):
         """Evict entries to make space"""
@@ -230,7 +239,7 @@ class MemoryCacheBackend(CacheBackend):
             if lru_key in self.cache:
                 freed_bytes += self.cache[lru_key].size_bytes
                 await self.delete(lru_key)
-                self.stats['evictions'] += 1
+                self.stats["evictions"] += 1
 
     async def _evict_if_needed(self):
         """Evict entries if over size limit"""
@@ -238,7 +247,7 @@ class MemoryCacheBackend(CacheBackend):
             lru_key = self.access_order[0]
             if lru_key in self.cache:
                 await self.delete(lru_key)
-                self.stats['evictions'] += 1
+                self.stats["evictions"] += 1
 
     def _update_access_order(self, key: str):
         """Update LRU access order"""
@@ -248,45 +257,50 @@ class MemoryCacheBackend(CacheBackend):
 
     def get_stats(self) -> Dict[str, Any]:
         """Get memory cache statistics"""
-        total_requests = self.stats['hits'] + self.stats['misses']
-        hit_rate = (self.stats['hits'] / max(1, total_requests)) * 100
+        total_requests = self.stats["hits"] + self.stats["misses"]
+        hit_rate = (self.stats["hits"] / max(1, total_requests)) * 100
 
         return {
-            'backend_type': 'memory',
-            'hit_rate': hit_rate,
-            'entries': len(self.cache),
-            'max_size': self.max_size,
-            'memory_usage_mb': self.stats['memory_usage_bytes'] / (1024 * 1024),
-            'max_memory_mb': self.max_memory_bytes / (1024 * 1024),
-            'stats': self.stats
+            "backend_type": "memory",
+            "hit_rate": hit_rate,
+            "entries": len(self.cache),
+            "max_size": self.max_size,
+            "memory_usage_mb": self.stats["memory_usage_bytes"] / (1024 * 1024),
+            "max_memory_mb": self.max_memory_bytes / (1024 * 1024),
+            "stats": self.stats,
         }
 
     async def health_check(self) -> Dict[str, Any]:
         """Check memory cache health"""
         memory_usage_percent = (
-            self.stats['memory_usage_bytes'] / self.max_memory_bytes) * 100
+            self.stats["memory_usage_bytes"] / self.max_memory_bytes
+        ) * 100
 
-        health_status = 'healthy'
+        health_status = "healthy"
         if memory_usage_percent > 90:
-            health_status = 'critical'
+            health_status = "critical"
         elif memory_usage_percent > 75:
-            health_status = 'warning'
+            health_status = "warning"
 
         return {
-            'status': health_status,
-            'memory_usage_percent': memory_usage_percent,
-            'entries': len(self.cache),
-            'evictions': self.stats['evictions']
+            "status": health_status,
+            "memory_usage_percent": memory_usage_percent,
+            "entries": len(self.cache),
+            "evictions": self.stats["evictions"],
         }
 
 
 class RedisCacheBackend(CacheBackend):
     """Redis cache backend with compression and serialization"""
 
-    def __init__(self, redis_url: str = "redis://localhost:6379",
-                 db: int = 0, timeout: int = 5,
-                 enable_compression: bool = True,
-                 key_prefix: str = "llm_cache:"):
+    def __init__(
+        self,
+        redis_url: str = "redis://localhost:6379",
+        db: int = 0,
+        timeout: int = 5,
+        enable_compression: bool = True,
+        key_prefix: str = "llm_cache:",
+    ):
         self.redis_url = redis_url
         self.db = db
         self.timeout = timeout
@@ -296,12 +310,12 @@ class RedisCacheBackend(CacheBackend):
         self._initialized = False
 
         self.stats = {
-            'hits': 0,
-            'misses': 0,
-            'sets': 0,
-            'deletes': 0,
-            'errors': 0,
-            'compression_ratio': 0
+            "hits": 0,
+            "misses": 0,
+            "sets": 0,
+            "deletes": 0,
+            "errors": 0,
+            "compression_ratio": 0,
         }
 
     async def initialize(self):
@@ -314,7 +328,7 @@ class RedisCacheBackend(CacheBackend):
                 self.redis_url,
                 db=self.db,
                 socket_timeout=self.timeout,
-                decode_responses=False  # We handle encoding ourselves
+                decode_responses=False,  # We handle encoding ourselves
             )
 
             # Test connection
@@ -335,15 +349,14 @@ class RedisCacheBackend(CacheBackend):
     def _serialize_entry(self, entry: CacheEntry) -> bytes:
         """Serialize cache entry"""
         data = entry.to_dict()
-        serialized = json.dumps(data, default=str).encode('utf-8')
+        serialized = json.dumps(data, default=str).encode("utf-8")
 
         if self.enable_compression:
             try:
                 compressed = gzip.compress(serialized)
                 # Only use compression if it saves space
                 if len(compressed) < len(serialized):
-                    self.stats['compression_ratio'] = len(
-                        compressed) / len(serialized)
+                    self.stats["compression_ratio"] = len(compressed) / len(serialized)
                     return compressed
             except Exception:
                 pass
@@ -361,7 +374,7 @@ class RedisCacheBackend(CacheBackend):
                     pass  # Not compressed
 
             # Deserialize JSON
-            entry_dict = json.loads(data.decode('utf-8'))
+            entry_dict = json.loads(data.decode("utf-8"))
             return CacheEntry.from_dict(entry_dict)
 
         except Exception as e:
@@ -374,7 +387,7 @@ class RedisCacheBackend(CacheBackend):
             await self.initialize()
 
         if not self.redis_client:
-            self.stats['misses'] += 1
+            self.stats["misses"] += 1
             return None
 
         try:
@@ -382,31 +395,33 @@ class RedisCacheBackend(CacheBackend):
             data = await self.redis_client.get(redis_key)
 
             if not data:
-                self.stats['misses'] += 1
+                self.stats["misses"] += 1
                 return None
 
             entry = self._deserialize_entry(data)
             if not entry:
-                self.stats['misses'] += 1
+                self.stats["misses"] += 1
                 return None
 
             # Check expiration (Redis TTL should handle this, but double-check)
             if entry.is_expired():
                 await self.delete(key)
-                self.stats['misses'] += 1
+                self.stats["misses"] += 1
                 return None
 
             entry.access()
-            self.stats['hits'] += 1
+            self.stats["hits"] += 1
             return entry
 
         except Exception as e:
             logging.error(f"Redis get error: {e}")
-            self.stats['errors'] += 1
-            self.stats['misses'] += 1
+            self.stats["errors"] += 1
+            self.stats["misses"] += 1
             return None
 
-    async def set(self, key: str, value: Any, ttl: int = 3600, metadata: Dict[str, Any] = None) -> bool:
+    async def set(
+        self, key: str, value: Any, ttl: int = 3600, metadata: Dict[str, Any] = None
+    ) -> bool:
         """Set cache entry in Redis"""
         if not self._initialized:
             await self.initialize()
@@ -420,19 +435,19 @@ class RedisCacheBackend(CacheBackend):
                 value=value,
                 created_at=time.time(),
                 expires_at=time.time() + ttl,
-                metadata=metadata or {}
+                metadata=metadata or {},
             )
 
             redis_key = self._make_key(key)
             serialized_data = self._serialize_entry(entry)
 
             await self.redis_client.setex(redis_key, ttl, serialized_data)
-            self.stats['sets'] += 1
+            self.stats["sets"] += 1
             return True
 
         except Exception as e:
             logging.error(f"Redis set error: {e}")
-            self.stats['errors'] += 1
+            self.stats["errors"] += 1
             return False
 
     async def delete(self, key: str) -> bool:
@@ -444,12 +459,12 @@ class RedisCacheBackend(CacheBackend):
             redis_key = self._make_key(key)
             result = await self.redis_client.delete(redis_key)
             if result > 0:
-                self.stats['deletes'] += 1
+                self.stats["deletes"] += 1
             return result > 0
 
         except Exception as e:
             logging.error(f"Redis delete error: {e}")
-            self.stats['errors'] += 1
+            self.stats["errors"] += 1
             return False
 
     async def clear(self) -> bool:
@@ -472,7 +487,7 @@ class RedisCacheBackend(CacheBackend):
 
         except Exception as e:
             logging.error(f"Redis clear error: {e}")
-            self.stats['errors'] += 1
+            self.stats["errors"] += 1
             return False
 
     async def exists(self, key: str) -> bool:
@@ -490,25 +505,22 @@ class RedisCacheBackend(CacheBackend):
 
     def get_stats(self) -> Dict[str, Any]:
         """Get Redis cache statistics"""
-        total_requests = self.stats['hits'] + self.stats['misses']
-        hit_rate = (self.stats['hits'] / max(1, total_requests)) * 100
+        total_requests = self.stats["hits"] + self.stats["misses"]
+        hit_rate = (self.stats["hits"] / max(1, total_requests)) * 100
 
         return {
-            'backend_type': 'redis',
-            'initialized': self._initialized,
-            'hit_rate': hit_rate,
-            'compression_enabled': self.enable_compression,
-            'compression_ratio': self.stats['compression_ratio'],
-            'stats': self.stats
+            "backend_type": "redis",
+            "initialized": self._initialized,
+            "hit_rate": hit_rate,
+            "compression_enabled": self.enable_compression,
+            "compression_ratio": self.stats["compression_ratio"],
+            "stats": self.stats,
         }
 
     async def health_check(self) -> Dict[str, Any]:
         """Check Redis health"""
         if not self._initialized:
-            return {
-                'status': 'unavailable',
-                'message': 'Redis not initialized'
-            }
+            return {"status": "unavailable", "message": "Redis not initialized"}
 
         try:
             # Test Redis connection
@@ -516,48 +528,47 @@ class RedisCacheBackend(CacheBackend):
 
             # Get Redis info
             info = await self.redis_client.info()
-            memory_usage = info.get('used_memory', 0)
-            max_memory = info.get('maxmemory', 0)
+            memory_usage = info.get("used_memory", 0)
+            max_memory = info.get("maxmemory", 0)
 
-            health_status = 'healthy'
+            health_status = "healthy"
             if max_memory > 0 and memory_usage > max_memory * 0.9:
-                health_status = 'critical'
+                health_status = "critical"
             elif max_memory > 0 and memory_usage > max_memory * 0.75:
-                health_status = 'warning'
+                health_status = "warning"
 
             return {
-                'status': health_status,
-                'ping': pong,
-                'memory_usage_mb': memory_usage / (1024 * 1024),
-                'max_memory_mb': max_memory / (1024 * 1024) if max_memory > 0 else None,
-                'connected_clients': info.get('connected_clients', 0),
-                'errors': self.stats['errors']
+                "status": health_status,
+                "ping": pong,
+                "memory_usage_mb": memory_usage / (1024 * 1024),
+                "max_memory_mb": max_memory / (1024 * 1024) if max_memory > 0 else None,
+                "connected_clients": info.get("connected_clients", 0),
+                "errors": self.stats["errors"],
             }
 
         except Exception as e:
             logging.error(f"Redis health check failed: {e}")
-            return {
-                'status': 'unhealthy',
-                'error': str(e)
-            }
+            return {"status": "unhealthy", "error": str(e)}
 
 
 class MultiTierCacheBackend(CacheBackend):
     """Multi-tier cache backend (Memory + Redis)"""
 
-    def __init__(self,
-                 memory_backend: MemoryCacheBackend,
-                 redis_backend: RedisCacheBackend,
-                 write_through: bool = True):
+    def __init__(
+        self,
+        memory_backend: MemoryCacheBackend,
+        redis_backend: RedisCacheBackend,
+        write_through: bool = True,
+    ):
         self.memory_backend = memory_backend
         self.redis_backend = redis_backend
         self.write_through = write_through
 
         self.stats = {
-            'l1_hits': 0,  # Memory hits
-            'l2_hits': 0,  # Redis hits
-            'misses': 0,
-            'sets': 0
+            "l1_hits": 0,  # Memory hits
+            "l2_hits": 0,  # Redis hits
+            "misses": 0,
+            "sets": 0,
         }
 
     async def get(self, key: str) -> Optional[CacheEntry]:
@@ -565,26 +576,26 @@ class MultiTierCacheBackend(CacheBackend):
         # Try L1 cache (memory) first
         entry = await self.memory_backend.get(key)
         if entry:
-            self.stats['l1_hits'] += 1
+            self.stats["l1_hits"] += 1
             return entry
 
         # Try L2 cache (Redis)
         entry = await self.redis_backend.get(key)
         if entry:
-            self.stats['l2_hits'] += 1
+            self.stats["l2_hits"] += 1
 
             # Populate L1 cache
             await self.memory_backend.set(
-                key, entry.value,
-                int(entry.expires_at - time.time()),
-                entry.metadata
+                key, entry.value, int(entry.expires_at - time.time()), entry.metadata
             )
             return entry
 
-        self.stats['misses'] += 1
+        self.stats["misses"] += 1
         return None
 
-    async def set(self, key: str, value: Any, ttl: int = 3600, metadata: Dict[str, Any] = None) -> bool:
+    async def set(
+        self, key: str, value: Any, ttl: int = 3600, metadata: Dict[str, Any] = None
+    ) -> bool:
         """Set in both tiers"""
         success = True
 
@@ -600,7 +611,7 @@ class MultiTierCacheBackend(CacheBackend):
                 success = False
 
         if success:
-            self.stats['sets'] += 1
+            self.stats["sets"] += 1
 
         return success
 
@@ -618,28 +629,29 @@ class MultiTierCacheBackend(CacheBackend):
 
     async def exists(self, key: str) -> bool:
         """Check existence in either tier"""
-        return (await self.memory_backend.exists(key) or
-                await self.redis_backend.exists(key))
+        return await self.memory_backend.exists(key) or await self.redis_backend.exists(
+            key
+        )
 
     def get_stats(self) -> Dict[str, Any]:
         """Get combined statistics"""
-        total_hits = self.stats['l1_hits'] + self.stats['l2_hits']
-        total_requests = total_hits + self.stats['misses']
+        total_hits = self.stats["l1_hits"] + self.stats["l2_hits"]
+        total_requests = total_hits + self.stats["misses"]
 
         overall_hit_rate = (total_hits / max(1, total_requests)) * 100
-        l1_hit_rate = (self.stats['l1_hits'] / max(1, total_requests)) * 100
-        l2_hit_rate = (self.stats['l2_hits'] / max(1, total_requests)) * 100
+        l1_hit_rate = (self.stats["l1_hits"] / max(1, total_requests)) * 100
+        l2_hit_rate = (self.stats["l2_hits"] / max(1, total_requests)) * 100
 
         return {
-            'backend_type': 'multi_tier',
-            'overall_hit_rate': overall_hit_rate,
-            'l1_hit_rate': l1_hit_rate,
-            'l2_hit_rate': l2_hit_rate,
-            'tier_stats': {
-                'memory': self.memory_backend.get_stats(),
-                'redis': self.redis_backend.get_stats()
+            "backend_type": "multi_tier",
+            "overall_hit_rate": overall_hit_rate,
+            "l1_hit_rate": l1_hit_rate,
+            "l2_hit_rate": l2_hit_rate,
+            "tier_stats": {
+                "memory": self.memory_backend.get_stats(),
+                "redis": self.redis_backend.get_stats(),
             },
-            'stats': self.stats
+            "stats": self.stats,
         }
 
     async def health_check(self) -> Dict[str, Any]:
@@ -648,27 +660,29 @@ class MultiTierCacheBackend(CacheBackend):
         redis_health = await self.redis_backend.health_check()
 
         # Overall health is healthy if at least memory tier is healthy
-        overall_status = 'healthy'
-        if memory_health['status'] != 'healthy':
-            overall_status = 'degraded'
+        overall_status = "healthy"
+        if memory_health["status"] != "healthy":
+            overall_status = "degraded"
 
         return {
-            'status': overall_status,
-            'tiers': {
-                'memory': memory_health,
-                'redis': redis_health
-            }
+            "status": overall_status,
+            "tiers": {"memory": memory_health, "redis": redis_health},
         }
+
 
 # Factory functions for easy creation
 
 
-def create_memory_cache_backend(max_size: int = 1000, max_memory_mb: int = 100) -> MemoryCacheBackend:
+def create_memory_cache_backend(
+    max_size: int = 1000, max_memory_mb: int = 100
+) -> MemoryCacheBackend:
     """Create memory cache backend"""
     return MemoryCacheBackend(max_size, max_memory_mb)
 
 
-def create_redis_cache_backend(redis_url: str = "redis://localhost:6379", **kwargs) -> RedisCacheBackend:
+def create_redis_cache_backend(
+    redis_url: str = "redis://localhost:6379", **kwargs
+) -> RedisCacheBackend:
     """Create Redis cache backend"""
     return RedisCacheBackend(redis_url, **kwargs)
 
@@ -677,7 +691,7 @@ async def create_smart_cache_backend(
     redis_url: str = "redis://localhost:6379",
     memory_size: int = 1000,
     memory_mb: int = 100,
-    prefer_redis: bool = True
+    prefer_redis: bool = True,
 ) -> CacheBackend:
     """Create the best available cache backend"""
 

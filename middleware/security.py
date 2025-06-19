@@ -1,7 +1,7 @@
 # middleware/security.py - Security Middleware
 import logging
 from fastapi import Request
-from fastapi.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from fastapi.responses import JSONResponse
@@ -29,16 +29,14 @@ class SecurityMiddleware:
         if self.settings.ENVIRONMENT == "production":
             # In production, configure with actual allowed hosts
             allowed_hosts = ["*"]  # Configure with actual hosts
-            app.add_middleware(TrustedHostMiddleware,
-                               allowed_hosts=allowed_hosts)
+            app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
 
         # Security headers middleware
         app.add_middleware(SecurityHeadersMiddleware)
 
         # Rate limiting middleware
         if self.settings.ENABLE_RATE_LIMITING:
-            app.add_middleware(RateLimitingMiddleware,
-                               rate_limiter=self.rate_limiter)
+            app.add_middleware(RateLimitingMiddleware, rate_limiter=self.rate_limiter)
 
         # Request logging middleware
         app.add_middleware(RequestLoggingMiddleware, settings=self.settings)
@@ -57,11 +55,15 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        response.headers["Permissions-Policy"] = (
+            "geolocation=(), microphone=(), camera=()"
+        )
 
         # HSTS header for HTTPS
         if request.url.scheme == "https":
-            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains"
+            )
 
         # Remove server information
         response.headers.pop("server", None)
@@ -88,7 +90,8 @@ class RateLimiter:
         # Clean old entries
         if client_ip in self.requests:
             self.requests[client_ip] = [
-                (timestamp, count) for timestamp, count in self.requests[client_ip]
+                (timestamp, count)
+                for timestamp, count in self.requests[client_ip]
                 if timestamp > window_start
             ]
         else:
@@ -108,7 +111,7 @@ class RateLimiter:
             "limit": limit,
             "remaining": max(0, limit - current_count - (1 if allowed else 0)),
             "reset": int(window_start + self.window_size),
-            "current": current_count
+            "current": current_count,
         }
 
         return allowed, rate_limit_info
@@ -142,14 +145,14 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
                 content={
                     "error": "Rate limit exceeded",
                     "message": "Too many requests. Please try again later.",
-                    "rate_limit": rate_info
+                    "rate_limit": rate_info,
                 },
                 headers={
                     "X-RateLimit-Limit": str(rate_info["limit"]),
                     "X-RateLimit-Remaining": str(rate_info["remaining"]),
                     "X-RateLimit-Reset": str(rate_info["reset"]),
-                    "Retry-After": "60"
-                }
+                    "Retry-After": "60",
+                },
             )
 
         # Process request
@@ -185,8 +188,9 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         self.settings = settings
 
         # Paths to exclude from detailed logging
-        self.excluded_paths = {
-            "/health", "/metrics"} if settings.ENVIRONMENT == "production" else set()
+        self.excluded_paths = (
+            {"/health", "/metrics"} if settings.ENVIRONMENT == "production" else set()
+        )
 
     async def dispatch(self, request: Request, call_next):
         start_time = time.time()
@@ -245,6 +249,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     def _generate_request_id(self) -> str:
         """Generate unique request ID"""
         import uuid
+
         return str(uuid.uuid4())[:8]
 
 
@@ -260,8 +265,9 @@ class CORSConfig:
 
         # Get CORS origins
         if isinstance(self.settings.CORS_ORIGINS, str):
-            origins = [origin.strip()
-                       for origin in self.settings.CORS_ORIGINS.split(",")]
+            origins = [
+                origin.strip() for origin in self.settings.CORS_ORIGINS.split(",")
+            ]
         else:
             origins = self.settings.CORS_ORIGINS
 
@@ -276,8 +282,8 @@ class CORSConfig:
                 "X-Request-ID",
                 "X-RateLimit-Limit",
                 "X-RateLimit-Remaining",
-                "X-RateLimit-Reset"
-            ]
+                "X-RateLimit-Reset",
+            ],
         )
 
         logger.info(f"✅ CORS configured with origins: {origins}")
@@ -290,5 +296,5 @@ __all__ = [
     "RateLimiter",
     "RateLimitingMiddleware",
     "RequestLoggingMiddleware",
-    "CORSConfig"
+    "CORSConfig",
 ]

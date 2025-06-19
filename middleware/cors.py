@@ -6,8 +6,9 @@ import logging
 
 
 class EnhancedCORSMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, allowed_origins: list = None,
-                 enable_credentials: bool = True):
+    def __init__(
+        self, app, allowed_origins: list = None, enable_credentials: bool = True
+    ):
         super().__init__(app)
         self.allowed_origins = allowed_origins or ["*"]
         self.enable_credentials = enable_credentials
@@ -19,7 +20,7 @@ class EnhancedCORSMiddleware(BaseHTTPMiddleware):
             allow_credentials=self.enable_credentials,
             allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             allow_headers=["*"],
-            expose_headers=["X-Request-ID", "X-Response-Time", "X-RateLimit-*"]
+            expose_headers=["X-Request-ID", "X-Response-Time", "X-RateLimit-*"],
         )
 
     async def dispatch(self, request: Request, call_next):
@@ -28,7 +29,6 @@ class EnhancedCORSMiddleware(BaseHTTPMiddleware):
 
         if origin and self.allowed_origins != ["*"]:
             if origin not in self.allowed_origins:
-                logging.warning(
-                    f"CORS request from unauthorized origin: {origin}")
+                logging.warning(f"CORS request from unauthorized origin: {origin}")
 
         return await call_next(request)

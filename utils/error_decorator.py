@@ -7,7 +7,12 @@ from utils.exceptions import LLMProxyError
 import logging
 import traceback
 from functools import wraps
-from .exceptions import LLMProxyError, OllamaConnectionError, ModelNotAvailableError, ErrorCategory
+from .exceptions import (
+    LLMProxyError,
+    OllamaConnectionError,
+    ModelNotAvailableError,
+    ErrorCategory,
+)
 
 
 def handle_errors(func):
@@ -38,7 +43,7 @@ def handle_errors(func):
                     error_code="INTERNAL_ERROR",
                     category=ErrorCategory.INTERNAL,
                     status_code=500,
-                    user_message="An internal error occurred. Please try again later."
+                    user_message="An internal error occurred. Please try again later.",
                 )
 
             # Log with full traceback
@@ -57,7 +62,12 @@ def handle_errors(func):
             raise
 
     # Return appropriate wrapper
-    return async_wrapper if hasattr(func, '__code__') and func.__code__.co_flags & 0x80 else sync_wrapper
+    return (
+        async_wrapper
+        if hasattr(func, "__code__") and func.__code__.co_flags & 0x80
+        else sync_wrapper
+    )
+
 
 # NOW UPDATE YOUR EXISTING main.py - ADD THESE IMPORTS AND HANDLERS
 
@@ -66,27 +76,28 @@ def handle_errors(func):
 
 # Add these error handlers to your existing FastAPI app:
 
+
 @app.exception_handler(LLMProxyError)
 async def llm_proxy_error_handler(request, exc: LLMProxyError):
     return JSONResponse(
-        status_code=exc.status_code,
-        content=exc.to_http_exception().detail
+        status_code=exc.status_code, content=exc.to_http_exception().detail
     )
 
 
 @app.exception_handler(RequestValidationError)
 async def validation_error_handler(request, exc: RequestValidationError):
     first_error = exc.errors()[0] if exc.errors() else {}
-    field = " -> ".join(str(loc) for loc in first_error.get('loc', []))
-    message = first_error.get('msg', 'Validation error')
+    field = " -> ".join(str(loc) for loc in first_error.get("loc", []))
+    message = first_error.get("msg", "Validation error")
 
     from utils.exceptions import InvalidRequestError
+
     error = InvalidRequestError(field, message)
 
     return JSONResponse(
-        status_code=error.status_code,
-        content=error.to_http_exception().detail
+        status_code=error.status_code, content=error.to_http_exception().detail
     )
+
 
 # Add the decorator to your main endpoints:
 

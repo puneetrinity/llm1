@@ -14,9 +14,7 @@ class StreamingService:
         self.ollama_client = ollama_client
 
     async def stream_chat_completion(
-        self,
-        request_data: Dict[str, Any],
-        model: str
+        self, request_data: Dict[str, Any], model: str
     ) -> AsyncGenerator[str, None]:
         """Stream chat completion responses"""
 
@@ -29,8 +27,8 @@ class StreamingService:
                 "options": {
                     "temperature": request_data.get("temperature", 0.7),
                     "top_p": request_data.get("top_p", 1.0),
-                    "num_predict": request_data.get("max_tokens", -1)
-                }
+                    "num_predict": request_data.get("max_tokens", -1),
+                },
             }
 
             completion_id = f"chatcmpl-{uuid.uuid4().hex[:8]}"
@@ -42,11 +40,13 @@ class StreamingService:
                 "object": "chat.completion.chunk",
                 "created": created_timestamp,
                 "model": model,
-                "choices": [{
-                    "index": 0,
-                    "delta": {"role": "assistant", "content": ""},
-                    "finish_reason": None
-                }]
+                "choices": [
+                    {
+                        "index": 0,
+                        "delta": {"role": "assistant", "content": ""},
+                        "finish_reason": None,
+                    }
+                ],
             }
 
             yield f"data: {json.dumps(initial_chunk)}\n\n"
@@ -64,11 +64,13 @@ class StreamingService:
                         "object": "chat.completion.chunk",
                         "created": created_timestamp,
                         "model": model,
-                        "choices": [{
-                            "index": 0,
-                            "delta": {"content": content} if content else {},
-                            "finish_reason": "stop" if done else None
-                        }]
+                        "choices": [
+                            {
+                                "index": 0,
+                                "delta": {"content": content} if content else {},
+                                "finish_reason": "stop" if done else None,
+                            }
+                        ],
                     }
 
                     yield f"data: {json.dumps(response_chunk)}\n\n"
@@ -82,11 +84,7 @@ class StreamingService:
                 "object": "chat.completion.chunk",
                 "created": created_timestamp,
                 "model": model,
-                "choices": [{
-                    "index": 0,
-                    "delta": {},
-                    "finish_reason": "stop"
-                }]
+                "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
             }
 
             yield f"data: {json.dumps(final_chunk)}\n\n"
@@ -95,10 +93,5 @@ class StreamingService:
         except Exception as e:
             logging.error(f"Error in streaming: {str(e)}")
 
-            error_chunk = {
-                "error": {
-                    "message": str(e),
-                    "type": "server_error"
-                }
-            }
+            error_chunk = {"error": {"message": str(e), "type": "server_error"}}
             yield f"data: {json.dumps(error_chunk)}\n\n"
