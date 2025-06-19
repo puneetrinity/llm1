@@ -11,7 +11,7 @@ from fastapi.requests import Request
 from fastapi import status
 import traceback
 
-from config import Settings
+from config import settings
 from models.requests import ChatCompletionRequest, CompletionRequest
 from models.responses import (
     ChatCompletionResponse,
@@ -22,12 +22,8 @@ from models.responses import (
 )
 from services.ollama_client import OllamaClient
 from services.router import LLMRouter
-from services.smart_cache import SmartCache
 from middleware.auth import AuthMiddleware
 from middleware.rate_limit import RateLimitMiddleware
-
-# Initialize settings
-settings = Settings()
 
 # Configure logging
 logging.basicConfig(level=settings.LOG_LEVEL)
@@ -62,7 +58,14 @@ app.add_middleware(RateLimitMiddleware, default_limit=60)
 ollama_client = OllamaClient()
 router = LLMRouter(ollama_client=ollama_client)
 model_router = router
-cache = SmartCache()
+try:
+    from services.smart_cache import SmartCache
+
+    cache = SmartCache()
+    logger.info("Smart cache enabled")
+except ImportError as e:
+    logger.warning(f"Smart cache disabled due to missing dependencies: {e}")
+    cache = None
 
 
 @app.get("/health")
