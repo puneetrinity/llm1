@@ -16,6 +16,8 @@
 !frontend/
 !utils/
 !models/
+!scripts/
+!scripts/setup.sh
 
 # Block specific problematic files/directories
 .git
