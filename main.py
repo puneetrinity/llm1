@@ -1,3 +1,7 @@
+from middleware.rate_limiter import RateLimiter
+from services.circuit_breaker import CircuitBreaker
+from services.cache_service import CacheService
+from services.ollama_client import OllamaClient
 #!/usr/bin/env python3
 """
 Enhanced LLM Proxy - Production-Ready Main Application
@@ -43,11 +47,11 @@ from models.responses import (
 )
 
 # Import services
-from services.ollama_client import OllamaClient
-from services.cache_service import CacheService
-from services.circuit_breaker import CircuitBreaker
+from services.request.app.state.ollama_client import OllamaClient
+from services.request.app.state.cache_service import CacheService
+from services.request.app.state.circuit_breaker import CircuitBreaker
 from middleware.auth import AuthMiddleware
-from middleware.rate_limiter import RateLimiter
+from middleware.request.app.state.rate_limiter import RateLimiter
 from utils.helpers import format_openai_response, handle_streaming_response
 
 # Optional enhanced services
@@ -84,7 +88,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Load settings
-settings = Settings()
+app.state.settings = Settings()
 
 # App state
 def create_initial_app_state():
@@ -94,10 +98,10 @@ def create_initial_app_state():
         "services": {
             "ollama": False,
             "cache": False,
-            "router": False,
+            "request.app.state.router": False,
             "warmup": False,
             "auth": False,
-            "rate_limiter": False
+            "request.app.state.rate_limiter": False
         },
         "models": {
             "available": [],
@@ -165,15 +169,15 @@ class InitializationService:
 
 # Modular service initialization
 async def initialize_ollama_client(app):
-    app.state.ollama_client = OllamaClient(
+    app.state.request.app.state.app.state.ollama_client = OllamaClient(
         base_url=settings.OLLAMA_BASE_URL,
         timeout=settings.OLLAMA_TIMEOUT
     )
-    await app.state.ollama_client.initialize()
+    await app.state.request.app.state.ollama_client.initialize()
     app.state.app_state["services"]["ollama"] = True
 
 async def initialize_cache_service(app):
-    app.state.cache_service = CacheService(
+    app.state.request.app.state.app.state.cache_service = CacheService(
         ttl=settings.CACHE_TTL,
         max_size=settings.CACHE_MAX_SIZE
     )
@@ -181,7 +185,7 @@ async def initialize_cache_service(app):
     logger.info("✅ Cache service initialized")
 
 async def initialize_circuit_breaker(app):
-    app.state.circuit_breaker = CircuitBreaker(
+    app.state.request.app.state.app.state.circuit_breaker = CircuitBreaker(
         failure_threshold=5,
         recovery_timeout=30,
         expected_exception=Exception
@@ -190,46 +194,45 @@ async def initialize_circuit_breaker(app):
 
 async def initialize_router(app):
     if ROUTER_AVAILABLE and settings.ENABLE_MODEL_ROUTING:
-        app.state.router = EnhancedLLMRouter(app.state.ollama_client)
-        await app.state.router.initialize()
-        app.state.app_state["services"]["router"] = True
-        logger.info("✅ Enhanced router initialized")
+        app.state.request.app.state.app.state.router = EnhancedLLMRouter(app.state.request.app.state.ollama_client)
+        await app.state.request.app.state.router.initialize()
+        app.state.app_state["services"]["request.app.state.router"] = True
+        logger.info("✅ Enhanced request.app.state.router initialized")
     else:
-        app.state.router = None
+        app.state.request.app.state.router = None
 
 async def initialize_model_warmup(app):
-    if WARMUP_AVAILABLE and settings.ENABLE_MODEL_WARMUP and app.state.router:
-        app.state.warmup_service = ModelWarmupService(app.state.ollama_client, app.state.router)
-        asyncio.create_task(app.state.warmup_service.start_warmup_service())
+    if WARMUP_AVAILABLE and settings.ENABLE_MODEL_WARMUP and app.state.        app.state.request.app.state.app.state.warmup_service = ModelWarmupService(app.state.request.app.state.ollama_client, app.state.request.app.state.router)
+        asyncio.create_task(app.state.request.app.state.warmup_service.start_warmup_service())
         app.state.app_state["services"]["warmup"] = True
         logger.info("✅ Model warmup service started")
     else:
-        app.state.warmup_service = None
+        app.state.request.app.state.warmup_service = None
 
 async def initialize_auth_middleware(app):
     if settings.ENABLE_AUTH:
-        app.state.auth_middleware = AuthMiddleware(
+        app.state.request.app.state.app.state.auth_middleware = AuthMiddleware(
             api_keys=settings.API_KEYS,
             enable_auth=True
         )
         app.state.app_state["services"]["auth"] = True
         logger.info("✅ Authentication enabled")
     else:
-        app.state.auth_middleware = None
+        app.state.request.app.state.auth_middleware = None
 
 async def initialize_rate_limiter(app):
     if settings.ENABLE_RATE_LIMITING:
-        app.state.rate_limiter = RateLimiter(
+        app.state.request.app.state.app.state.rate_limiter = RateLimiter(
             requests_per_minute=settings.RATE_LIMIT_PER_MINUTE
         )
-        app.state.app_state["services"]["rate_limiter"] = True
+        app.state.app_state["services"]["request.app.state.rate_limiter"] = True
         logger.info("✅ Rate limiting enabled")
     else:
-        app.state.rate_limiter = None
+        app.state.request.app.state.rate_limiter = None
 
 async def initialize_services(app):
-    app.state.app_state = create_initial_app_state()
-    init_service = InitializationService()
+    app.state.app.state.app_state = create_initial_app_state()
+    app.state.init_service = InitializationService()
     try:
         # Step 1: Wait for Ollama
         if not await init_service.wait_for_ollama():
@@ -237,14 +240,14 @@ async def initialize_services(app):
         # Step 2: Ollama client
         await initialize_ollama_client(app)
         # Step 3: Get available models
-        models = await app.state.ollama_client.list_models()
+        models = await app.state.request.app.state.ollama_client.list_models()
         app.state.app_state["models"]["available"] = [m.get('name', '') for m in models]
         logger.info(f"Available models: {app.state.app_state['models']['available']}")
         # Step 4: Cache
         if settings.ENABLE_CACHE:
             await initialize_cache_service(app)
         else:
-            app.state.cache_service = None
+            app.state.request.app.state.cache_service = None
         # Step 5: Circuit breaker
         await initialize_circuit_breaker(app)
         # Step 6: Router
@@ -284,16 +287,16 @@ async def lifespan(app: FastAPI):
     logger.info("="*60)
     yield
     logger.info("🛑 Shutting down Enhanced LLM Proxy...")
-    if getattr(app.state, "warmup_service", None):
-        await app.state.warmup_service.stop_warmup_service()
-    if getattr(app.state, "router", None) and hasattr(app.state.router, "cleanup"):
-        await app.state.router.cleanup()
-    if getattr(app.state, "ollama_client", None):
-        await app.state.ollama_client.cleanup()
+    if getattr(app.state, "request.app.state.warmup_service", None):
+        await app.state.request.app.state.warmup_service.stop_warmup_service()
+    if getattr(app.state, "request.app.state.router", None) and hasattr(app.state.request.app.state.router, "cleanup"):
+        await app.state.request.app.state.router.cleanup()
+    if getattr(app.state, "request.app.state.ollama_client", None):
+        await app.state.request.app.state.ollama_client.cleanup()
     logger.info("👋 Shutdown complete")
 
 # Create FastAPI app
-app = FastAPI(
+app.state.app = FastAPI(
     title="Enhanced LLM Proxy",
     description="Production-ready OpenAI-compatible API with 4-model routing, caching, and AI features",
     version="4.0.0",
@@ -329,12 +332,12 @@ async def root(request: Request):
 
 # You should update all other endpoints in main.py to use `request.app.state` for services
 # For example:
-#   request.app.state.ollama_client
-#   request.app.state.cache_service
-#   request.app.state.circuit_breaker
-#   request.app.state.router
-#   request.app.state.warmup_service
-#   request.app.state.auth_middleware
-#   request.app.state.rate_limiter
+#   request.app.state.request.app.state.ollama_client
+#   request.app.state.request.app.state.cache_service
+#   request.app.state.request.app.state.circuit_breaker
+#   request.app.state.request.app.state.router
+#   request.app.state.request.app.state.warmup_service
+#   request.app.state.request.app.state.auth_middleware
+#   request.app.state.request.app.state.rate_limiter
 
 # See above for the root endpoint style. Repeat for /v1/models, /v1/chat/completions, etc.

@@ -1,66 +1,67 @@
-# Core Dependencies
+# Complete LLM Proxy Requirements - ALL ENHANCED FEATURES
+
+# Core FastAPI and Web Framework
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 pydantic==2.5.0
 pydantic-settings==2.1.0
 python-multipart==0.0.6
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
 
-# Async and HTTP
+# HTTP and Async
 aiohttp==3.9.1
-aiofiles==23.2.1
 httpx==0.25.2
+requests==2.31.0
+aiofiles==23.2.1
 websockets==12.0
 
-# Streaming and SSE
-sse-starlette==1.8.2
-
-# Caching
-diskcache==5.6.3
-aiocache==0.12.2
-
-# ML and NLP (for semantic classification)
+# Enhanced Features - AI/ML
 sentence-transformers==2.2.2
-torch>=2.0.0
-transformers==4.36.0
+transformers==4.35.2
+torch==2.1.1
+torchvision==0.16.1
+torchaudio==2.1.1
+numpy==1.24.4
 scikit-learn==1.3.2
-numpy==1.24.3
+
+# Vector Search and Similarity
+faiss-cpu==1.7.4
+
+# Streaming and SSE
+sse-starlette==1.6.5
+
+# Caching and Storage
+redis==5.0.1
+aioredis==2.0.1
 
 # Monitoring and Metrics
-psutil==5.9.6
 prometheus-client==0.19.0
+psutil==5.9.6
 
-# Logging
-python-json-logger==2.0.7
-coloredlogs==15.0.1
+# Data Processing
+pandas==2.1.4
+python-dateutil==2.8.2
 
-# Rate Limiting
-slowapi==0.1.9
+# Security and Auth
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
 
-# Circuit Breaker
-py-breaker==0.7.0
-
-# CORS and Security
-python-cors==1.0.0
-
-# Environment and Configuration
-python-dotenv==1.0.0
-
-# Testing (optional, for development)
+# Development and Testing
 pytest==7.4.3
 pytest-asyncio==0.21.1
 httpx==0.25.2
 
-# Documentation (optional)
-mkdocs==1.5.3
-mkdocs-material==9.4.14
+# Utilities
+click==8.1.7
+rich==13.7.0
+typer==0.9.0
 
-# Type Checking (optional, for development)
-mypy==1.7.1
-types-aiofiles==23.2.0
-types-psutil==5.9.5.17
+# Dependency conflict fixes
+protobuf==3.20.3
+urllib3==1.26.18
+# If you use moviepy, uncomment the following lines:
+# imageio==2.1.2
+# tqdm==4.11.2
 
-# Production Server (optional, for deployment)
-gunicorn==21.2.0
-supervisor==4.2.5
+# Optional: GPU support (uncomment if using CUDA)
+# torch==2.1.1+cu121 --index-url https://download.pytorch.org/whl/cu121

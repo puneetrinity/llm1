@@ -1,4 +1,3 @@
-from services.ollama_client import OllamaClient
 # main_master.py - Complete LLM Proxy with 3-Model Routing and Full Authentication
 from fastapi import FastAPI, HTTPException, Request, Depends, WebSocket, Query, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -48,10 +47,10 @@ except ImportError:
             case_sensitive = True
             extra = "ignore"
 
-    app.state.settings = Settings()
+    settings = Settings()
 
 logging.basicConfig(
-    app.state.level = getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
+    level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[logging.StreamHandler(sys.stdout)]
 )
@@ -206,8 +205,8 @@ class OllamaClient:
             await self.session.close()
 
 class ModelRouter:
-    def __init__(self, request.app.state.ollama_client):
-        self.request.app.state.ollama_client = request.app.state.ollama_client
+    def __init__(self, ollama_client):
+        self.ollama_client = ollama_client
         self.model_config = {
             'phi:3.5': {
                 'priority': 1,
